@@ -1,0 +1,35 @@
+{
+  "schema_version": 1,
+  "keyboard": "ws_together",
+  "keymap": "default",
+  "layout_macro": "LAYOUT_ortho_4x4",
+  "key_count": 16,
+  "layers": [
+    {
+      "index": 0,
+      "name": "_BASE",
+      "keys": [
+        "KC_7", "KC_8", "KC_9", "KC_SLSH",
+        "KC_4", "KC_5", "KC_6", "KC_ASTR",
+        "KC_1", "KC_2", "KC_3", "KC_MINS",
+        "KC_0", "KC_DOT", "MO(_FN)", "KC_ENT"
+      ]
+    },
+    {
+      "index": 1,
+      "name": "_FN",
+      "keys": [
+        "QK_BOOT", "KC_NO", "KC_NO", "KC_VOLU",
+        "KC_NO", "KC_NO", "KC_NO", "KC_VOLD",
+        "KC_NO", "KC_NO", "KC_NO", "KC_MUTE",
+        "KC_TRNS", "KC_NO", "KC_TRNS", "KC_NO"
+      ]
+    }
+  ],
+  "source": {
+    "keymap_c": "fixtures/ws_together/keymap.c",
+    "config_h": "fixtures/ws_together/config.h",
+    "rules_mk": "fixtures/ws_together/rules.mk"
+  },
+  "seeded_at": "2026-07-17T00:00:00Z"
+}
