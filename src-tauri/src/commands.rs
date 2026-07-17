@@ -1,67 +1,45 @@
 //! Tauri commands — the invoke surface of the app. See `docs/CONTRACT.md`.
 //!
-//! These are STUBS returning fixture data so the UI worker can build against
-//! the real contract. The seeder, codegen, and flashing workers replace the
-//! bodies without changing the signatures.
+//! This is a thin delegation layer: each command calls into the module owned
+//! by the responsible worker (`oryx`, `codegen`, `build`, `flash`). Workers
+//! replace their module's bodies — command signatures here do not change
+//! without a contract bump.
 
 use tauri::AppHandle;
 
-use crate::events::{
-    emit_flash_done, emit_flash_progress, FlashDone, FlashProgress, FlashStage,
-};
+use crate::events::{emit_flash_done, emit_flash_progress};
 use crate::layout::SeededLayout;
+use crate::{build, codegen, flash, oryx};
 
-const FIXTURE_LAYOUT: &str = include_str!(concat!(
-    env!("CARGO_MANIFEST_DIR"),
-    "/../fixtures/ws_together/seeded_layout.json"
-));
-
-/// Load the current seeded layout.
-/// STUB: returns the checked-in fixture instead of running the seeder.
+/// Load the current seeded layout (Worker A: `oryx`).
 #[tauri::command]
 pub fn get_layout() -> Result<SeededLayout, String> {
-    let layout: SeededLayout =
-        serde_json::from_str(FIXTURE_LAYOUT).map_err(|e| e.to_string())?;
-    layout.validate()?;
-    Ok(layout)
+    oryx::seed_layout()
 }
 
-/// Save an edited layout back to disk (codegen worker regenerates keymap.c).
-/// STUB: validates the payload and discards it.
+/// Save an edited layout back to QMK sources (Worker A: `codegen`).
+/// STUB: renders and discards.
 #[tauri::command]
 pub fn save_layout(layout: SeededLayout) -> Result<(), String> {
-    layout.validate()
+    codegen::generate_keymap(&layout).map(|_| ())
 }
 
-/// Compile and flash the firmware, emitting `flash:progress` events and a
-/// final `flash:done`. STUB: emits a canned progress sequence, touches no
-/// hardware.
+/// Compile firmware for `keyboard` (Worker A: `build`), emitting
+/// `flash:progress` events with stage `compiling`. Returns the firmware path.
+#[tauri::command]
+pub fn compile_firmware(app: AppHandle, keyboard: String) -> Result<String, String> {
+    build::compile(&keyboard, |p| emit_flash_progress(&app, p))
+}
+
+/// Full pipeline: compile (Worker A: `build`) then flash (Worker B: `flash`),
+/// emitting `flash:progress` throughout and `flash:done` once at the end.
 #[tauri::command]
 pub fn flash_firmware(app: AppHandle, keyboard: String) -> Result<(), String> {
-    let steps = [
-        (FlashStage::Compiling, 0, "starting compile (stub)"),
-        (FlashStage::Compiling, 100, "compile finished (stub)"),
-        (FlashStage::WaitingForBootloader, 0, "waiting for bootloader (stub)"),
-        (FlashStage::Flashing, 50, "writing firmware (stub)"),
-        (FlashStage::Done, 100, "flash complete (stub)"),
-    ];
-    for (stage, percent, message) in steps {
-        emit_flash_progress(
-            &app,
-            FlashProgress {
-                stage,
-                percent,
-                message: message.to_string(),
-            },
-        );
-    }
-    emit_flash_done(
-        &app,
-        FlashDone {
-            success: true,
-            message: format!("stub flash of '{keyboard}' complete"),
-        },
-    );
+    let firmware_path = build::compile(&keyboard, |p| emit_flash_progress(&app, p))?;
+    let done = flash::flash(&keyboard, &firmware_path, |p| {
+        emit_flash_progress(&app, p)
+    })?;
+    emit_flash_done(&app, done);
     Ok(())
 }
 

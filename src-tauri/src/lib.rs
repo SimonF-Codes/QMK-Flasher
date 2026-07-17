@@ -1,6 +1,10 @@
+pub mod build;
+pub mod codegen;
 pub mod commands;
 pub mod events;
+pub mod flash;
 pub mod layout;
+pub mod oryx;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -9,6 +13,7 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             commands::get_layout,
             commands::save_layout,
+            commands::compile_firmware,
             commands::flash_firmware,
         ])
         .run(tauri::generate_context!())
