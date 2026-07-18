@@ -1,16 +1,20 @@
 //! The QMK MSYS build: exactly
 //! `MSYSTEM=MINGW64 <msys>\usr\bin\bash.exe -lc "cd <qmk> && make
-//! zsa/moonlander/reva:<keymap>"` via tokio::process, streaming stdout+stderr
-//! lines through the caller's `FnMut` (the command layer forwards them as
-//! `build-log` events). Never `qmk compile`. On success the .bin is copied to
+//! zsa/moonlander/reva:<keymap>"`, streaming stdout+stderr lines through the
+//! caller's `FnMut` (the command layer forwards them as `build-log` events).
+//! Never `qmk compile`. On success the .bin is copied to
 //! `%APPDATA%\qmk-flasher\builds\<timestamp>.bin`.
+//!
+//! Deliberately `std::process`, not tokio: Tauri runs `(async)` command
+//! handlers inside its own tokio runtime, and a nested `Runtime::block_on`
+//! there panics ("Cannot start a runtime from within a runtime") — the
+//! original `start_flash_pipeline` hang. Two pump threads feed an mpsc
+//! channel; `on_log` runs on the caller's thread.
 
+use std::io::BufRead;
 use std::path::{Path, PathBuf};
 use std::process::Stdio;
-
-use tokio::io::{AsyncBufReadExt, BufReader};
-use tokio::process::Command;
-use tokio::sync::mpsc;
+use std::sync::mpsc;
 
 use crate::appcfg::AppConfig;
 use crate::error::AppError;
@@ -55,40 +59,43 @@ pub fn build(cfg: &AppConfig, on_log: &mut dyn FnMut(String)) -> Result<String, 
     );
     on_log(format!("$ bash -lc \"{script}\""));
 
-    let rt = tokio::runtime::Builder::new_current_thread()
-        .enable_all()
-        .build()
-        .map_err(|e| AppError::BuildFailed(format!("tokio runtime: {e}")))?;
+    let mut command = std::process::Command::new(&bash);
+    command
+        .arg("-lc")
+        .arg(&script)
+        .env("MSYSTEM", "MINGW64")
+        .env("CHERE_INVOKING", "1")
+        .stdin(Stdio::null())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped());
+    #[cfg(windows)]
+    {
+        // CREATE_NO_WINDOW — no console flash from the GUI app.
+        use std::os::windows::process::CommandExt;
+        command.creation_flags(0x0800_0000);
+    }
+    let mut child = command
+        .spawn()
+        .map_err(|e| AppError::BuildFailed(format!("spawning bash: {e}")))?;
 
-    let status = rt.block_on(async {
-        let mut child = Command::new(&bash)
-            .arg("-lc")
-            .arg(&script)
-            .env("MSYSTEM", "MINGW64")
-            .env("CHERE_INVOKING", "1")
-            .stdin(Stdio::null())
-            .stdout(Stdio::piped())
-            .stderr(Stdio::piped())
-            .spawn()
-            .map_err(|e| AppError::BuildFailed(format!("spawning bash: {e}")))?;
-
-        let (tx, mut rx) = mpsc::unbounded_channel::<String>();
-        let stdout = child.stdout.take().expect("stdout piped");
-        let stderr = child.stderr.take().expect("stderr piped");
-        for reader in [
-            tokio::task::spawn(pump(BufReader::new(stdout), tx.clone())),
-            tokio::task::spawn(pump(BufReader::new(stderr), tx)),
-        ] {
-            drop(reader); // detached: they finish when the pipes close
-        }
-        while let Some(line) = rx.recv().await {
-            on_log(line);
-        }
-        child
-            .wait()
-            .await
-            .map_err(|e| AppError::BuildFailed(format!("waiting for make: {e}")))
-    })?;
+    let (tx, rx) = mpsc::channel::<String>();
+    let stdout = child.stdout.take().expect("stdout piped");
+    let stderr = child.stderr.take().expect("stderr piped");
+    let tx2 = tx.clone();
+    let pumps = [
+        std::thread::spawn(move || pump(stdout, tx)),
+        std::thread::spawn(move || pump(stderr, tx2)),
+    ];
+    // The channel closes when both pump threads drop their senders.
+    for line in rx {
+        on_log(line);
+    }
+    for p in pumps {
+        let _ = p.join();
+    }
+    let status = child
+        .wait()
+        .map_err(|e| AppError::BuildFailed(format!("waiting for make: {e}")))?;
 
     if !status.success() {
         return Err(AppError::BuildFailed(format!(
@@ -114,12 +121,10 @@ pub fn build(cfg: &AppConfig, on_log: &mut dyn FnMut(String)) -> Result<String, 
     Ok(dest.to_string_lossy().into_owned())
 }
 
-async fn pump<R: tokio::io::AsyncRead + Unpin>(
-    reader: BufReader<R>,
-    tx: mpsc::UnboundedSender<String>,
-) {
-    let mut lines = reader.lines();
-    while let Ok(Some(line)) = lines.next_line().await {
+fn pump(reader: impl std::io::Read, tx: mpsc::Sender<String>) {
+    let lines = std::io::BufReader::new(reader).lines();
+    for line in lines {
+        let Ok(line) = line else { break };
         if tx.send(line).is_err() {
             break;
         }
@@ -143,6 +148,46 @@ mod tests {
     #[test]
     fn make_target_never_uses_qmk_compile() {
         assert_eq!(make_target("qmk_flasher"), "zsa/moonlander/reva:qmk_flasher");
+    }
+
+    /// Regression test for the `start_flash_pipeline` panic: Tauri runs the
+    /// `(async)` command handler inside its multi-thread tokio runtime, so
+    /// `build` executes on a tokio worker driving async tasks. It must
+    /// stream + return a normal error there — never panic ("Cannot start a
+    /// runtime from within a runtime", the old tokio-based implementation).
+    #[test]
+    fn build_streams_and_errors_inside_a_tokio_runtime_context() {
+        let cfg = crate::appcfg::get();
+        if !Path::new(&cfg.msys_path).join("usr/bin/bash.exe").exists() {
+            eprintln!("QMK MSYS not installed; skipping runtime-context test");
+            return;
+        }
+        // A dir that exists but is no qmk_firmware checkout: bash+make run
+        // for real and fail fast with "No rule to make target".
+        let tmp = std::env::temp_dir().join("qmk-flasher-msys-ctx-test");
+        std::fs::create_dir_all(&tmp).unwrap();
+        let cfg = AppConfig {
+            qmk_firmware_path: tmp.to_string_lossy().into_owned(),
+            ..cfg
+        };
+        // Multi-thread flavor: what Tauri actually runs commands on. The
+        // handler body executes inside an async task (NOT spawn_blocking),
+        // which is where a nested `Runtime::block_on` panics.
+        let rt = tokio::runtime::Builder::new_multi_thread()
+            .enable_all()
+            .build()
+            .unwrap();
+        let (err, lines) = rt.block_on(async move {
+            tokio::spawn(async move {
+                let mut lines = Vec::new();
+                let err = build(&cfg, &mut |l| lines.push(l)).unwrap_err();
+                (err, lines)
+            })
+            .await
+            .expect("build must not panic inside a runtime context")
+        });
+        assert_eq!(err.code(), "BuildFailed");
+        assert!(!lines.is_empty(), "make output must be streamed");
     }
 
     #[test]
