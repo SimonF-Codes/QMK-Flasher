@@ -16,6 +16,9 @@ function stepIndex(phase: string): number {
   return STEPS.findIndex((s) => (s.phases as readonly string[]).includes(phase));
 }
 
+/** Keep the log bounded so a chatty build can't grow renders without limit. */
+const MAX_LOG_LINES = 2000;
+
 export default function BuildFlashPanel() {
   const layout = useLayoutStore((s) => s.layout);
   const [state, setState] = useState<PipelineState>({ phase: "idle" });
@@ -26,12 +29,24 @@ export default function BuildFlashPanel() {
   const [failNext, setFailNext] = useState(false);
   const logRef = useRef<HTMLPreElement>(null);
 
+  // Real builds emit log lines in fast bursts; a setState per line froze the
+  // webview. Buffer and flush on an interval, keeping only the newest lines.
+  const logBufRef = useRef<string[]>([]);
   useEffect(() => {
     const un1 = ipc.onPipelineState(setState);
-    const un2 = ipc.onBuildLog((l) => setLog((prev) => [...prev, l.line]));
+    const un2 = ipc.onBuildLog((l) => {
+      logBufRef.current.push(l.line);
+    });
+    const flush = setInterval(() => {
+      if (logBufRef.current.length === 0) return;
+      const chunk = logBufRef.current;
+      logBufRef.current = [];
+      setLog((prev) => [...prev, ...chunk].slice(-MAX_LOG_LINES));
+    }, 120);
     return () => {
       un1();
       un2();
+      clearInterval(flush);
     };
   }, []);
 
@@ -42,6 +57,7 @@ export default function BuildFlashPanel() {
   const start = async () => {
     if (!layout) return;
     setError(null);
+    logBufRef.current = [];
     setLog([]);
     setLogOpen(true);
     setRunning(true);

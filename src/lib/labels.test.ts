@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
+import fixture from "../../shared/fixtures/seeded_layout.json";
 import { badge, holdLabel, qmkToken, tapLabel, withGlow } from "./labels";
+import { LayoutFileSchema } from "./types";
 
 describe("labels", () => {
   it("renders keycap labels per kind", () => {
@@ -27,6 +29,23 @@ describe("labels", () => {
     expect(qmkToken({ kind: "modTap", mods: ["MOD_RSFT"], tap: "KC_ENTER" })).toBe("MT(MOD_RSFT, KC_ENTER)");
     expect(qmkToken({ kind: "layerTap", layer: 1, tap: "KC_SLASH" })).toBe("LT(1, KC_SLASH)");
     expect(qmkToken({ kind: "layerSwitch", action: "TG", layer: 5 })).toBe("TG(5)");
+  });
+
+  it("renders every key of the full seeded fixture without throwing", () => {
+    const layout = LayoutFileSchema.parse(fixture);
+    expect(layout.layers.length).toBeGreaterThanOrEqual(7);
+    for (const layer of layout.layers) {
+      for (const key of layer.keys) {
+        expect(() => {
+          const tap = tapLabel(key);
+          holdLabel(key);
+          badge(key);
+          qmkToken(key);
+          // every visible kind must produce a non-empty keycap label
+          if (key.kind !== "none") expect(tap).not.toBe("");
+        }).not.toThrow();
+      }
+    }
   });
 
   it("carries glow across replacements", () => {
