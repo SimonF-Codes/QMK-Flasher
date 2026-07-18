@@ -505,10 +505,194 @@ pub fn layout_from_snapshot(
     Ok(layout)
 }
 
+// ---------------------------------------------------------------------------
+// Seed-time cross-check: the seeded layout must render to the same semantic
+// tokens as the keymap.c Oryx generated for the same revision, at every
+// position (modulo KC_MEH→QK_LOCK). Both sides canonicalize into one space:
+// construct tokens (DUAL_FUNC_n / TD(DANCE_n) / ST_MACRO_n) resolve to their
+// behavior, so numbering differences cannot false-positive.
+// ---------------------------------------------------------------------------
+
+use crate::oryx::parse_keymap_c::{self, ParsedKeymap};
+
+/// Canonical semantic token for a seeded action. `KC_MEH` canonicalizes to
+/// `QK_LOCK` (the transform the app always applies).
+pub(crate) fn canon_action(a: &KeyAction) -> String {
+    fn macro_canon(steps: &[crate::layout::schema::MacroStep]) -> String {
+        let last = steps.len().saturating_sub(1);
+        let parts: Vec<String> = steps
+            .iter()
+            .enumerate()
+            .map(|(i, s)| {
+                // The final step's delay is never rendered (SEND_STRING has
+                // no trailing SS_DELAY), so it is not comparable.
+                let delay = if i == last { None } else { s.delay };
+                format!(
+                    "{}@{}+{}",
+                    s.code,
+                    delay.map_or(String::new(), |d| d.to_string()),
+                    s.mods.as_deref().unwrap_or_default().join("|")
+                )
+            })
+            .collect();
+        format!("MACRO({})", parts.join(","))
+    }
+    match a {
+        KeyAction::None { .. } => "KC_NO".into(),
+        KeyAction::Transparent { .. } => "KC_TRANSPARENT".into(),
+        KeyAction::QkLock { .. } => "QK_LOCK".into(),
+        KeyAction::Basic { code, mods: None, .. } if code == "KC_MEH" => "QK_LOCK".into(),
+        KeyAction::Basic { code, mods: None, .. } => code.clone(),
+        KeyAction::Basic { code, mods: Some(m), .. } => {
+            format!("MODS({},{})", m.join("|"), code)
+        }
+        KeyAction::LayerSwitch { action, layer, .. } => format!("{action:?}({layer})"),
+        KeyAction::ModTap { mods, tap, .. } => format!("MT({}, {tap})", mods.join(" | ")),
+        KeyAction::LayerTap { layer, tap, .. } => format!("LT({layer}, {tap})"),
+        KeyAction::DualFunc { tap, hold, .. } => format!("DF({},{})", tap.code, hold.code),
+        KeyAction::Special { code, .. } | KeyAction::Rgb { code, .. } => code.clone(),
+        KeyAction::TapDance { tap, hold, double_tap, tap_hold, .. } => format!(
+            "TD({},{},{},{})",
+            tap.as_deref().unwrap_or(""),
+            hold.as_deref().unwrap_or(""),
+            double_tap.as_deref().unwrap_or(""),
+            tap_hold.as_deref().unwrap_or("")
+        ),
+        KeyAction::Macro { steps, .. } => macro_canon(steps),
+        KeyAction::RgbHsv { h, s, v, .. } => format!("HSV_{h}_{s}_{v}"),
+    }
+}
+
+/// Canonical semantic token for a keymap.c LAYOUT token, resolving
+/// DUAL_FUNC_n / TD(DANCE_n) / ST_MACRO_n through the parsed keymap and
+/// applying the KC_MEH→QK_LOCK equivalence.
+pub(crate) fn canon_ref_token(tok: &str, p: &ParsedKeymap) -> String {
+    if tok == "KC_MEH" {
+        return "QK_LOCK".into();
+    }
+    if let Some(n) = tok.strip_prefix("DUAL_FUNC_") {
+        if let Some(b) = n.parse::<u32>().ok().and_then(|n| p.dual_funcs.get(&n)) {
+            return format!("DF({},{})", b.tap, b.hold);
+        }
+    }
+    if let Some(inner) = tok.strip_prefix("TD(DANCE_") {
+        if let Some(d) = inner
+            .trim_end_matches(')')
+            .parse::<u32>()
+            .ok()
+            .and_then(|n| p.dances.get(&n))
+        {
+            return format!(
+                "TD({},{},{},{})",
+                d.tap.as_deref().unwrap_or(""),
+                d.hold.as_deref().unwrap_or(""),
+                d.double_tap.as_deref().unwrap_or(""),
+                d.tap_hold.as_deref().unwrap_or("")
+            );
+        }
+    }
+    if let Some(n) = tok.strip_prefix("ST_MACRO_") {
+        if let Some(steps) = n.parse::<u32>().ok().and_then(|n| p.st_macros.get(&n)) {
+            let parts: Vec<String> = steps
+                .iter()
+                .map(|s| {
+                    format!(
+                        "{}@{}+{}",
+                        s.code,
+                        s.delay.map_or(String::new(), |d| d.to_string()),
+                        s.mods.join("|")
+                    )
+                })
+                .collect();
+            return format!("MACRO({})", parts.join(","));
+        }
+    }
+    // Modifier wrappers: LCTL(LSFT(KC_C)) → MODS(MOD_LCTL|MOD_LSFT,KC_C).
+    const WRAPPERS: [(&str, &str); 8] = [
+        ("LCTL(", "MOD_LCTL"),
+        ("LSFT(", "MOD_LSFT"),
+        ("LALT(", "MOD_LALT"),
+        ("LGUI(", "MOD_LGUI"),
+        ("RCTL(", "MOD_RCTL"),
+        ("RSFT(", "MOD_RSFT"),
+        ("RALT(", "MOD_RALT"),
+        ("RGUI(", "MOD_RGUI"),
+    ];
+    let mut mods = Vec::new();
+    let mut inner = tok;
+    'unwrap: loop {
+        for (prefix, m) in WRAPPERS {
+            if let Some(rest) = inner.strip_prefix(prefix) {
+                if let Some(rest) = rest.strip_suffix(')') {
+                    mods.push(m);
+                    inner = rest;
+                    continue 'unwrap;
+                }
+            }
+        }
+        break;
+    }
+    if !mods.is_empty() {
+        return format!("MODS({},{})", mods.join("|"), inner);
+    }
+    tok.to_string()
+}
+
+/// Verify `layout` against the keymap.c Oryx generated for the same revision.
+/// Any positional disagreement is a hard [`AppError::PermutationMismatch`]
+/// carrying the differing positions.
+pub fn cross_check(layout: &LayoutFile, oryx_keymap_c: &str) -> Result<(), AppError> {
+    let parsed = parse_keymap_c::parse(oryx_keymap_c)?;
+    if parsed.layers.len() != layout.layers.len() {
+        return Err(AppError::PermutationMismatch(format!(
+            "seeded {} layers but the Oryx source has {}",
+            layout.layers.len(),
+            parsed.layers.len()
+        )));
+    }
+    let mut diffs = Vec::new();
+    for (li, (layer, ref_tokens)) in
+        layout.layers.iter().zip(&parsed.layers).enumerate()
+    {
+        if ref_tokens.len() != layer.keys.len() {
+            return Err(AppError::PermutationMismatch(format!(
+                "Oryx source layer {li} has {} tokens, expected {}",
+                ref_tokens.len(),
+                layer.keys.len()
+            )));
+        }
+        for (arg, (key, tok)) in layer.keys.iter().zip(ref_tokens).enumerate() {
+            let ours = canon_action(key);
+            let theirs = canon_ref_token(tok, &parsed);
+            if ours != theirs {
+                diffs.push(format!(
+                    "layer {li} arg {arg}: seeded {ours} vs source {theirs}"
+                ));
+            }
+        }
+    }
+    if layout.combos.len() != parsed.combos.len() {
+        diffs.push(format!(
+            "seeded {} combos but the Oryx source has {}",
+            layout.combos.len(),
+            parsed.combos.len()
+        ));
+    }
+    if diffs.is_empty() {
+        return Ok(());
+    }
+    let shown = diffs.iter().take(10).cloned().collect::<Vec<_>>().join("; ");
+    let extra = diffs.len().saturating_sub(10);
+    Err(AppError::PermutationMismatch(if extra > 0 {
+        format!("{} positions differ: {shown} (+{extra} more)", diffs.len())
+    } else {
+        format!("{} positions differ: {shown}", diffs.len())
+    }))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::oryx::parse_keymap_c::{self, ParsedKeymap};
     use crate::oryx::permute::{layout_index_for_oryx, ORYX_TO_LAYOUT};
 
     const REFERENCE_KEYMAP_C: &str = include_str!(concat!(
@@ -760,97 +944,10 @@ mod tests {
     // -----------------------------------------------------------------------
     // Permutation re-derivation from the fixture pair (the A1 centerpiece):
     // canonicalize both the un-permuted seeded actions and the parsed
-    // reference tokens into one semantic space, then the unique
-    // column-matching between them must reproduce ORYX_TO_LAYOUT exactly.
+    // reference tokens into one semantic space (the cross-check's canon
+    // functions), then the unique column-matching between them must
+    // reproduce ORYX_TO_LAYOUT exactly.
     // -----------------------------------------------------------------------
-
-    /// Canonical semantic token for a seeded action. `KC_MEH` canonicalizes
-    /// to `QK_LOCK` (the transform the app always applies).
-    fn canon_action(a: &KeyAction) -> String {
-        fn macro_canon(steps: &[MacroStep]) -> String {
-            let last = steps.len().saturating_sub(1);
-            let parts: Vec<String> = steps
-                .iter()
-                .enumerate()
-                .map(|(i, s)| {
-                    // The final step's delay is never rendered (SEND_STRING
-                    // has no trailing SS_DELAY), so it is not comparable.
-                    let delay = if i == last { None } else { s.delay };
-                    format!(
-                        "{}@{}+{}",
-                        s.code,
-                        delay.map_or(String::new(), |d| d.to_string()),
-                        s.mods.as_deref().unwrap_or_default().join("|")
-                    )
-                })
-                .collect();
-            format!("MACRO({})", parts.join(","))
-        }
-        match a {
-            KeyAction::None { .. } => "KC_NO".into(),
-            KeyAction::Transparent { .. } => "KC_TRANSPARENT".into(),
-            KeyAction::QkLock { .. } => "QK_LOCK".into(),
-            KeyAction::Basic { code, mods: None, .. } if code == "KC_MEH" => "QK_LOCK".into(),
-            KeyAction::Basic { code, mods: None, .. } => code.clone(),
-            KeyAction::Basic { code, mods: Some(m), .. } => {
-                format!("MODS({},{})", m.join("|"), code)
-            }
-            KeyAction::LayerSwitch { action, layer, .. } => format!("{action:?}({layer})"),
-            KeyAction::ModTap { mods, tap, .. } => {
-                format!("MT({}, {})", mods.join(" | "), tap)
-            }
-            KeyAction::LayerTap { layer, tap, .. } => format!("LT({layer}, {tap})"),
-            KeyAction::DualFunc { tap, hold, .. } => {
-                format!("DF({},{})", tap.code, hold.code)
-            }
-            KeyAction::Special { code, .. } | KeyAction::Rgb { code, .. } => code.clone(),
-            KeyAction::TapDance { tap, hold, double_tap, tap_hold, .. } => format!(
-                "TD({},{},{},{})",
-                tap.as_deref().unwrap_or(""),
-                hold.as_deref().unwrap_or(""),
-                double_tap.as_deref().unwrap_or(""),
-                tap_hold.as_deref().unwrap_or("")
-            ),
-            KeyAction::Macro { steps, .. } => macro_canon(steps),
-            KeyAction::RgbHsv { h, s, v, .. } => format!("HSV_{h}_{s}_{v}"),
-        }
-    }
-
-    /// Canonical semantic token for a reference keymap.c LAYOUT token,
-    /// resolving DUAL_FUNC_n / TD(DANCE_n) / ST_MACRO_n through the parser.
-    fn canon_ref_token(tok: &str, p: &ParsedKeymap) -> String {
-        if let Some(n) = tok.strip_prefix("DUAL_FUNC_") {
-            let b = &p.dual_funcs[&n.parse::<u32>().unwrap()];
-            return format!("DF({},{})", b.tap, b.hold);
-        }
-        if let Some(inner) = tok.strip_prefix("TD(DANCE_") {
-            let n: u32 = inner.trim_end_matches(')').parse().unwrap();
-            let d = &p.dances[&n];
-            return format!(
-                "TD({},{},{},{})",
-                d.tap.as_deref().unwrap_or(""),
-                d.hold.as_deref().unwrap_or(""),
-                d.double_tap.as_deref().unwrap_or(""),
-                d.tap_hold.as_deref().unwrap_or("")
-            );
-        }
-        if let Some(n) = tok.strip_prefix("ST_MACRO_") {
-            let steps = &p.st_macros[&n.parse::<u32>().unwrap()];
-            let parts: Vec<String> = steps
-                .iter()
-                .map(|s| {
-                    format!(
-                        "{}@{}+{}",
-                        s.code,
-                        s.delay.map_or(String::new(), |d| d.to_string()),
-                        s.mods.join("|")
-                    )
-                })
-                .collect();
-            return format!("MACRO({})", parts.join(","));
-        }
-        tok.to_string()
-    }
 
     #[test]
     fn permutation_rederived_from_fixture_pair_matches_table() {
@@ -896,6 +993,24 @@ mod tests {
                 (0..7).map(|l| canon_ref[l][arg].clone()).collect::<Vec<_>>()
             );
         }
+    }
+
+    #[test]
+    fn cross_check_accepts_the_reference_keymap() {
+        cross_check(&seeded(), REFERENCE_KEYMAP_C).expect("fixture pair must agree");
+    }
+
+    #[test]
+    fn cross_check_reports_positional_diffs() {
+        let mut layout = seeded();
+        layout.layers[0].keys[0] =
+            KeyAction::Basic { code: "KC_F24".into(), mods: None, glow: None };
+        let err = cross_check(&layout, REFERENCE_KEYMAP_C).unwrap_err();
+        assert_eq!(err.code(), "PermutationMismatch");
+        let msg = err.to_string();
+        assert!(msg.contains("layer 0 arg 0"), "{msg}");
+        assert!(msg.contains("KC_F24"), "{msg}");
+        assert!(msg.contains("KC_ESCAPE"), "{msg}");
     }
 
     /// `shared/fixtures/seeded_layout.json` is the full seeder output over the

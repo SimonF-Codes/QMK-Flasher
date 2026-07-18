@@ -1,31 +1,54 @@
 //! MSYS firmware build — owned by Worker A. See `docs/CONTRACT.md`.
 //!
-//! Real implementation (msys.rs): `MSYSTEM=MINGW64 bash -lc "cd qmk_firmware
-//! && make zsa/moonlander/reva:qmk_flasher"`, streaming stdout lines through
-//! `on_log`, then copying the .bin to `%APPDATA%\qmk-flasher\builds\`.
-//! Never `qmk compile`. STUB: canned log lines and a fake path.
+//! `build_firmware` builds the **saved** layout: it loads it from the store,
+//! writes generated sources into `keymaps/<keymapName>/` (never
+//! `arrows_together`), then runs the MSYS make (msys.rs), streaming every
+//! output line through `on_log` (forwarded to the webview as `build-log`
+//! events). Returns the path of the .bin copy under
+//! `%APPDATA%\qmk-flasher\builds\`.
+
+pub mod msys;
 
 use crate::error::AppError;
+use crate::{appcfg, codegen, layout};
 
-/// Build the firmware, streaming make output through `on_log` (forwarded to
-/// the webview as `build-log` events). Returns the built .bin path.
-/// STUB: emits canned lines, touches no toolchain.
 pub fn build_firmware<F: FnMut(String)>(mut on_log: F) -> Result<String, AppError> {
-    on_log("make zsa/moonlander/reva:qmk_flasher (stub)".to_string());
-    on_log("Creating binary load file for flashing: .build/zsa_moonlander_reva_qmk_flasher.bin (stub)".to_string());
-    Ok(r"C:\Users\fridl\AppData\Roaming\qmk-flasher\builds\stub.bin".to_string())
+    let layout = layout::store::load()?;
+    let cfg = appcfg::get();
+    let dir = codegen::write_sources(&layout, &cfg)?;
+    on_log(format!("Sources written to {}", dir.display()));
+    msys::build(&cfg, &mut on_log)
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
 
+    /// A3 acceptance: the real MSYS build. Ignored by default — run manually
+    /// once with `cargo test real_msys_build -- --ignored --nocapture`.
+    /// Produces a .bin whose size is within ~1% of the known-good
+    /// arrows_together image (golden source parity ⇒ near-identical binary).
     #[test]
-    fn build_streams_log_and_returns_bin_path() {
+    #[ignore = "invokes the real MSYS toolchain (minutes); run manually for A3"]
+    fn real_msys_build_produces_reference_sized_bin() {
         let mut lines = Vec::new();
-        let path = build_firmware(|l| lines.push(l)).unwrap();
+        let path = build_firmware(|l| {
+            println!("{l}");
+            lines.push(l);
+        })
+        .expect("real build must succeed");
         assert!(path.ends_with(".bin"));
-        assert!(!lines.is_empty());
-        assert!(lines[0].contains("make zsa/moonlander/reva:qmk_flasher"));
+        let built = std::fs::metadata(&path).expect("built bin exists").len() as f64;
+        let reference = std::fs::metadata(
+            r"C:\Users\fridl\qmk_firmware\zsa_moonlander_reva_arrows_together.bin",
+        )
+        .expect("reference arrows_together bin exists")
+        .len() as f64;
+        let deviation = (built - reference).abs() / reference;
+        assert!(
+            deviation < 0.01,
+            "built {built} bytes vs reference {reference} bytes ({:.2}% off)",
+            deviation * 100.0
+        );
     }
 }
