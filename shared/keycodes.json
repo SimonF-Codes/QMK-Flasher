@@ -1,0 +1,2160 @@
+[
+  {
+    "qmk": "KC_A",
+    "aliases": [],
+    "label": "A",
+    "longLabel": "A",
+    "category": "letter",
+    "tappable": true,
+    "modsApplicable": true
+  },
+  {
+    "qmk": "KC_B",
+    "aliases": [],
+    "label": "B",
+    "longLabel": "B",
+    "category": "letter",
+    "tappable": true,
+    "modsApplicable": true
+  },
+  {
+    "qmk": "KC_C",
+    "aliases": [],
+    "label": "C",
+    "longLabel": "C",
+    "category": "letter",
+    "tappable": true,
+    "modsApplicable": true
+  },
+  {
+    "qmk": "KC_D",
+    "aliases": [],
+    "label": "D",
+    "longLabel": "D",
+    "category": "letter",
+    "tappable": true,
+    "modsApplicable": true
+  },
+  {
+    "qmk": "KC_E",
+    "aliases": [],
+    "label": "E",
+    "longLabel": "E",
+    "category": "letter",
+    "tappable": true,
+    "modsApplicable": true
+  },
+  {
+    "qmk": "KC_F",
+    "aliases": [],
+    "label": "F",
+    "longLabel": "F",
+    "category": "letter",
+    "tappable": true,
+    "modsApplicable": true
+  },
+  {
+    "qmk": "KC_G",
+    "aliases": [],
+    "label": "G",
+    "longLabel": "G",
+    "category": "letter",
+    "tappable": true,
+    "modsApplicable": true
+  },
+  {
+    "qmk": "KC_H",
+    "aliases": [],
+    "label": "H",
+    "longLabel": "H",
+    "category": "letter",
+    "tappable": true,
+    "modsApplicable": true
+  },
+  {
+    "qmk": "KC_I",
+    "aliases": [],
+    "label": "I",
+    "longLabel": "I",
+    "category": "letter",
+    "tappable": true,
+    "modsApplicable": true
+  },
+  {
+    "qmk": "KC_J",
+    "aliases": [],
+    "label": "J",
+    "longLabel": "J",
+    "category": "letter",
+    "tappable": true,
+    "modsApplicable": true
+  },
+  {
+    "qmk": "KC_K",
+    "aliases": [],
+    "label": "K",
+    "longLabel": "K",
+    "category": "letter",
+    "tappable": true,
+    "modsApplicable": true
+  },
+  {
+    "qmk": "KC_L",
+    "aliases": [],
+    "label": "L",
+    "longLabel": "L",
+    "category": "letter",
+    "tappable": true,
+    "modsApplicable": true
+  },
+  {
+    "qmk": "KC_M",
+    "aliases": [],
+    "label": "M",
+    "longLabel": "M",
+    "category": "letter",
+    "tappable": true,
+    "modsApplicable": true
+  },
+  {
+    "qmk": "KC_N",
+    "aliases": [],
+    "label": "N",
+    "longLabel": "N",
+    "category": "letter",
+    "tappable": true,
+    "modsApplicable": true
+  },
+  {
+    "qmk": "KC_O",
+    "aliases": [],
+    "label": "O",
+    "longLabel": "O",
+    "category": "letter",
+    "tappable": true,
+    "modsApplicable": true
+  },
+  {
+    "qmk": "KC_P",
+    "aliases": [],
+    "label": "P",
+    "longLabel": "P",
+    "category": "letter",
+    "tappable": true,
+    "modsApplicable": true
+  },
+  {
+    "qmk": "KC_Q",
+    "aliases": [],
+    "label": "Q",
+    "longLabel": "Q",
+    "category": "letter",
+    "tappable": true,
+    "modsApplicable": true
+  },
+  {
+    "qmk": "KC_R",
+    "aliases": [],
+    "label": "R",
+    "longLabel": "R",
+    "category": "letter",
+    "tappable": true,
+    "modsApplicable": true
+  },
+  {
+    "qmk": "KC_S",
+    "aliases": [],
+    "label": "S",
+    "longLabel": "S",
+    "category": "letter",
+    "tappable": true,
+    "modsApplicable": true
+  },
+  {
+    "qmk": "KC_T",
+    "aliases": [],
+    "label": "T",
+    "longLabel": "T",
+    "category": "letter",
+    "tappable": true,
+    "modsApplicable": true
+  },
+  {
+    "qmk": "KC_U",
+    "aliases": [],
+    "label": "U",
+    "longLabel": "U",
+    "category": "letter",
+    "tappable": true,
+    "modsApplicable": true
+  },
+  {
+    "qmk": "KC_V",
+    "aliases": [],
+    "label": "V",
+    "longLabel": "V",
+    "category": "letter",
+    "tappable": true,
+    "modsApplicable": true
+  },
+  {
+    "qmk": "KC_W",
+    "aliases": [],
+    "label": "W",
+    "longLabel": "W",
+    "category": "letter",
+    "tappable": true,
+    "modsApplicable": true
+  },
+  {
+    "qmk": "KC_X",
+    "aliases": [],
+    "label": "X",
+    "longLabel": "X",
+    "category": "letter",
+    "tappable": true,
+    "modsApplicable": true
+  },
+  {
+    "qmk": "KC_Y",
+    "aliases": [],
+    "label": "Y",
+    "longLabel": "Y",
+    "category": "letter",
+    "tappable": true,
+    "modsApplicable": true
+  },
+  {
+    "qmk": "KC_Z",
+    "aliases": [],
+    "label": "Z",
+    "longLabel": "Z",
+    "category": "letter",
+    "tappable": true,
+    "modsApplicable": true
+  },
+  {
+    "qmk": "KC_1",
+    "aliases": [],
+    "label": "1",
+    "longLabel": "1",
+    "category": "digit",
+    "tappable": true,
+    "modsApplicable": true
+  },
+  {
+    "qmk": "KC_2",
+    "aliases": [],
+    "label": "2",
+    "longLabel": "2",
+    "category": "digit",
+    "tappable": true,
+    "modsApplicable": true
+  },
+  {
+    "qmk": "KC_3",
+    "aliases": [],
+    "label": "3",
+    "longLabel": "3",
+    "category": "digit",
+    "tappable": true,
+    "modsApplicable": true
+  },
+  {
+    "qmk": "KC_4",
+    "aliases": [],
+    "label": "4",
+    "longLabel": "4",
+    "category": "digit",
+    "tappable": true,
+    "modsApplicable": true
+  },
+  {
+    "qmk": "KC_5",
+    "aliases": [],
+    "label": "5",
+    "longLabel": "5",
+    "category": "digit",
+    "tappable": true,
+    "modsApplicable": true
+  },
+  {
+    "qmk": "KC_6",
+    "aliases": [],
+    "label": "6",
+    "longLabel": "6",
+    "category": "digit",
+    "tappable": true,
+    "modsApplicable": true
+  },
+  {
+    "qmk": "KC_7",
+    "aliases": [],
+    "label": "7",
+    "longLabel": "7",
+    "category": "digit",
+    "tappable": true,
+    "modsApplicable": true
+  },
+  {
+    "qmk": "KC_8",
+    "aliases": [],
+    "label": "8",
+    "longLabel": "8",
+    "category": "digit",
+    "tappable": true,
+    "modsApplicable": true
+  },
+  {
+    "qmk": "KC_9",
+    "aliases": [],
+    "label": "9",
+    "longLabel": "9",
+    "category": "digit",
+    "tappable": true,
+    "modsApplicable": true
+  },
+  {
+    "qmk": "KC_0",
+    "aliases": [],
+    "label": "0",
+    "longLabel": "0",
+    "category": "digit",
+    "tappable": true,
+    "modsApplicable": true
+  },
+  {
+    "qmk": "KC_F1",
+    "aliases": [],
+    "label": "F1",
+    "longLabel": "F1",
+    "category": "fkey",
+    "tappable": true,
+    "modsApplicable": true
+  },
+  {
+    "qmk": "KC_F2",
+    "aliases": [],
+    "label": "F2",
+    "longLabel": "F2",
+    "category": "fkey",
+    "tappable": true,
+    "modsApplicable": true
+  },
+  {
+    "qmk": "KC_F3",
+    "aliases": [],
+    "label": "F3",
+    "longLabel": "F3",
+    "category": "fkey",
+    "tappable": true,
+    "modsApplicable": true
+  },
+  {
+    "qmk": "KC_F4",
+    "aliases": [],
+    "label": "F4",
+    "longLabel": "F4",
+    "category": "fkey",
+    "tappable": true,
+    "modsApplicable": true
+  },
+  {
+    "qmk": "KC_F5",
+    "aliases": [],
+    "label": "F5",
+    "longLabel": "F5",
+    "category": "fkey",
+    "tappable": true,
+    "modsApplicable": true
+  },
+  {
+    "qmk": "KC_F6",
+    "aliases": [],
+    "label": "F6",
+    "longLabel": "F6",
+    "category": "fkey",
+    "tappable": true,
+    "modsApplicable": true
+  },
+  {
+    "qmk": "KC_F7",
+    "aliases": [],
+    "label": "F7",
+    "longLabel": "F7",
+    "category": "fkey",
+    "tappable": true,
+    "modsApplicable": true
+  },
+  {
+    "qmk": "KC_F8",
+    "aliases": [],
+    "label": "F8",
+    "longLabel": "F8",
+    "category": "fkey",
+    "tappable": true,
+    "modsApplicable": true
+  },
+  {
+    "qmk": "KC_F9",
+    "aliases": [],
+    "label": "F9",
+    "longLabel": "F9",
+    "category": "fkey",
+    "tappable": true,
+    "modsApplicable": true
+  },
+  {
+    "qmk": "KC_F10",
+    "aliases": [],
+    "label": "F10",
+    "longLabel": "F10",
+    "category": "fkey",
+    "tappable": true,
+    "modsApplicable": true
+  },
+  {
+    "qmk": "KC_F11",
+    "aliases": [],
+    "label": "F11",
+    "longLabel": "F11",
+    "category": "fkey",
+    "tappable": true,
+    "modsApplicable": true
+  },
+  {
+    "qmk": "KC_F12",
+    "aliases": [],
+    "label": "F12",
+    "longLabel": "F12",
+    "category": "fkey",
+    "tappable": true,
+    "modsApplicable": true
+  },
+  {
+    "qmk": "KC_F13",
+    "aliases": [],
+    "label": "F13",
+    "longLabel": "F13",
+    "category": "fkey",
+    "tappable": true,
+    "modsApplicable": true
+  },
+  {
+    "qmk": "KC_F14",
+    "aliases": [],
+    "label": "F14",
+    "longLabel": "F14",
+    "category": "fkey",
+    "tappable": true,
+    "modsApplicable": true
+  },
+  {
+    "qmk": "KC_F15",
+    "aliases": [],
+    "label": "F15",
+    "longLabel": "F15",
+    "category": "fkey",
+    "tappable": true,
+    "modsApplicable": true
+  },
+  {
+    "qmk": "KC_F16",
+    "aliases": [],
+    "label": "F16",
+    "longLabel": "F16",
+    "category": "fkey",
+    "tappable": true,
+    "modsApplicable": true
+  },
+  {
+    "qmk": "KC_F17",
+    "aliases": [],
+    "label": "F17",
+    "longLabel": "F17",
+    "category": "fkey",
+    "tappable": true,
+    "modsApplicable": true
+  },
+  {
+    "qmk": "KC_F18",
+    "aliases": [],
+    "label": "F18",
+    "longLabel": "F18",
+    "category": "fkey",
+    "tappable": true,
+    "modsApplicable": true
+  },
+  {
+    "qmk": "KC_F19",
+    "aliases": [],
+    "label": "F19",
+    "longLabel": "F19",
+    "category": "fkey",
+    "tappable": true,
+    "modsApplicable": true
+  },
+  {
+    "qmk": "KC_F20",
+    "aliases": [],
+    "label": "F20",
+    "longLabel": "F20",
+    "category": "fkey",
+    "tappable": true,
+    "modsApplicable": true
+  },
+  {
+    "qmk": "KC_F21",
+    "aliases": [],
+    "label": "F21",
+    "longLabel": "F21",
+    "category": "fkey",
+    "tappable": true,
+    "modsApplicable": true
+  },
+  {
+    "qmk": "KC_F22",
+    "aliases": [],
+    "label": "F22",
+    "longLabel": "F22",
+    "category": "fkey",
+    "tappable": true,
+    "modsApplicable": true
+  },
+  {
+    "qmk": "KC_F23",
+    "aliases": [],
+    "label": "F23",
+    "longLabel": "F23",
+    "category": "fkey",
+    "tappable": true,
+    "modsApplicable": true
+  },
+  {
+    "qmk": "KC_F24",
+    "aliases": [],
+    "label": "F24",
+    "longLabel": "F24",
+    "category": "fkey",
+    "tappable": true,
+    "modsApplicable": true
+  },
+  {
+    "qmk": "KC_ENTER",
+    "aliases": [
+      "KC_ENT"
+    ],
+    "label": "Enter",
+    "longLabel": "Enter",
+    "category": "punct",
+    "tappable": true,
+    "modsApplicable": true
+  },
+  {
+    "qmk": "KC_ESCAPE",
+    "aliases": [
+      "KC_ESC"
+    ],
+    "label": "Esc",
+    "longLabel": "Escape",
+    "category": "punct",
+    "tappable": true,
+    "modsApplicable": true
+  },
+  {
+    "qmk": "KC_BACKSPACE",
+    "aliases": [
+      "KC_BSPC"
+    ],
+    "label": "Bksp",
+    "longLabel": "Backspace",
+    "category": "punct",
+    "tappable": true,
+    "modsApplicable": true
+  },
+  {
+    "qmk": "KC_TAB",
+    "aliases": [],
+    "label": "Tab",
+    "longLabel": "Tab",
+    "category": "punct",
+    "tappable": true,
+    "modsApplicable": true
+  },
+  {
+    "qmk": "KC_SPACE",
+    "aliases": [
+      "KC_SPC"
+    ],
+    "label": "Space",
+    "longLabel": "Space",
+    "category": "punct",
+    "tappable": true,
+    "modsApplicable": true
+  },
+  {
+    "qmk": "KC_MINUS",
+    "aliases": [
+      "KC_MINS"
+    ],
+    "label": "-",
+    "longLabel": "Minus",
+    "category": "punct",
+    "tappable": true,
+    "modsApplicable": true
+  },
+  {
+    "qmk": "KC_EQUAL",
+    "aliases": [
+      "KC_EQL"
+    ],
+    "label": "=",
+    "longLabel": "Equal",
+    "category": "punct",
+    "tappable": true,
+    "modsApplicable": true
+  },
+  {
+    "qmk": "KC_LEFT_BRACKET",
+    "aliases": [
+      "KC_LBRC"
+    ],
+    "label": "[",
+    "longLabel": "Left Bracket",
+    "category": "punct",
+    "tappable": true,
+    "modsApplicable": true
+  },
+  {
+    "qmk": "KC_RIGHT_BRACKET",
+    "aliases": [
+      "KC_RBRC"
+    ],
+    "label": "]",
+    "longLabel": "Right Bracket",
+    "category": "punct",
+    "tappable": true,
+    "modsApplicable": true
+  },
+  {
+    "qmk": "KC_BACKSLASH",
+    "aliases": [
+      "KC_BSLS"
+    ],
+    "label": "\\",
+    "longLabel": "Backslash",
+    "category": "punct",
+    "tappable": true,
+    "modsApplicable": true
+  },
+  {
+    "qmk": "KC_SEMICOLON",
+    "aliases": [
+      "KC_SCLN"
+    ],
+    "label": ";",
+    "longLabel": "Semicolon",
+    "category": "punct",
+    "tappable": true,
+    "modsApplicable": true
+  },
+  {
+    "qmk": "KC_QUOTE",
+    "aliases": [
+      "KC_QUOT"
+    ],
+    "label": "'",
+    "longLabel": "Quote",
+    "category": "punct",
+    "tappable": true,
+    "modsApplicable": true
+  },
+  {
+    "qmk": "KC_GRAVE",
+    "aliases": [
+      "KC_GRV"
+    ],
+    "label": "`",
+    "longLabel": "Grave",
+    "category": "punct",
+    "tappable": true,
+    "modsApplicable": true
+  },
+  {
+    "qmk": "KC_COMMA",
+    "aliases": [
+      "KC_COMM"
+    ],
+    "label": ",",
+    "longLabel": "Comma",
+    "category": "punct",
+    "tappable": true,
+    "modsApplicable": true
+  },
+  {
+    "qmk": "KC_DOT",
+    "aliases": [],
+    "label": ".",
+    "longLabel": "Period",
+    "category": "punct",
+    "tappable": true,
+    "modsApplicable": true
+  },
+  {
+    "qmk": "KC_SLASH",
+    "aliases": [
+      "KC_SLSH"
+    ],
+    "label": "/",
+    "longLabel": "Slash",
+    "category": "punct",
+    "tappable": true,
+    "modsApplicable": true
+  },
+  {
+    "qmk": "KC_CAPS_LOCK",
+    "aliases": [
+      "KC_CAPS"
+    ],
+    "label": "Caps",
+    "longLabel": "Caps Lock",
+    "category": "punct",
+    "tappable": true,
+    "modsApplicable": true
+  },
+  {
+    "qmk": "KC_TILDE",
+    "aliases": [
+      "KC_TILD"
+    ],
+    "label": "~",
+    "longLabel": "Tilde",
+    "category": "shifted",
+    "tappable": true,
+    "modsApplicable": true
+  },
+  {
+    "qmk": "KC_EXCLAIM",
+    "aliases": [
+      "KC_EXLM"
+    ],
+    "label": "!",
+    "longLabel": "Exclamation",
+    "category": "shifted",
+    "tappable": true,
+    "modsApplicable": true
+  },
+  {
+    "qmk": "KC_AT",
+    "aliases": [],
+    "label": "@",
+    "longLabel": "At",
+    "category": "shifted",
+    "tappable": true,
+    "modsApplicable": true
+  },
+  {
+    "qmk": "KC_HASH",
+    "aliases": [],
+    "label": "#",
+    "longLabel": "Hash",
+    "category": "shifted",
+    "tappable": true,
+    "modsApplicable": true
+  },
+  {
+    "qmk": "KC_DOLLAR",
+    "aliases": [
+      "KC_DLR"
+    ],
+    "label": "$",
+    "longLabel": "Dollar",
+    "category": "shifted",
+    "tappable": true,
+    "modsApplicable": true
+  },
+  {
+    "qmk": "KC_PERCENT",
+    "aliases": [
+      "KC_PERC"
+    ],
+    "label": "%",
+    "longLabel": "Percent",
+    "category": "shifted",
+    "tappable": true,
+    "modsApplicable": true
+  },
+  {
+    "qmk": "KC_CIRCUMFLEX",
+    "aliases": [
+      "KC_CIRC"
+    ],
+    "label": "^",
+    "longLabel": "Circumflex",
+    "category": "shifted",
+    "tappable": true,
+    "modsApplicable": true
+  },
+  {
+    "qmk": "KC_AMPERSAND",
+    "aliases": [
+      "KC_AMPR"
+    ],
+    "label": "&",
+    "longLabel": "Ampersand",
+    "category": "shifted",
+    "tappable": true,
+    "modsApplicable": true
+  },
+  {
+    "qmk": "KC_ASTERISK",
+    "aliases": [
+      "KC_ASTR"
+    ],
+    "label": "*",
+    "longLabel": "Asterisk",
+    "category": "shifted",
+    "tappable": true,
+    "modsApplicable": true
+  },
+  {
+    "qmk": "KC_LEFT_PAREN",
+    "aliases": [
+      "KC_LPRN"
+    ],
+    "label": "(",
+    "longLabel": "Left Paren",
+    "category": "shifted",
+    "tappable": true,
+    "modsApplicable": true
+  },
+  {
+    "qmk": "KC_RIGHT_PAREN",
+    "aliases": [
+      "KC_RPRN"
+    ],
+    "label": ")",
+    "longLabel": "Right Paren",
+    "category": "shifted",
+    "tappable": true,
+    "modsApplicable": true
+  },
+  {
+    "qmk": "KC_UNDERSCORE",
+    "aliases": [
+      "KC_UNDS"
+    ],
+    "label": "_",
+    "longLabel": "Underscore",
+    "category": "shifted",
+    "tappable": true,
+    "modsApplicable": true
+  },
+  {
+    "qmk": "KC_PLUS",
+    "aliases": [],
+    "label": "+",
+    "longLabel": "Plus",
+    "category": "shifted",
+    "tappable": true,
+    "modsApplicable": true
+  },
+  {
+    "qmk": "KC_LEFT_CURLY_BRACE",
+    "aliases": [
+      "KC_LCBR"
+    ],
+    "label": "{",
+    "longLabel": "Left Brace",
+    "category": "shifted",
+    "tappable": true,
+    "modsApplicable": true
+  },
+  {
+    "qmk": "KC_RIGHT_CURLY_BRACE",
+    "aliases": [
+      "KC_RCBR"
+    ],
+    "label": "}",
+    "longLabel": "Right Brace",
+    "category": "shifted",
+    "tappable": true,
+    "modsApplicable": true
+  },
+  {
+    "qmk": "KC_PIPE",
+    "aliases": [],
+    "label": "|",
+    "longLabel": "Pipe",
+    "category": "shifted",
+    "tappable": true,
+    "modsApplicable": true
+  },
+  {
+    "qmk": "KC_COLON",
+    "aliases": [
+      "KC_COLN"
+    ],
+    "label": ":",
+    "longLabel": "Colon",
+    "category": "shifted",
+    "tappable": true,
+    "modsApplicable": true
+  },
+  {
+    "qmk": "KC_DOUBLE_QUOTE",
+    "aliases": [
+      "KC_DQUO",
+      "KC_DQT"
+    ],
+    "label": "\"",
+    "longLabel": "Double Quote",
+    "category": "shifted",
+    "tappable": true,
+    "modsApplicable": true
+  },
+  {
+    "qmk": "KC_LEFT_ANGLE_BRACKET",
+    "aliases": [
+      "KC_LABK",
+      "KC_LT"
+    ],
+    "label": "<",
+    "longLabel": "Less Than",
+    "category": "shifted",
+    "tappable": true,
+    "modsApplicable": true
+  },
+  {
+    "qmk": "KC_RIGHT_ANGLE_BRACKET",
+    "aliases": [
+      "KC_RABK",
+      "KC_GT"
+    ],
+    "label": ">",
+    "longLabel": "Greater Than",
+    "category": "shifted",
+    "tappable": true,
+    "modsApplicable": true
+  },
+  {
+    "qmk": "KC_QUESTION",
+    "aliases": [
+      "KC_QUES"
+    ],
+    "label": "?",
+    "longLabel": "Question",
+    "category": "shifted",
+    "tappable": true,
+    "modsApplicable": true
+  },
+  {
+    "qmk": "KC_INSERT",
+    "aliases": [
+      "KC_INS"
+    ],
+    "label": "Ins",
+    "longLabel": "Insert",
+    "category": "nav",
+    "tappable": true,
+    "modsApplicable": true
+  },
+  {
+    "qmk": "KC_DELETE",
+    "aliases": [
+      "KC_DEL"
+    ],
+    "label": "Del",
+    "longLabel": "Delete",
+    "category": "nav",
+    "tappable": true,
+    "modsApplicable": true
+  },
+  {
+    "qmk": "KC_HOME",
+    "aliases": [],
+    "label": "Home",
+    "longLabel": "Home",
+    "category": "nav",
+    "tappable": true,
+    "modsApplicable": true
+  },
+  {
+    "qmk": "KC_END",
+    "aliases": [],
+    "label": "End",
+    "longLabel": "End",
+    "category": "nav",
+    "tappable": true,
+    "modsApplicable": true
+  },
+  {
+    "qmk": "KC_PAGE_UP",
+    "aliases": [
+      "KC_PGUP"
+    ],
+    "label": "PgUp",
+    "longLabel": "Page Up",
+    "category": "nav",
+    "tappable": true,
+    "modsApplicable": true
+  },
+  {
+    "qmk": "KC_PAGE_DOWN",
+    "aliases": [
+      "KC_PGDN"
+    ],
+    "label": "PgDn",
+    "longLabel": "Page Down",
+    "category": "nav",
+    "tappable": true,
+    "modsApplicable": true
+  },
+  {
+    "qmk": "KC_UP",
+    "aliases": [],
+    "label": "↑",
+    "longLabel": "Up Arrow",
+    "category": "nav",
+    "tappable": true,
+    "modsApplicable": true
+  },
+  {
+    "qmk": "KC_DOWN",
+    "aliases": [],
+    "label": "↓",
+    "longLabel": "Down Arrow",
+    "category": "nav",
+    "tappable": true,
+    "modsApplicable": true
+  },
+  {
+    "qmk": "KC_LEFT",
+    "aliases": [],
+    "label": "←",
+    "longLabel": "Left Arrow",
+    "category": "nav",
+    "tappable": true,
+    "modsApplicable": true
+  },
+  {
+    "qmk": "KC_RIGHT",
+    "aliases": [],
+    "label": "→",
+    "longLabel": "Right Arrow",
+    "category": "nav",
+    "tappable": true,
+    "modsApplicable": true
+  },
+  {
+    "qmk": "KC_PRINT_SCREEN",
+    "aliases": [
+      "KC_PSCR"
+    ],
+    "label": "PrtSc",
+    "longLabel": "Print Screen",
+    "category": "nav",
+    "tappable": true,
+    "modsApplicable": true
+  },
+  {
+    "qmk": "KC_SCROLL_LOCK",
+    "aliases": [
+      "KC_SCRL",
+      "KC_BRMD"
+    ],
+    "label": "ScrLk",
+    "longLabel": "Scroll Lock",
+    "category": "nav",
+    "tappable": true,
+    "modsApplicable": true
+  },
+  {
+    "qmk": "KC_PAUSE",
+    "aliases": [
+      "KC_PAUS",
+      "KC_BRK",
+      "KC_BRMU"
+    ],
+    "label": "Pause",
+    "longLabel": "Pause/Break",
+    "category": "nav",
+    "tappable": true,
+    "modsApplicable": true
+  },
+  {
+    "qmk": "KC_APPLICATION",
+    "aliases": [
+      "KC_APP"
+    ],
+    "label": "Menu",
+    "longLabel": "Application (Menu)",
+    "category": "nav",
+    "tappable": true,
+    "modsApplicable": true
+  },
+  {
+    "qmk": "KC_UNDO",
+    "aliases": [],
+    "label": "Undo",
+    "longLabel": "Undo",
+    "category": "editing",
+    "tappable": true,
+    "modsApplicable": true
+  },
+  {
+    "qmk": "KC_CUT",
+    "aliases": [],
+    "label": "Cut",
+    "longLabel": "Cut",
+    "category": "editing",
+    "tappable": true,
+    "modsApplicable": true
+  },
+  {
+    "qmk": "KC_COPY",
+    "aliases": [],
+    "label": "Copy",
+    "longLabel": "Copy",
+    "category": "editing",
+    "tappable": true,
+    "modsApplicable": true
+  },
+  {
+    "qmk": "KC_PASTE",
+    "aliases": [
+      "KC_PSTE"
+    ],
+    "label": "Paste",
+    "longLabel": "Paste",
+    "category": "editing",
+    "tappable": true,
+    "modsApplicable": true
+  },
+  {
+    "qmk": "KC_FIND",
+    "aliases": [],
+    "label": "Find",
+    "longLabel": "Find",
+    "category": "editing",
+    "tappable": true,
+    "modsApplicable": true
+  },
+  {
+    "qmk": "KC_NUM_LOCK",
+    "aliases": [
+      "KC_NUM"
+    ],
+    "label": "Num",
+    "longLabel": "Num Lock",
+    "category": "keypad",
+    "tappable": true,
+    "modsApplicable": true
+  },
+  {
+    "qmk": "KC_KP_SLASH",
+    "aliases": [
+      "KC_PSLS"
+    ],
+    "label": "KP /",
+    "longLabel": "Keypad Slash",
+    "category": "keypad",
+    "tappable": true,
+    "modsApplicable": true
+  },
+  {
+    "qmk": "KC_KP_ASTERISK",
+    "aliases": [
+      "KC_PAST"
+    ],
+    "label": "KP *",
+    "longLabel": "Keypad Asterisk",
+    "category": "keypad",
+    "tappable": true,
+    "modsApplicable": true
+  },
+  {
+    "qmk": "KC_KP_MINUS",
+    "aliases": [
+      "KC_PMNS"
+    ],
+    "label": "KP -",
+    "longLabel": "Keypad Minus",
+    "category": "keypad",
+    "tappable": true,
+    "modsApplicable": true
+  },
+  {
+    "qmk": "KC_KP_PLUS",
+    "aliases": [
+      "KC_PPLS"
+    ],
+    "label": "KP +",
+    "longLabel": "Keypad Plus",
+    "category": "keypad",
+    "tappable": true,
+    "modsApplicable": true
+  },
+  {
+    "qmk": "KC_KP_ENTER",
+    "aliases": [
+      "KC_PENT"
+    ],
+    "label": "KP Ent",
+    "longLabel": "Keypad Enter",
+    "category": "keypad",
+    "tappable": true,
+    "modsApplicable": true
+  },
+  {
+    "qmk": "KC_KP_1",
+    "aliases": [
+      "KC_P1"
+    ],
+    "label": "KP 1",
+    "longLabel": "Keypad 1",
+    "category": "keypad",
+    "tappable": true,
+    "modsApplicable": true
+  },
+  {
+    "qmk": "KC_KP_2",
+    "aliases": [
+      "KC_P2"
+    ],
+    "label": "KP 2",
+    "longLabel": "Keypad 2",
+    "category": "keypad",
+    "tappable": true,
+    "modsApplicable": true
+  },
+  {
+    "qmk": "KC_KP_3",
+    "aliases": [
+      "KC_P3"
+    ],
+    "label": "KP 3",
+    "longLabel": "Keypad 3",
+    "category": "keypad",
+    "tappable": true,
+    "modsApplicable": true
+  },
+  {
+    "qmk": "KC_KP_4",
+    "aliases": [
+      "KC_P4"
+    ],
+    "label": "KP 4",
+    "longLabel": "Keypad 4",
+    "category": "keypad",
+    "tappable": true,
+    "modsApplicable": true
+  },
+  {
+    "qmk": "KC_KP_5",
+    "aliases": [
+      "KC_P5"
+    ],
+    "label": "KP 5",
+    "longLabel": "Keypad 5",
+    "category": "keypad",
+    "tappable": true,
+    "modsApplicable": true
+  },
+  {
+    "qmk": "KC_KP_6",
+    "aliases": [
+      "KC_P6"
+    ],
+    "label": "KP 6",
+    "longLabel": "Keypad 6",
+    "category": "keypad",
+    "tappable": true,
+    "modsApplicable": true
+  },
+  {
+    "qmk": "KC_KP_7",
+    "aliases": [
+      "KC_P7"
+    ],
+    "label": "KP 7",
+    "longLabel": "Keypad 7",
+    "category": "keypad",
+    "tappable": true,
+    "modsApplicable": true
+  },
+  {
+    "qmk": "KC_KP_8",
+    "aliases": [
+      "KC_P8"
+    ],
+    "label": "KP 8",
+    "longLabel": "Keypad 8",
+    "category": "keypad",
+    "tappable": true,
+    "modsApplicable": true
+  },
+  {
+    "qmk": "KC_KP_9",
+    "aliases": [
+      "KC_P9"
+    ],
+    "label": "KP 9",
+    "longLabel": "Keypad 9",
+    "category": "keypad",
+    "tappable": true,
+    "modsApplicable": true
+  },
+  {
+    "qmk": "KC_KP_0",
+    "aliases": [
+      "KC_P0"
+    ],
+    "label": "KP 0",
+    "longLabel": "Keypad 0",
+    "category": "keypad",
+    "tappable": true,
+    "modsApplicable": true
+  },
+  {
+    "qmk": "KC_KP_DOT",
+    "aliases": [
+      "KC_PDOT"
+    ],
+    "label": "KP .",
+    "longLabel": "Keypad Dot",
+    "category": "keypad",
+    "tappable": true,
+    "modsApplicable": true
+  },
+  {
+    "qmk": "KC_KP_EQUAL",
+    "aliases": [
+      "KC_PEQL"
+    ],
+    "label": "KP =",
+    "longLabel": "Keypad Equal",
+    "category": "keypad",
+    "tappable": true,
+    "modsApplicable": true
+  },
+  {
+    "qmk": "KC_KP_COMMA",
+    "aliases": [
+      "KC_PCMM"
+    ],
+    "label": "KP ,",
+    "longLabel": "Keypad Comma",
+    "category": "keypad",
+    "tappable": true,
+    "modsApplicable": true
+  },
+  {
+    "qmk": "KC_LEFT_CTRL",
+    "aliases": [
+      "KC_LCTL"
+    ],
+    "label": "LCtrl",
+    "longLabel": "Left Control",
+    "category": "modifier",
+    "tappable": false,
+    "modsApplicable": false
+  },
+  {
+    "qmk": "KC_LEFT_SHIFT",
+    "aliases": [
+      "KC_LSFT"
+    ],
+    "label": "LShift",
+    "longLabel": "Left Shift",
+    "category": "modifier",
+    "tappable": false,
+    "modsApplicable": false
+  },
+  {
+    "qmk": "KC_LEFT_ALT",
+    "aliases": [
+      "KC_LALT",
+      "KC_LOPT"
+    ],
+    "label": "LAlt",
+    "longLabel": "Left Alt",
+    "category": "modifier",
+    "tappable": false,
+    "modsApplicable": false
+  },
+  {
+    "qmk": "KC_LEFT_GUI",
+    "aliases": [
+      "KC_LGUI",
+      "KC_LCMD",
+      "KC_LWIN"
+    ],
+    "label": "LGui",
+    "longLabel": "Left GUI",
+    "category": "modifier",
+    "tappable": false,
+    "modsApplicable": false
+  },
+  {
+    "qmk": "KC_RIGHT_CTRL",
+    "aliases": [
+      "KC_RCTL"
+    ],
+    "label": "RCtrl",
+    "longLabel": "Right Control",
+    "category": "modifier",
+    "tappable": false,
+    "modsApplicable": false
+  },
+  {
+    "qmk": "KC_RIGHT_SHIFT",
+    "aliases": [
+      "KC_RSFT"
+    ],
+    "label": "RShift",
+    "longLabel": "Right Shift",
+    "category": "modifier",
+    "tappable": false,
+    "modsApplicable": false
+  },
+  {
+    "qmk": "KC_RIGHT_ALT",
+    "aliases": [
+      "KC_RALT",
+      "KC_ROPT",
+      "KC_ALGR"
+    ],
+    "label": "RAlt",
+    "longLabel": "Right Alt",
+    "category": "modifier",
+    "tappable": false,
+    "modsApplicable": false
+  },
+  {
+    "qmk": "KC_RIGHT_GUI",
+    "aliases": [
+      "KC_RGUI",
+      "KC_RCMD",
+      "KC_RWIN"
+    ],
+    "label": "RGui",
+    "longLabel": "Right GUI",
+    "category": "modifier",
+    "tappable": false,
+    "modsApplicable": false
+  },
+  {
+    "qmk": "KC_MEH",
+    "aliases": [],
+    "label": "Meh",
+    "longLabel": "Meh (Ctrl+Shift+Alt)",
+    "category": "modifier",
+    "tappable": false,
+    "modsApplicable": false
+  },
+  {
+    "qmk": "KC_HYPR",
+    "aliases": [],
+    "label": "Hyper",
+    "longLabel": "Hyper (Ctrl+Shift+Alt+GUI)",
+    "category": "modifier",
+    "tappable": false,
+    "modsApplicable": false
+  },
+  {
+    "qmk": "KC_AUDIO_MUTE",
+    "aliases": [
+      "KC_MUTE"
+    ],
+    "label": "Mute",
+    "longLabel": "Mute",
+    "category": "media",
+    "tappable": true,
+    "modsApplicable": true
+  },
+  {
+    "qmk": "KC_AUDIO_VOL_UP",
+    "aliases": [
+      "KC_VOLU"
+    ],
+    "label": "Vol+",
+    "longLabel": "Volume Up",
+    "category": "media",
+    "tappable": true,
+    "modsApplicable": true
+  },
+  {
+    "qmk": "KC_AUDIO_VOL_DOWN",
+    "aliases": [
+      "KC_VOLD"
+    ],
+    "label": "Vol-",
+    "longLabel": "Volume Down",
+    "category": "media",
+    "tappable": true,
+    "modsApplicable": true
+  },
+  {
+    "qmk": "KC_MEDIA_NEXT_TRACK",
+    "aliases": [
+      "KC_MNXT"
+    ],
+    "label": "Next",
+    "longLabel": "Next Track",
+    "category": "media",
+    "tappable": true,
+    "modsApplicable": true
+  },
+  {
+    "qmk": "KC_MEDIA_PREV_TRACK",
+    "aliases": [
+      "KC_MPRV"
+    ],
+    "label": "Prev",
+    "longLabel": "Previous Track",
+    "category": "media",
+    "tappable": true,
+    "modsApplicable": true
+  },
+  {
+    "qmk": "KC_MEDIA_STOP",
+    "aliases": [
+      "KC_MSTP"
+    ],
+    "label": "Stop",
+    "longLabel": "Media Stop",
+    "category": "media",
+    "tappable": true,
+    "modsApplicable": true
+  },
+  {
+    "qmk": "KC_MEDIA_PLAY_PAUSE",
+    "aliases": [
+      "KC_MPLY"
+    ],
+    "label": "Play",
+    "longLabel": "Play/Pause",
+    "category": "media",
+    "tappable": true,
+    "modsApplicable": true
+  },
+  {
+    "qmk": "KC_MEDIA_SELECT",
+    "aliases": [
+      "KC_MSEL"
+    ],
+    "label": "Select",
+    "longLabel": "Media Select",
+    "category": "media",
+    "tappable": true,
+    "modsApplicable": true
+  },
+  {
+    "qmk": "KC_MEDIA_EJECT",
+    "aliases": [
+      "KC_EJCT"
+    ],
+    "label": "Eject",
+    "longLabel": "Media Eject",
+    "category": "media",
+    "tappable": true,
+    "modsApplicable": true
+  },
+  {
+    "qmk": "KC_MEDIA_FAST_FORWARD",
+    "aliases": [
+      "KC_MFFD"
+    ],
+    "label": "FFwd",
+    "longLabel": "Fast Forward",
+    "category": "media",
+    "tappable": true,
+    "modsApplicable": true
+  },
+  {
+    "qmk": "KC_MEDIA_REWIND",
+    "aliases": [
+      "KC_MRWD"
+    ],
+    "label": "Rwd",
+    "longLabel": "Rewind",
+    "category": "media",
+    "tappable": true,
+    "modsApplicable": true
+  },
+  {
+    "qmk": "KC_BRIGHTNESS_UP",
+    "aliases": [
+      "KC_BRIU"
+    ],
+    "label": "Bri+",
+    "longLabel": "Brightness Up",
+    "category": "media",
+    "tappable": true,
+    "modsApplicable": true
+  },
+  {
+    "qmk": "KC_BRIGHTNESS_DOWN",
+    "aliases": [
+      "KC_BRID"
+    ],
+    "label": "Bri-",
+    "longLabel": "Brightness Down",
+    "category": "media",
+    "tappable": true,
+    "modsApplicable": true
+  },
+  {
+    "qmk": "KC_MAIL",
+    "aliases": [],
+    "label": "Mail",
+    "longLabel": "Launch Mail",
+    "category": "media",
+    "tappable": true,
+    "modsApplicable": true
+  },
+  {
+    "qmk": "KC_CALCULATOR",
+    "aliases": [
+      "KC_CALC"
+    ],
+    "label": "Calc",
+    "longLabel": "Launch Calculator",
+    "category": "media",
+    "tappable": true,
+    "modsApplicable": true
+  },
+  {
+    "qmk": "KC_MY_COMPUTER",
+    "aliases": [
+      "KC_MYCM"
+    ],
+    "label": "My PC",
+    "longLabel": "My Computer",
+    "category": "media",
+    "tappable": true,
+    "modsApplicable": true
+  },
+  {
+    "qmk": "KC_WWW_SEARCH",
+    "aliases": [
+      "KC_WSCH"
+    ],
+    "label": "Search",
+    "longLabel": "Browser Search",
+    "category": "media",
+    "tappable": true,
+    "modsApplicable": true
+  },
+  {
+    "qmk": "KC_WWW_HOME",
+    "aliases": [
+      "KC_WHOM"
+    ],
+    "label": "Home",
+    "longLabel": "Browser Home",
+    "category": "media",
+    "tappable": true,
+    "modsApplicable": true
+  },
+  {
+    "qmk": "KC_WWW_BACK",
+    "aliases": [
+      "KC_WBAK"
+    ],
+    "label": "Back",
+    "longLabel": "Browser Back",
+    "category": "media",
+    "tappable": true,
+    "modsApplicable": true
+  },
+  {
+    "qmk": "KC_WWW_FORWARD",
+    "aliases": [
+      "KC_WFWD"
+    ],
+    "label": "Fwd",
+    "longLabel": "Browser Forward",
+    "category": "media",
+    "tappable": true,
+    "modsApplicable": true
+  },
+  {
+    "qmk": "KC_WWW_STOP",
+    "aliases": [
+      "KC_WSTP"
+    ],
+    "label": "Stop",
+    "longLabel": "Browser Stop",
+    "category": "media",
+    "tappable": true,
+    "modsApplicable": true
+  },
+  {
+    "qmk": "KC_WWW_REFRESH",
+    "aliases": [
+      "KC_WREF"
+    ],
+    "label": "Refresh",
+    "longLabel": "Browser Refresh",
+    "category": "media",
+    "tappable": true,
+    "modsApplicable": true
+  },
+  {
+    "qmk": "KC_WWW_FAVORITES",
+    "aliases": [
+      "KC_WFAV"
+    ],
+    "label": "Fav",
+    "longLabel": "Browser Favorites",
+    "category": "media",
+    "tappable": true,
+    "modsApplicable": true
+  },
+  {
+    "qmk": "KC_MS_UP",
+    "aliases": [
+      "KC_MS_U"
+    ],
+    "label": "M ↑",
+    "longLabel": "Mouse Up",
+    "category": "mouse",
+    "tappable": true,
+    "modsApplicable": true
+  },
+  {
+    "qmk": "KC_MS_DOWN",
+    "aliases": [
+      "KC_MS_D"
+    ],
+    "label": "M ↓",
+    "longLabel": "Mouse Down",
+    "category": "mouse",
+    "tappable": true,
+    "modsApplicable": true
+  },
+  {
+    "qmk": "KC_MS_LEFT",
+    "aliases": [
+      "KC_MS_L"
+    ],
+    "label": "M ←",
+    "longLabel": "Mouse Left",
+    "category": "mouse",
+    "tappable": true,
+    "modsApplicable": true
+  },
+  {
+    "qmk": "KC_MS_RIGHT",
+    "aliases": [
+      "KC_MS_R"
+    ],
+    "label": "M →",
+    "longLabel": "Mouse Right",
+    "category": "mouse",
+    "tappable": true,
+    "modsApplicable": true
+  },
+  {
+    "qmk": "KC_MS_BTN1",
+    "aliases": [
+      "KC_BTN1"
+    ],
+    "label": "Btn1",
+    "longLabel": "Mouse Button 1",
+    "category": "mouse",
+    "tappable": true,
+    "modsApplicable": true
+  },
+  {
+    "qmk": "KC_MS_BTN2",
+    "aliases": [
+      "KC_BTN2"
+    ],
+    "label": "Btn2",
+    "longLabel": "Mouse Button 2",
+    "category": "mouse",
+    "tappable": true,
+    "modsApplicable": true
+  },
+  {
+    "qmk": "KC_MS_BTN3",
+    "aliases": [
+      "KC_BTN3"
+    ],
+    "label": "Btn3",
+    "longLabel": "Mouse Button 3",
+    "category": "mouse",
+    "tappable": true,
+    "modsApplicable": true
+  },
+  {
+    "qmk": "KC_MS_BTN4",
+    "aliases": [
+      "KC_BTN4"
+    ],
+    "label": "Btn4",
+    "longLabel": "Mouse Button 4",
+    "category": "mouse",
+    "tappable": true,
+    "modsApplicable": true
+  },
+  {
+    "qmk": "KC_MS_BTN5",
+    "aliases": [
+      "KC_BTN5"
+    ],
+    "label": "Btn5",
+    "longLabel": "Mouse Button 5",
+    "category": "mouse",
+    "tappable": true,
+    "modsApplicable": true
+  },
+  {
+    "qmk": "KC_MS_WH_UP",
+    "aliases": [
+      "KC_WH_U"
+    ],
+    "label": "Wh ↑",
+    "longLabel": "Wheel Up",
+    "category": "mouse",
+    "tappable": true,
+    "modsApplicable": true
+  },
+  {
+    "qmk": "KC_MS_WH_DOWN",
+    "aliases": [
+      "KC_WH_D"
+    ],
+    "label": "Wh ↓",
+    "longLabel": "Wheel Down",
+    "category": "mouse",
+    "tappable": true,
+    "modsApplicable": true
+  },
+  {
+    "qmk": "KC_MS_WH_LEFT",
+    "aliases": [
+      "KC_WH_L"
+    ],
+    "label": "Wh ←",
+    "longLabel": "Wheel Left",
+    "category": "mouse",
+    "tappable": true,
+    "modsApplicable": true
+  },
+  {
+    "qmk": "KC_MS_WH_RIGHT",
+    "aliases": [
+      "KC_WH_R"
+    ],
+    "label": "Wh →",
+    "longLabel": "Wheel Right",
+    "category": "mouse",
+    "tappable": true,
+    "modsApplicable": true
+  },
+  {
+    "qmk": "KC_MS_ACCEL0",
+    "aliases": [
+      "KC_ACL0"
+    ],
+    "label": "Acl0",
+    "longLabel": "Mouse Accel 0",
+    "category": "mouse",
+    "tappable": true,
+    "modsApplicable": true
+  },
+  {
+    "qmk": "KC_MS_ACCEL1",
+    "aliases": [
+      "KC_ACL1"
+    ],
+    "label": "Acl1",
+    "longLabel": "Mouse Accel 1",
+    "category": "mouse",
+    "tappable": true,
+    "modsApplicable": true
+  },
+  {
+    "qmk": "KC_MS_ACCEL2",
+    "aliases": [
+      "KC_ACL2"
+    ],
+    "label": "Acl2",
+    "longLabel": "Mouse Accel 2",
+    "category": "mouse",
+    "tappable": true,
+    "modsApplicable": true
+  },
+  {
+    "qmk": "KC_SYSTEM_POWER",
+    "aliases": [
+      "KC_PWR"
+    ],
+    "label": "Power",
+    "longLabel": "System Power",
+    "category": "system",
+    "tappable": false,
+    "modsApplicable": false
+  },
+  {
+    "qmk": "KC_SYSTEM_SLEEP",
+    "aliases": [
+      "KC_SLEP"
+    ],
+    "label": "Sleep",
+    "longLabel": "System Sleep",
+    "category": "system",
+    "tappable": false,
+    "modsApplicable": false
+  },
+  {
+    "qmk": "KC_SYSTEM_WAKE",
+    "aliases": [
+      "KC_WAKE"
+    ],
+    "label": "Wake",
+    "longLabel": "System Wake",
+    "category": "system",
+    "tappable": false,
+    "modsApplicable": false
+  },
+  {
+    "qmk": "KC_NO",
+    "aliases": [
+      "XXXXXXX"
+    ],
+    "label": "",
+    "longLabel": "None",
+    "category": "special",
+    "tappable": false,
+    "modsApplicable": false
+  },
+  {
+    "qmk": "KC_TRANSPARENT",
+    "aliases": [
+      "KC_TRNS",
+      "_______"
+    ],
+    "label": "▽",
+    "longLabel": "Transparent",
+    "category": "special",
+    "tappable": false,
+    "modsApplicable": false
+  },
+  {
+    "qmk": "QK_BOOT",
+    "aliases": [
+      "RESET"
+    ],
+    "label": "Boot",
+    "longLabel": "Bootloader (DFU)",
+    "category": "special",
+    "tappable": false,
+    "modsApplicable": false
+  },
+  {
+    "qmk": "QK_LOCK",
+    "aliases": [],
+    "label": "Lock",
+    "longLabel": "Key Lock (hold any key)",
+    "category": "special",
+    "tappable": false,
+    "modsApplicable": false
+  },
+  {
+    "qmk": "CW_TOGG",
+    "aliases": [
+      "QK_CAPS_WORD_TOGGLE"
+    ],
+    "label": "CapsWd",
+    "longLabel": "Caps Word Toggle",
+    "category": "special",
+    "tappable": false,
+    "modsApplicable": false
+  },
+  {
+    "qmk": "AS_ON",
+    "aliases": [],
+    "label": "AS On",
+    "longLabel": "Auto Shift On",
+    "category": "special",
+    "tappable": false,
+    "modsApplicable": false
+  },
+  {
+    "qmk": "AS_OFF",
+    "aliases": [],
+    "label": "AS Off",
+    "longLabel": "Auto Shift Off",
+    "category": "special",
+    "tappable": false,
+    "modsApplicable": false
+  },
+  {
+    "qmk": "AS_TOGG",
+    "aliases": [],
+    "label": "AS Tog",
+    "longLabel": "Auto Shift Toggle",
+    "category": "special",
+    "tappable": false,
+    "modsApplicable": false
+  },
+  {
+    "qmk": "AU_TOGG",
+    "aliases": [
+      "AU_TOG"
+    ],
+    "label": "Audio",
+    "longLabel": "Audio Toggle",
+    "category": "special",
+    "tappable": false,
+    "modsApplicable": false
+  },
+  {
+    "qmk": "MU_TOGG",
+    "aliases": [
+      "MU_TOG"
+    ],
+    "label": "Music",
+    "longLabel": "Music Mode Toggle",
+    "category": "special",
+    "tappable": false,
+    "modsApplicable": false
+  },
+  {
+    "qmk": "MU_NEXT",
+    "aliases": [
+      "MU_MOD"
+    ],
+    "label": "Mus →",
+    "longLabel": "Music Mode Next",
+    "category": "special",
+    "tappable": false,
+    "modsApplicable": false
+  },
+  {
+    "qmk": "TOGGLE_LAYER_COLOR",
+    "aliases": [],
+    "label": "LyrCol",
+    "longLabel": "Toggle Per-Layer Color (ZSA)",
+    "category": "special",
+    "tappable": false,
+    "modsApplicable": false
+  },
+  {
+    "qmk": "RGB_TOG",
+    "aliases": [],
+    "label": "RGB",
+    "longLabel": "RGB Toggle",
+    "category": "rgb",
+    "tappable": false,
+    "modsApplicable": false
+  },
+  {
+    "qmk": "RGB_MODE_FORWARD",
+    "aliases": [
+      "RGB_MOD"
+    ],
+    "label": "RGB →",
+    "longLabel": "RGB Mode Next",
+    "category": "rgb",
+    "tappable": false,
+    "modsApplicable": false
+  },
+  {
+    "qmk": "RGB_MODE_REVERSE",
+    "aliases": [
+      "RGB_RMOD"
+    ],
+    "label": "RGB ←",
+    "longLabel": "RGB Mode Previous",
+    "category": "rgb",
+    "tappable": false,
+    "modsApplicable": false
+  },
+  {
+    "qmk": "RGB_HUI",
+    "aliases": [],
+    "label": "Hue+",
+    "longLabel": "RGB Hue Up",
+    "category": "rgb",
+    "tappable": false,
+    "modsApplicable": false
+  },
+  {
+    "qmk": "RGB_HUD",
+    "aliases": [],
+    "label": "Hue-",
+    "longLabel": "RGB Hue Down",
+    "category": "rgb",
+    "tappable": false,
+    "modsApplicable": false
+  },
+  {
+    "qmk": "RGB_SAI",
+    "aliases": [],
+    "label": "Sat+",
+    "longLabel": "RGB Saturation Up",
+    "category": "rgb",
+    "tappable": false,
+    "modsApplicable": false
+  },
+  {
+    "qmk": "RGB_SAD",
+    "aliases": [],
+    "label": "Sat-",
+    "longLabel": "RGB Saturation Down",
+    "category": "rgb",
+    "tappable": false,
+    "modsApplicable": false
+  },
+  {
+    "qmk": "RGB_VAI",
+    "aliases": [],
+    "label": "Val+",
+    "longLabel": "RGB Value Up",
+    "category": "rgb",
+    "tappable": false,
+    "modsApplicable": false
+  },
+  {
+    "qmk": "RGB_VAD",
+    "aliases": [],
+    "label": "Val-",
+    "longLabel": "RGB Value Down",
+    "category": "rgb",
+    "tappable": false,
+    "modsApplicable": false
+  },
+  {
+    "qmk": "RGB_SPI",
+    "aliases": [],
+    "label": "Spd+",
+    "longLabel": "RGB Speed Up",
+    "category": "rgb",
+    "tappable": false,
+    "modsApplicable": false
+  },
+  {
+    "qmk": "RGB_SPD",
+    "aliases": [],
+    "label": "Spd-",
+    "longLabel": "RGB Speed Down",
+    "category": "rgb",
+    "tappable": false,
+    "modsApplicable": false
+  },
+  {
+    "qmk": "RGB_SLD",
+    "aliases": [],
+    "label": "Solid",
+    "longLabel": "RGB Solid Mode (ZSA)",
+    "category": "rgb",
+    "tappable": false,
+    "modsApplicable": false
+  }
+]

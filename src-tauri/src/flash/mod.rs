@@ -1,36 +1,60 @@
-//! USB/DFU flashing — owned by Worker B. See `docs/CONTRACT.md`.
+//! USB watching + DFU flashing — owned by Worker B. See `docs/CONTRACT.md`.
 //!
-//! Responsible for putting the keyboard into its bootloader and writing a
-//! compiled firmware image over USB/DFU. STUB: reports a canned progress
-//! sequence and touches no hardware.
+//! Real implementation: watcher.rs polls `nusb::list_devices()` (1 s) for
+//! 0483:df11 → `dfu-device` events; dfu.rs does DfuSe erase + download at
+//! 0x08000000 with progress, then :leave (board re-enumerates as 3297:1969).
+//! `wally-cli` source is the behavioral reference. STUB: canned sequence,
+//! touches no hardware.
 
-use crate::events::{FlashDone, FlashProgress, FlashStage};
+use schemars::JsonSchema;
+use serde::{Deserialize, Serialize};
 
-/// Flash the firmware image at `firmware_path` to `keyboard`, reporting
-/// progress through `on_progress` (forwarded as `flash:progress` events by
-/// the command layer). Returns the terminal [`FlashDone`] payload.
-/// STUB: emits a canned sequence, touches no hardware.
-pub fn flash<F: FnMut(FlashProgress)>(
-    keyboard: &str,
-    firmware_path: &str,
-    mut on_progress: F,
-) -> Result<FlashDone, String> {
-    let steps = [
-        (FlashStage::WaitingForBootloader, 0, "waiting for bootloader (stub)"),
-        (FlashStage::Flashing, 50, "writing firmware (stub)"),
-        (FlashStage::Done, 100, "flash complete (stub)"),
-    ];
-    for (stage, percent, message) in steps {
-        on_progress(FlashProgress {
-            stage,
-            percent,
-            message: message.to_string(),
-        });
+use crate::error::AppError;
+use crate::events::{PipelinePhase, PipelineState};
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct DfuDeviceInfo {
+    pub vid: u16,
+    pub pid: u16,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub serial: Option<String>,
+}
+
+/// Enumerate DFU-mode boards (0483:df11).
+/// STUB: always empty — no hardware access yet.
+pub fn list_dfu_devices() -> Result<Vec<DfuDeviceInfo>, AppError> {
+    Ok(Vec::new())
+}
+
+/// Flash `bin_path`, reporting phases through `on_state` (forwarded as
+/// `pipeline-state` events). STUB: canned phase sequence, no hardware.
+pub fn flash_firmware<F: FnMut(PipelineState)>(
+    bin_path: &str,
+    mut on_state: F,
+) -> Result<(), AppError> {
+    if bin_path.trim().is_empty() {
+        return Err(AppError::DfuVerifyFailed("empty bin path".into()));
     }
-    Ok(FlashDone {
-        success: true,
-        message: format!("stub flash of '{firmware_path}' to '{keyboard}' complete"),
-    })
+    on_state(PipelineState::phase(PipelinePhase::WaitingForBootloader));
+    on_state(PipelineState {
+        phase: PipelinePhase::Erasing,
+        detail: None,
+        progress: Some(100),
+    });
+    on_state(PipelineState {
+        phase: PipelinePhase::Flashing,
+        detail: Some(format!("writing {bin_path} (stub)")),
+        progress: Some(100),
+    });
+    on_state(PipelineState::phase(PipelinePhase::Leaving));
+    on_state(PipelineState::phase(PipelinePhase::Done));
+    Ok(())
+}
+
+/// Cancel an in-flight pipeline. STUB: nothing to cancel.
+pub fn cancel() -> Result<(), AppError> {
+    Ok(())
 }
 
 #[cfg(test)]
@@ -38,16 +62,15 @@ mod tests {
     use super::*;
 
     #[test]
-    fn flash_reports_full_sequence_and_succeeds() {
-        let mut progress = Vec::new();
-        let done =
-            flash("ws_together", "target/firmware/ws_together.hex", |p| {
-                progress.push(p)
-            })
-            .unwrap();
-        assert!(done.success);
-        assert_eq!(progress.len(), 3);
-        assert_eq!(progress.first().unwrap().stage, FlashStage::WaitingForBootloader);
-        assert_eq!(progress.last().unwrap().stage, FlashStage::Done);
+    fn flash_emits_phases_through_done() {
+        let mut phases = Vec::new();
+        flash_firmware("stub.bin", |s| phases.push(s.phase)).unwrap();
+        assert_eq!(phases.first(), Some(&PipelinePhase::WaitingForBootloader));
+        assert_eq!(phases.last(), Some(&PipelinePhase::Done));
+    }
+
+    #[test]
+    fn list_dfu_devices_is_empty_in_stub() {
+        assert!(list_dfu_devices().unwrap().is_empty());
     }
 }

@@ -1,0 +1,640 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "LayoutFile",
+  "description": "The app's persisted layout (`%APPDATA%\\qmk-flasher\\layout.json`), seeded\nonce from Oryx. Keys are stored in **LAYOUT-arg order** — the Oryx→LAYOUT\npermutation is applied once at seed time.",
+  "type": "object",
+  "properties": {
+    "combos": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/Combo"
+      }
+    },
+    "layers": {
+      "description": "Index in this array == QMK layer number.",
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/Layer"
+      }
+    },
+    "meta": {
+      "$ref": "#/$defs/Meta"
+    },
+    "schemaVersion": {
+      "description": "Must equal [`SCHEMA_VERSION`].",
+      "type": "integer",
+      "format": "uint32",
+      "minimum": 0
+    },
+    "settings": {
+      "$ref": "#/$defs/Settings"
+    }
+  },
+  "required": [
+    "schemaVersion",
+    "meta",
+    "layers",
+    "combos",
+    "settings"
+  ],
+  "$defs": {
+    "Combo": {
+      "description": "COMBO(keys → action). `keys` are LAYOUT-arg key indices (the Oryx→LAYOUT\npermutation is applied to combo indices at seed time too).",
+      "type": "object",
+      "properties": {
+        "action": {
+          "$ref": "#/$defs/KeyAction"
+        },
+        "keys": {
+          "type": "array",
+          "items": {
+            "type": "integer",
+            "format": "uint32",
+            "minimum": 0
+          }
+        },
+        "layer": {
+          "description": "Layer the combo listens on.",
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        },
+        "name": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "name",
+        "keys",
+        "layer",
+        "action"
+      ]
+    },
+    "KeyAction": {
+      "description": "One key's behavior. Tagged union on `kind`; every variant carries an\noptional `glow` (\"#rrggbb\" per-key LED override).",
+      "oneOf": [
+        {
+          "description": "KC_NO — key does nothing.",
+          "type": "object",
+          "properties": {
+            "glow": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "kind": {
+              "type": "string",
+              "const": "none"
+            }
+          },
+          "required": [
+            "kind"
+          ]
+        },
+        {
+          "description": "KC_TRANSPARENT — falls through to the layer below.",
+          "type": "object",
+          "properties": {
+            "glow": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "kind": {
+              "type": "string",
+              "const": "transparent"
+            }
+          },
+          "required": [
+            "kind"
+          ]
+        },
+        {
+          "description": "A plain keycode, optionally with modifiers (e.g. LCTL(KC_C)).",
+          "type": "object",
+          "properties": {
+            "code": {
+              "type": "string"
+            },
+            "glow": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "kind": {
+              "type": "string",
+              "const": "basic"
+            },
+            "mods": {
+              "type": [
+                "array",
+                "null"
+              ],
+              "items": {
+                "type": "string"
+              }
+            }
+          },
+          "required": [
+            "kind",
+            "code"
+          ]
+        },
+        {
+          "description": "MO/TG/TO/TT layer switches.",
+          "type": "object",
+          "properties": {
+            "action": {
+              "$ref": "#/$defs/LayerSwitchAction"
+            },
+            "glow": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "kind": {
+              "type": "string",
+              "const": "layerSwitch"
+            },
+            "layer": {
+              "type": "integer",
+              "format": "uint8",
+              "maximum": 255,
+              "minimum": 0
+            }
+          },
+          "required": [
+            "kind",
+            "action",
+            "layer"
+          ]
+        },
+        {
+          "description": "MT(mods, tap) — modifier on hold, keycode on tap.",
+          "type": "object",
+          "properties": {
+            "glow": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "kind": {
+              "type": "string",
+              "const": "modTap"
+            },
+            "mods": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "tap": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "mods",
+            "tap"
+          ]
+        },
+        {
+          "description": "LT(layer, tap) — layer on hold, keycode on tap.",
+          "type": "object",
+          "properties": {
+            "glow": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "kind": {
+              "type": "string",
+              "const": "layerTap"
+            },
+            "layer": {
+              "type": "integer",
+              "format": "uint8",
+              "maximum": 255,
+              "minimum": 0
+            },
+            "tap": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "layer",
+            "tap"
+          ]
+        },
+        {
+          "description": "Oryx DUAL_FUNC_n (LT trick + process_record_user case).",
+          "type": "object",
+          "properties": {
+            "glow": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "hold": {
+              "$ref": "#/$defs/TapSpec"
+            },
+            "kind": {
+              "type": "string",
+              "const": "dualFunc"
+            },
+            "tap": {
+              "$ref": "#/$defs/TapSpec"
+            }
+          },
+          "required": [
+            "kind",
+            "tap",
+            "hold"
+          ]
+        },
+        {
+          "description": "QK_LOCK — the Key Lock key (the whole reason this app exists).",
+          "type": "object",
+          "properties": {
+            "glow": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "kind": {
+              "type": "string",
+              "const": "qkLock"
+            }
+          },
+          "required": [
+            "kind"
+          ]
+        },
+        {
+          "description": "Non-basic QMK codes with no parameters: QK_BOOT, CW_TOGG, AS_TOGG,\nAU_TOGG, MU_TOGG, TOGGLE_LAYER_COLOR, …",
+          "type": "object",
+          "properties": {
+            "code": {
+              "type": "string"
+            },
+            "glow": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "kind": {
+              "type": "string",
+              "const": "special"
+            }
+          },
+          "required": [
+            "kind",
+            "code"
+          ]
+        },
+        {
+          "description": "TD(DANCE_n) — v1 read-only.",
+          "type": "object",
+          "properties": {
+            "doubleTap": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "glow": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "hold": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "kind": {
+              "type": "string",
+              "const": "tapDance"
+            },
+            "tap": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "tapHold": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "tappingTerm": {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "format": "uint16",
+              "maximum": 65535,
+              "minimum": 0
+            }
+          },
+          "required": [
+            "kind"
+          ]
+        },
+        {
+          "description": "ST_MACRO_n — v1 read-only.",
+          "type": "object",
+          "properties": {
+            "glow": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "kind": {
+              "type": "string",
+              "const": "macro"
+            },
+            "label": {
+              "type": "string"
+            },
+            "steps": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/MacroStep"
+              }
+            }
+          },
+          "required": [
+            "kind",
+            "label",
+            "steps"
+          ]
+        },
+        {
+          "description": "Parameterless RGB controls: RGB_TOG, RGB_VAI, RGB_SLD, … — v1 read-only.",
+          "type": "object",
+          "properties": {
+            "code": {
+              "type": "string"
+            },
+            "glow": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "kind": {
+              "type": "string",
+              "const": "rgb"
+            }
+          },
+          "required": [
+            "kind",
+            "code"
+          ]
+        },
+        {
+          "description": "Oryx HSV_h_s_v custom keycode (sets rgblight to a fixed HSV) — v1 read-only.",
+          "type": "object",
+          "properties": {
+            "glow": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "h": {
+              "type": "integer",
+              "format": "uint8",
+              "maximum": 255,
+              "minimum": 0
+            },
+            "kind": {
+              "type": "string",
+              "const": "rgbHsv"
+            },
+            "s": {
+              "type": "integer",
+              "format": "uint8",
+              "maximum": 255,
+              "minimum": 0
+            },
+            "v": {
+              "type": "integer",
+              "format": "uint8",
+              "maximum": 255,
+              "minimum": 0
+            }
+          },
+          "required": [
+            "kind",
+            "h",
+            "s",
+            "v"
+          ]
+        }
+      ]
+    },
+    "Layer": {
+      "type": "object",
+      "properties": {
+        "color": {
+          "description": "Base layer color as \"#rrggbb\" (drives the ledmap base HSV).",
+          "type": "string"
+        },
+        "keys": {
+          "description": "Exactly [`MOONLANDER_KEY_COUNT`] entries in LAYOUT-arg order.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/KeyAction"
+          }
+        },
+        "title": {
+          "description": "Layer title from Oryx (may be the default \"Layer\").",
+          "type": "string"
+        }
+      },
+      "required": [
+        "title",
+        "color",
+        "keys"
+      ]
+    },
+    "LayerSwitchAction": {
+      "type": "string",
+      "enum": [
+        "MO",
+        "TG",
+        "TO",
+        "TT"
+      ]
+    },
+    "MacroStep": {
+      "description": "One SEND_STRING step of a macro: tap `code` (with `mods` held), then wait\n`delay` ms before the next step.",
+      "type": "object",
+      "properties": {
+        "code": {
+          "type": "string"
+        },
+        "delay": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint16",
+          "maximum": 65535,
+          "minimum": 0
+        },
+        "mods": {
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "required": [
+        "code"
+      ]
+    },
+    "Meta": {
+      "type": "object",
+      "properties": {
+        "geometry": {
+          "description": "Keyboard geometry id, e.g. \"moonlander\".",
+          "type": "string"
+        },
+        "name": {
+          "description": "Display name of the layout, e.g. \"Arrows Together\".",
+          "type": "string"
+        },
+        "seededFrom": {
+          "$ref": "#/$defs/SeededFrom"
+        }
+      },
+      "required": [
+        "name",
+        "geometry",
+        "seededFrom"
+      ]
+    },
+    "SeededFrom": {
+      "type": "object",
+      "properties": {
+        "layoutId": {
+          "description": "Oryx layout hash id, e.g. \"rddD7\".",
+          "type": "string"
+        },
+        "qmkVersion": {
+          "description": "QMK version reported by Oryx, e.g. \"25.0\".",
+          "type": "string"
+        },
+        "revisionHash": {
+          "description": "Oryx revision hash id, e.g. \"QzpBEp\".",
+          "type": "string"
+        },
+        "seededAt": {
+          "description": "RFC 3339 timestamp of the seed.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "layoutId",
+        "revisionHash",
+        "qmkVersion",
+        "seededAt"
+      ]
+    },
+    "Settings": {
+      "description": "Feature toggles driving rules.mk / config.h generation.",
+      "type": "object",
+      "properties": {
+        "autoShift": {
+          "type": "boolean"
+        },
+        "capsWord": {
+          "type": "boolean"
+        },
+        "combos": {
+          "type": "boolean"
+        },
+        "keyLock": {
+          "description": "Always true — Key Lock is the point of this app.",
+          "type": "boolean"
+        },
+        "layerState8bit": {
+          "type": "boolean"
+        },
+        "oryx": {
+          "type": "boolean"
+        },
+        "rgbMatrixCustom": {
+          "type": "boolean"
+        },
+        "rgbStartupSpeed": {
+          "description": "RGB_MATRIX_STARTUP_SPD in config.h.",
+          "type": "integer",
+          "format": "uint16",
+          "maximum": 65535,
+          "minimum": 0
+        },
+        "serialNumber": {
+          "description": "SERIAL_NUMBER in config.h, e.g. \"rddD7/QzpBEp\".",
+          "type": "string"
+        },
+        "tapDance": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "autoShift",
+        "capsWord",
+        "tapDance",
+        "combos",
+        "keyLock",
+        "oryx",
+        "rgbMatrixCustom",
+        "layerState8bit",
+        "serialNumber",
+        "rgbStartupSpeed"
+      ]
+    },
+    "TapSpec": {
+      "description": "A keycode plus optional modifiers, as used inside `dualFunc`.",
+      "type": "object",
+      "properties": {
+        "code": {
+          "type": "string"
+        },
+        "mods": {
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "required": [
+        "code"
+      ]
+    }
+  }
+}

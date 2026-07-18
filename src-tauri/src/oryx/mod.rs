@@ -1,22 +1,17 @@
 //! Oryx seeding — owned by Worker A. See `docs/CONTRACT.md`.
 //!
-//! Responsible for producing a [`SeededLayout`] from the user's ZSA Oryx
-//! layout / QMK sources. STUB: returns the checked-in fixture.
+//! Real implementation: GraphQL fetch (client.rs) → KeyAction mapping +
+//! Oryx→LAYOUT permutation (permute.rs, seed.rs) → KC_MEH→qkLock transform →
+//! cross-check against the Oryx source zip via the keymap.c parser
+//! (parse_keymap_c.rs). STUB: returns the checked-in fixture.
 
-use crate::layout::SeededLayout;
+use crate::error::AppError;
+use crate::layout::{store, LayoutFile};
 
-const FIXTURE_LAYOUT: &str = include_str!(concat!(
-    env!("CARGO_MANIFEST_DIR"),
-    "/../fixtures/ws_together/seeded_layout.json"
-));
-
-/// Seed the current layout.
-/// STUB: parses the fixture instead of talking to Oryx or parsing QMK sources.
-pub fn seed_layout() -> Result<SeededLayout, String> {
-    let layout: SeededLayout =
-        serde_json::from_str(FIXTURE_LAYOUT).map_err(|e| e.to_string())?;
-    layout.validate()?;
-    Ok(layout)
+/// Seed a fresh layout from Oryx.
+/// STUB: ignores `layout_id`/`force` and returns the fixture.
+pub fn seed_from_oryx(_layout_id: &str, _force: bool) -> Result<LayoutFile, AppError> {
+    store::load()
 }
 
 #[cfg(test)]
@@ -24,9 +19,9 @@ mod tests {
     use super::*;
 
     #[test]
-    fn seed_layout_returns_valid_fixture() {
-        let layout = seed_layout().expect("stub must return the fixture");
-        assert_eq!(layout.keyboard, "ws_together");
+    fn seed_returns_valid_fixture() {
+        let layout = seed_from_oryx("rddD7", false).unwrap();
         assert!(layout.validate().is_ok());
+        assert_eq!(layout.meta.seeded_from.layout_id, "rddD7");
     }
 }

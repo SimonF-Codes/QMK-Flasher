@@ -1,40 +1,65 @@
-//! Keymap codegen — owned by Worker A. See `docs/CONTRACT.md`.
+//! QMK source generation — owned by Worker A. See `docs/CONTRACT.md`.
 //!
-//! Responsible for rendering a [`SeededLayout`] back into QMK sources
-//! (`keymap.c`). STUB: validates the layout and returns the fixture
-//! `keymap.c` verbatim.
+//! Real implementation renders keymap.c / rules.mk / config.h from a
+//! [`LayoutFile`] (keymap_c.rs, rules_mk.rs, config_h.rs, ledmap.rs) into
+//! `keymaps/qmk_flasher/`; `shared/fixtures/reference_keymap.c` is the golden
+//! spec. STUB: validates and returns the reference files verbatim.
 
-use crate::layout::SeededLayout;
+use schemars::JsonSchema;
+use serde::{Deserialize, Serialize};
 
-const FIXTURE_KEYMAP: &str = include_str!(concat!(
+use crate::error::AppError;
+use crate::layout::LayoutFile;
+
+const REFERENCE_KEYMAP_C: &str = include_str!(concat!(
     env!("CARGO_MANIFEST_DIR"),
-    "/../fixtures/ws_together/keymap.c"
+    "/../shared/fixtures/reference_keymap.c"
+));
+const REFERENCE_RULES_MK: &str = include_str!(concat!(
+    env!("CARGO_MANIFEST_DIR"),
+    "/../shared/fixtures/reference_rules.mk"
+));
+const REFERENCE_CONFIG_H: &str = include_str!(concat!(
+    env!("CARGO_MANIFEST_DIR"),
+    "/../shared/fixtures/reference_config.h"
 ));
 
-/// Render `layout` as the contents of a `keymap.c`.
-/// STUB: returns the fixture file instead of generating from the layout.
-pub fn generate_keymap(layout: &SeededLayout) -> Result<String, String> {
-    layout.validate()?;
-    Ok(FIXTURE_KEYMAP.to_string())
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct GeneratedSources {
+    pub keymap_c: String,
+    pub rules_mk: String,
+    pub config_h: String,
+}
+
+/// Render `layout` into QMK sources.
+/// STUB: returns the reference fixture files instead of generating.
+pub fn generate(layout: &LayoutFile) -> Result<GeneratedSources, AppError> {
+    layout.validate().map_err(AppError::InvalidLayout)?;
+    Ok(GeneratedSources {
+        keymap_c: REFERENCE_KEYMAP_C.to_string(),
+        rules_mk: REFERENCE_RULES_MK.to_string(),
+        config_h: REFERENCE_CONFIG_H.to_string(),
+    })
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::oryx::seed_layout;
+    use crate::layout::store;
 
     #[test]
-    fn generate_keymap_accepts_fixture() {
-        let layout = seed_layout().unwrap();
-        let keymap = generate_keymap(&layout).expect("stub must render");
-        assert!(keymap.contains(&layout.layout_macro));
-        assert!(keymap.contains("keymaps"));
+    fn generate_returns_reference_sources_for_fixture() {
+        let sources = generate(&store::load().unwrap()).unwrap();
+        assert!(sources.keymap_c.contains("QK_LOCK"));
+        assert!(sources.rules_mk.contains("KEY_LOCK_ENABLE = yes"));
+        assert!(sources.config_h.contains("SERIAL_NUMBER"));
     }
 
     #[test]
-    fn generate_keymap_rejects_invalid_layout() {
-        let mut layout = seed_layout().unwrap();
-        layout.key_count = 3;
-        assert!(generate_keymap(&layout).is_err());
+    fn generate_rejects_invalid_layout() {
+        let mut layout = store::load().unwrap();
+        layout.layers[0].keys.pop();
+        assert!(generate(&layout).is_err());
     }
 }

@@ -1,0 +1,4 @@
+# Repo lives under OneDrive — keep the (huge, churny) cargo target dir out of
+# sync. Applies to all worktrees of this repo.
+[build]
+target-dir = "C:/Users/fridl/.cargo-targets/qmk-flasher"

@@ -22,3 +22,7 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# worktree-command-center readiness marker
+.cos-ready
+

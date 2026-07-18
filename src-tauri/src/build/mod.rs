@@ -1,30 +1,19 @@
 //! MSYS firmware build — owned by Worker A. See `docs/CONTRACT.md`.
 //!
-//! Responsible for compiling QMK firmware via the MSYS2 toolchain. STUB:
-//! reports canned progress and returns a fake firmware path without invoking
-//! any toolchain.
+//! Real implementation (msys.rs): `MSYSTEM=MINGW64 bash -lc "cd qmk_firmware
+//! && make zsa/moonlander/reva:qmk_flasher"`, streaming stdout lines through
+//! `on_log`, then copying the .bin to `%APPDATA%\qmk-flasher\builds\`.
+//! Never `qmk compile`. STUB: canned log lines and a fake path.
 
-use crate::events::{FlashProgress, FlashStage};
+use crate::error::AppError;
 
-/// Compile firmware for `keyboard`, reporting progress through `on_progress`
-/// (the command layer forwards it as `flash:progress` events with stage
-/// `compiling`). Returns the path of the built firmware image.
-/// STUB: emits two progress ticks and returns a fake path.
-pub fn compile<F: FnMut(FlashProgress)>(
-    keyboard: &str,
-    mut on_progress: F,
-) -> Result<String, String> {
-    on_progress(FlashProgress {
-        stage: FlashStage::Compiling,
-        percent: 0,
-        message: format!("starting compile of '{keyboard}' (stub)"),
-    });
-    on_progress(FlashProgress {
-        stage: FlashStage::Compiling,
-        percent: 100,
-        message: "compile finished (stub)".to_string(),
-    });
-    Ok(format!("target/firmware/{keyboard}.hex"))
+/// Build the firmware, streaming make output through `on_log` (forwarded to
+/// the webview as `build-log` events). Returns the built .bin path.
+/// STUB: emits canned lines, touches no toolchain.
+pub fn build_firmware<F: FnMut(String)>(mut on_log: F) -> Result<String, AppError> {
+    on_log("make zsa/moonlander/reva:qmk_flasher (stub)".to_string());
+    on_log("Creating binary load file for flashing: .build/zsa_moonlander_reva_qmk_flasher.bin (stub)".to_string());
+    Ok(r"C:\Users\fridl\AppData\Roaming\qmk-flasher\builds\stub.bin".to_string())
 }
 
 #[cfg(test)]
@@ -32,14 +21,11 @@ mod tests {
     use super::*;
 
     #[test]
-    fn compile_reports_progress_and_returns_path() {
-        let mut progress = Vec::new();
-        let path = compile("ws_together", |p| progress.push(p)).unwrap();
-        assert_eq!(path, "target/firmware/ws_together.hex");
-        assert_eq!(progress.len(), 2);
-        assert!(progress
-            .iter()
-            .all(|p| p.stage == FlashStage::Compiling));
-        assert_eq!(progress.last().unwrap().percent, 100);
+    fn build_streams_log_and_returns_bin_path() {
+        let mut lines = Vec::new();
+        let path = build_firmware(|l| lines.push(l)).unwrap();
+        assert!(path.ends_with(".bin"));
+        assert!(!lines.is_empty());
+        assert!(lines[0].contains("make zsa/moonlander/reva:qmk_flasher"));
     }
 }

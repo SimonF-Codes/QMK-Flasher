@@ -1,96 +1,279 @@
 /**
- * TypeScript mirror of the layout schema and event payloads defined in
- * `src-tauri/src/layout/schema.rs` and `src-tauri/src/events.rs`.
- * See `docs/CONTRACT.md`.
- *
- * Any change here MUST stay in lockstep with the Rust side and bump
- * SCHEMA_VERSION in both places.
+ * TypeScript mirror of the Rust contract types:
+ *   - layout schema   src-tauri/src/layout/schema.rs
+ *   - events          src-tauri/src/events.rs
+ *   - errors          src-tauri/src/error.rs
+ *   - geometry        src-tauri/src/geometry.rs
+ *   - app config      src-tauri/src/appcfg.rs
+ * See docs/CONTRACT.md. Any change MUST stay in lockstep with the Rust side
+ * and bump SCHEMA_VERSION in both places.
  */
 import { z } from "zod";
 
-/** Current version of the seeded-layout schema. */
-export const SCHEMA_VERSION = 1;
+/** Current version of the layout-file schema. */
+export const SCHEMA_VERSION = 2;
+/** Keys per layer in LAYOUT_moonlander argument order. */
+export const MOONLANDER_KEY_COUNT = 72;
+
+const hexColor = z.string().regex(/^#[0-9a-fA-F]{6}$/, "expected #rrggbb");
+const glow = hexColor.optional();
+
+export const TapSpecSchema = z.object({
+  code: z.string().min(1),
+  mods: z.array(z.string().min(1)).optional(),
+});
+
+export const MacroStepSchema = z.object({
+  code: z.string().min(1),
+  delay: z.number().int().nonnegative().optional(),
+  mods: z.array(z.string().min(1)).optional(),
+});
+
+export const LayerSwitchActionSchema = z.enum(["MO", "TG", "TO", "TT"]);
+
+export const KeyActionSchema = z.discriminatedUnion("kind", [
+  z.object({ kind: z.literal("none"), glow }),
+  z.object({ kind: z.literal("transparent"), glow }),
+  z.object({
+    kind: z.literal("basic"),
+    code: z.string().min(1),
+    mods: z.array(z.string().min(1)).optional(),
+    glow,
+  }),
+  z.object({
+    kind: z.literal("layerSwitch"),
+    action: LayerSwitchActionSchema,
+    layer: z.number().int().nonnegative(),
+    glow,
+  }),
+  z.object({
+    kind: z.literal("modTap"),
+    mods: z.array(z.string().min(1)).min(1),
+    tap: z.string().min(1),
+    glow,
+  }),
+  z.object({
+    kind: z.literal("layerTap"),
+    layer: z.number().int().nonnegative(),
+    tap: z.string().min(1),
+    glow,
+  }),
+  z.object({
+    kind: z.literal("dualFunc"),
+    tap: TapSpecSchema,
+    hold: TapSpecSchema,
+    glow,
+  }),
+  z.object({ kind: z.literal("qkLock"), glow }),
+  z.object({ kind: z.literal("special"), code: z.string().min(1), glow }),
+  z.object({
+    kind: z.literal("tapDance"),
+    tap: z.string().min(1).optional(),
+    hold: z.string().min(1).optional(),
+    doubleTap: z.string().min(1).optional(),
+    tapHold: z.string().min(1).optional(),
+    tappingTerm: z.number().int().positive().optional(),
+    glow,
+  }),
+  z.object({
+    kind: z.literal("macro"),
+    label: z.string(),
+    steps: z.array(MacroStepSchema),
+    glow,
+  }),
+  z.object({ kind: z.literal("rgb"), code: z.string().min(1), glow }),
+  z.object({
+    kind: z.literal("rgbHsv"),
+    h: z.number().int().min(0).max(255),
+    s: z.number().int().min(0).max(255),
+    v: z.number().int().min(0).max(255),
+    glow,
+  }),
+]);
 
 export const LayerSchema = z.object({
-  /** Position in the keymaps[] array. */
-  index: z.number().int().nonnegative(),
-  /** Layer enum name from keymap.c, e.g. "_BASE". */
-  name: z.string().min(1),
-  /** Keycodes in LAYOUT-macro argument order, e.g. "KC_A", "MO(_FN)". */
-  keys: z.array(z.string().min(1)),
+  title: z.string(),
+  color: hexColor,
+  keys: z.array(KeyActionSchema).length(MOONLANDER_KEY_COUNT),
 });
 
-export const SourceFilesSchema = z.object({
-  keymap_c: z.string().min(1),
-  config_h: z.string().min(1),
-  rules_mk: z.string().min(1),
+export const ComboSchema = z.object({
+  name: z.string(),
+  keys: z.array(z.number().int().min(0).max(MOONLANDER_KEY_COUNT - 1)),
+  layer: z.number().int().nonnegative(),
+  action: KeyActionSchema,
 });
 
-export const SeededLayoutSchema = z
+export const SettingsSchema = z.object({
+  autoShift: z.boolean(),
+  capsWord: z.boolean(),
+  tapDance: z.boolean(),
+  combos: z.boolean(),
+  /** Always true — Key Lock is the point of this app. */
+  keyLock: z.literal(true),
+  oryx: z.boolean(),
+  rgbMatrixCustom: z.boolean(),
+  layerState8bit: z.boolean(),
+  serialNumber: z.string(),
+  rgbStartupSpeed: z.number().int().nonnegative(),
+});
+
+export const SeededFromSchema = z.object({
+  layoutId: z.string().min(1),
+  revisionHash: z.string().min(1),
+  qmkVersion: z.string().min(1),
+  seededAt: z.string().min(1),
+});
+
+export const MetaSchema = z.object({
+  name: z.string(),
+  geometry: z.string().min(1),
+  seededFrom: SeededFromSchema,
+});
+
+export const LayoutFileSchema = z
   .object({
-    schema_version: z.literal(SCHEMA_VERSION),
-    /** QMK keyboard name, e.g. "ws_together". */
-    keyboard: z.string().min(1),
-    /** QMK keymap name, e.g. "default". */
-    keymap: z.string().min(1),
-    /** The LAYOUT macro used in keymap.c, e.g. "LAYOUT_ortho_4x4". */
-    layout_macro: z.string().min(1),
-    /** Number of keys per layer. */
-    key_count: z.number().int().positive(),
-    /** Layers in keymap.c order. */
+    schemaVersion: z.literal(SCHEMA_VERSION),
+    meta: MetaSchema,
     layers: z.array(LayerSchema).min(1),
-    /** Repo-relative paths of the QMK sources this layout was seeded from. */
-    source: SourceFilesSchema,
-    /** RFC 3339 timestamp of when the seeder produced this file. */
-    seeded_at: z.string().min(1),
+    combos: z.array(ComboSchema),
+    settings: SettingsSchema,
   })
   .superRefine((layout, ctx) => {
-    layout.layers.forEach((layer, i) => {
-      if (layer.keys.length !== layout.key_count) {
+    layout.combos.forEach((combo, i) => {
+      if (combo.layer >= layout.layers.length) {
         ctx.addIssue({
           code: z.ZodIssueCode.custom,
-          path: ["layers", i, "keys"],
-          message: `layer ${layer.name} has ${layer.keys.length} keys, expected key_count ${layout.key_count}`,
-        });
-      }
-      if (layer.index !== i) {
-        ctx.addIssue({
-          code: z.ZodIssueCode.custom,
-          path: ["layers", i, "index"],
-          message: `layer ${layer.name} has index ${layer.index}, expected ${i}`,
+          path: ["combos", i, "layer"],
+          message: `combo ${combo.name} references layer ${combo.layer} but only ${layout.layers.length} layers exist`,
         });
       }
     });
   });
 
+export type TapSpec = z.infer<typeof TapSpecSchema>;
+export type MacroStep = z.infer<typeof MacroStepSchema>;
+export type LayerSwitchAction = z.infer<typeof LayerSwitchActionSchema>;
+export type KeyAction = z.infer<typeof KeyActionSchema>;
 export type Layer = z.infer<typeof LayerSchema>;
-export type SourceFiles = z.infer<typeof SourceFilesSchema>;
-export type SeededLayout = z.infer<typeof SeededLayoutSchema>;
+export type Combo = z.infer<typeof ComboSchema>;
+export type Settings = z.infer<typeof SettingsSchema>;
+export type Meta = z.infer<typeof MetaSchema>;
+export type LayoutFile = z.infer<typeof LayoutFileSchema>;
+
+// ---- Geometry (shared/moonlander_geometry.json) ----
+
+export const GeometryKeySchema = z.object({
+  x: z.number(),
+  y: z.number(),
+  w: z.number(),
+  h: z.number(),
+  r: z.number().optional(),
+  rx: z.number().optional(),
+  ry: z.number().optional(),
+  matrix: z.tuple([z.number().int(), z.number().int()]),
+  led: z.number().int().nonnegative(),
+});
+
+export const GeometryFileSchema = z.object({
+  keyboard: z.string(),
+  layoutMacro: z.string(),
+  keyCount: z.number().int().positive(),
+  keys: z.array(GeometryKeySchema).length(MOONLANDER_KEY_COUNT),
+});
+
+export type GeometryKey = z.infer<typeof GeometryKeySchema>;
+export type GeometryFile = z.infer<typeof GeometryFileSchema>;
+
+// ---- App config (src-tauri/src/appcfg.rs) ----
+
+export const AppConfigSchema = z.object({
+  msysPath: z.string().min(1),
+  qmkFirmwarePath: z.string().min(1),
+  keymapName: z.string().min(1),
+});
+
+export type AppConfig = z.infer<typeof AppConfigSchema>;
 
 // ---- Events (src-tauri/src/events.rs) ----
 
-export const EVENT_FLASH_PROGRESS = "flash:progress";
-export const EVENT_FLASH_DONE = "flash:done";
+export const EVENT_BUILD_LOG = "build-log";
+export const EVENT_PIPELINE_STATE = "pipeline-state";
+export const EVENT_DFU_DEVICE = "dfu-device";
 
-export const FlashStageSchema = z.enum([
-  "compiling",
-  "waiting_for_bootloader",
+export const BuildLogSchema = z.object({ line: z.string() });
+
+export const PipelinePhaseSchema = z.enum([
+  "idle",
+  "saving",
+  "generating",
+  "building",
+  "waitingForBootloader",
+  "erasing",
   "flashing",
+  "leaving",
   "done",
+  "error",
 ]);
 
-export const FlashProgressSchema = z.object({
-  stage: FlashStageSchema,
-  /** 0–100 within the current stage. */
-  percent: z.number().int().min(0).max(100),
-  message: z.string(),
+export const PipelineStateSchema = z.object({
+  phase: PipelinePhaseSchema,
+  detail: z.string().optional(),
+  /** 0–100 within the current phase, where meaningful. */
+  progress: z.number().int().min(0).max(100).optional(),
 });
 
-export const FlashDoneSchema = z.object({
-  success: z.boolean(),
-  message: z.string(),
+export const DfuDeviceSchema = z.object({ present: z.boolean() });
+
+export type BuildLog = z.infer<typeof BuildLogSchema>;
+export type PipelinePhase = z.infer<typeof PipelinePhaseSchema>;
+export type PipelineState = z.infer<typeof PipelineStateSchema>;
+export type DfuDevice = z.infer<typeof DfuDeviceSchema>;
+
+// ---- DFU device listing (src-tauri/src/flash/mod.rs) ----
+
+export const DfuDeviceInfoSchema = z.object({
+  vid: z.number().int(),
+  pid: z.number().int(),
+  serial: z.string().optional(),
 });
 
-export type FlashStage = z.infer<typeof FlashStageSchema>;
-export type FlashProgress = z.infer<typeof FlashProgressSchema>;
-export type FlashDone = z.infer<typeof FlashDoneSchema>;
+export type DfuDeviceInfo = z.infer<typeof DfuDeviceInfoSchema>;
+
+// ---- Errors (src-tauri/src/error.rs) ----
+
+export const AppErrorCodeSchema = z.enum([
+  "OryxUnreachable",
+  "PermutationMismatch",
+  "CodegenUnsupportedKey",
+  "BuildFailed",
+  "DfuNotFound",
+  "DfuAccessDenied",
+  "DfuVerifyFailed",
+  "InvalidLayout",
+]);
+
+export const AppErrorSchema = z.object({
+  code: AppErrorCodeSchema,
+  message: z.string(),
+  hint: z.string().nullable(),
+});
+
+export type AppErrorCode = z.infer<typeof AppErrorCodeSchema>;
+export type AppError = z.infer<typeof AppErrorSchema>;
+
+// ---- Keycode catalog (shared/keycodes.json) ----
+
+export const KeycodeEntrySchema = z.object({
+  qmk: z.string().min(1),
+  aliases: z.array(z.string().min(1)),
+  label: z.string(),
+  longLabel: z.string(),
+  category: z.string().min(1),
+  /** Valid as the tap half of modTap / layerTap / tapDance. */
+  tappable: z.boolean(),
+  /** Valid inside LCTL()-style mod wrappers. */
+  modsApplicable: z.boolean(),
+});
+
+export type KeycodeEntry = z.infer<typeof KeycodeEntrySchema>;

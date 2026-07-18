@@ -1,126 +1,159 @@
 # QMK-Flasher Worker Contract
 
-This document is the shared contract between the parallel workers building
-QMK-Flasher. The foundation (this commit) provides the scaffolding, fixtures,
-schema, and stubbed IPC surface. Workers replace stub bodies — **not**
-signatures, event names, or schema shapes — without coordinating first.
+Shared contract between the parallel workers building QMK-Flasher — a Tauri
+v2 desktop app that edits Simon's Moonlander layout ("Arrows Together", Oryx
+`rddD7`) and builds + flashes it with the Key Lock customization
+(`KC_MEH`→`QK_LOCK`) that Oryx cannot express. Authoritative plan:
+`C:\Users\fridl\.claude\plans\tender-honking-platypus.md`.
+
+**FROZEN after Phase 0:** everything under "Contract surface" below —
+`commands.rs`, `events.rs`, `error.rs`, `layout/schema.rs`, `src/lib/types.ts`,
+`shared/*`. Changes go to main first (schema bump + both mirrors + this doc),
+workers rebase.
 
 ## Worker boundaries
 
 | Worker | Owns (exact paths) | Scope |
 |---|---|---|
-| Foundation (done) | `docs/CONTRACT.md`, `fixtures/`, `src-tauri/src/layout/`, `src-tauri/src/commands.rs`, `src-tauri/src/events.rs`, `src/lib/types.ts` | Scaffold, schema, stubbed module bodies |
-| Worker A | `src-tauri/src/oryx/`, `src-tauri/src/codegen/`, `src-tauri/src/build/` | Oryx seeding, keymap codegen, MSYS firmware build |
-| Worker B | `src-tauri/src/flash/` | USB/DFU flashing |
-| Worker C | `src/` (except `src/lib/types.ts`, which stays in lockstep with the Rust schema) | Real frontend |
+| Foundation (done) | `docs/CONTRACT.md`, `shared/`, `scripts/`, `src-tauri/src/{layout/,commands.rs,events.rs,error.rs,geometry.rs,appcfg.rs}` | Scaffold, schema, contract, stubbed module bodies |
+| Worker A | `src-tauri/src/oryx/`, `src-tauri/src/codegen/`, `src-tauri/src/build/` | Oryx seeding, QMK codegen, MSYS build |
+| Worker B | `src-tauri/src/flash/` | USB watching + DFU flashing (+ pipeline hardening) |
+| Worker C | `src/` (except `src/lib/types.ts` — lockstep mirror) | Real frontend; sole editor of `shared/keycodes.json` after fork |
 
-Workers replace the bodies inside their modules; the public functions listed
-below and everything in `commands.rs`/`events.rs`/`layout/` stay as-is unless
-the contract is bumped.
+Worker modules expose plain functions taking `FnMut` callbacks for
+progress/logs — they never touch `AppHandle`; the command layer forwards
+callbacks to the webview as events. Keep that pattern.
 
-### Module surface (what each worker implements)
+## Layout schema (v2)
 
-- `oryx::seed_layout() -> Result<SeededLayout, String>` — produce the current
-  layout (from Oryx / QMK sources). Stub: returns the fixture.
-- `codegen::generate_keymap(&SeededLayout) -> Result<String, String>` —
-  render `keymap.c` contents. Stub: returns the fixture file.
-- `build::compile(keyboard, on_progress) -> Result<String, String>` — MSYS
-  QMK build; returns the firmware image path; reports `FlashProgress` with
-  stage `compiling` via the callback. Stub: canned ticks + fake path.
-- `flash::flash(keyboard, firmware_path, on_progress) -> Result<FlashDone, String>`
-  — USB/DFU flash of a built image; reports the remaining stages via the
-  callback. Stub: canned sequence, no hardware.
+Source of truth: **`src-tauri/src/layout/schema.rs`** (serde). Mirrors:
+**`src/lib/types.ts`** (zod), **`shared/layout.schema.json`** (generated —
+regenerate with `REGEN_SCHEMA=1 cargo test json_schema`; a test fails if
+stale). `SCHEMA_VERSION` = **2**. All JSON is camelCase.
 
-Progress callbacks are `FnMut(FlashProgress)`; the command layer forwards
-them to the webview as events, so worker modules never touch `AppHandle`.
+```
+LayoutFile { schemaVersion, meta { name, geometry,
+             seededFrom { layoutId, revisionHash, qmkVersion, seededAt } },
+             layers: Layer[], combos: Combo[], settings }
+Layer      { title, color: "#rrggbb", keys: KeyAction[72] }   // LAYOUT-arg order
+Combo      { name, keys: number[] /* LAYOUT-arg indices */, layer, action: KeyAction }
+settings   { autoShift, capsWord, tapDance, combos, keyLock: true (always),
+             oryx, rgbMatrixCustom, layerState8bit, serialNumber, rgbStartupSpeed }
+```
 
-Changing anything in the **Contract surface** below requires bumping
-`SCHEMA_VERSION` (both sides), updating this document, and announcing via
-`cos-coord note`.
+`KeyAction` is a tagged union on `kind`, every variant with optional
+`glow: "#rrggbb"`:
 
-## Contract surface
-
-### Layout schema
-
-Defined in **`src-tauri/src/layout/schema.rs`** (serde, source of truth) and
-mirrored in **`src/lib/types.ts`** (zod). Current `SCHEMA_VERSION`: **1**.
-
-`SeededLayout`:
-
-| Field | Type | Meaning |
+| kind | payload | notes |
 |---|---|---|
-| `schema_version` | int | Must equal `SCHEMA_VERSION` |
-| `keyboard` | string | QMK keyboard name (e.g. `ws_together`) |
-| `keymap` | string | QMK keymap name (e.g. `default`) |
-| `layout_macro` | string | LAYOUT macro used in `keymap.c` |
-| `key_count` | int | Keys per layer; every layer must match |
-| `layers` | `Layer[]` | In `keymaps[]` order; `layers[i].index == i` |
-| `source` | object | Repo-relative paths: `keymap_c`, `config_h`, `rules_mk` |
-| `seeded_at` | string | RFC 3339 timestamp |
+| `none` | — | KC_NO |
+| `transparent` | — | KC_TRANSPARENT |
+| `basic` | `code, mods?: string[]` | mods are `MOD_*` tokens, e.g. `["MOD_LCTL"]` |
+| `layerSwitch` | `action: "MO"\|"TG"\|"TO"\|"TT", layer` | |
+| `modTap` | `mods: string[], tap` | MT() |
+| `layerTap` | `layer, tap` | LT() |
+| `dualFunc` | `tap: {code, mods?}, hold: {code, mods?}` | Oryx DUAL_FUNC_n |
+| `qkLock` | — | the Key Lock key |
+| `special` | `code` | QK_BOOT, CW_TOGG, AS_*, AU/MU_*, TOGGLE_LAYER_COLOR |
+| `tapDance` | `tap?, hold?, doubleTap?, tapHold?, tappingTerm?` | v1 read-only |
+| `macro` | `label, steps: [{code, delay?, mods?}]` | v1 read-only |
+| `rgb` | `code` | RGB_TOG etc., v1 read-only |
+| `rgbHsv` | `h, s, v` (0–255) | Oryx HSV_h_s_v key, v1 read-only |
 
-`Layer`: `{ index: int, name: string, keys: string[] }` — `keys` are raw QMK
-keycode strings in LAYOUT-macro argument order (e.g. `KC_A`, `MO(_FN)`).
+Validation beyond shape (Rust `validate()` / zod): schemaVersion matches, ≥1
+layer, every layer exactly 72 keys, `settings.keyLock === true`, colors/glows
+are `#rrggbb`, combo layer/key indices in range.
 
-Validation beyond shape (`SeededLayout::validate()` / zod `superRefine`):
-schema_version matches, ≥1 layer, every layer has exactly `key_count` keys,
-layer indices are contiguous from 0.
+**Key order**: keys and combo indices are stored in **LAYOUT_moonlander
+argument order**; the seeder applies the Oryx→LAYOUT permutation exactly once
+at seed time (full table in the plan's Discovery findings).
 
-### Commands (`src-tauri/src/commands.rs`)
+## Commands (`src-tauri/src/commands.rs`)
 
-Commands are a thin delegation layer over the worker modules — workers do not
-edit this file.
+All results are `Result<T, AppError>` unless noted; errors cross IPC as
+`{code, message, hint}`.
 
 | Command | Signature | Delegates to |
 |---|---|---|
-| `get_layout` | `() -> Result<SeededLayout, String>` | `oryx::seed_layout` |
-| `save_layout` | `(layout: SeededLayout) -> Result<(), String>` | `codegen::generate_keymap` (renders, discards for now) |
-| `compile_firmware` | `(keyboard: String) -> Result<String, String>` (firmware path) | `build::compile` |
-| `flash_firmware` | `(keyboard: String) -> Result<(), String>` | `build::compile` then `flash::flash` (full pipeline), emits `flash:done` at the end |
+| `load_layout` | `() -> LayoutFile` | `layout::store::load` |
+| `save_layout` | `(layout) -> ()` | `layout::store::save` |
+| `seed_from_oryx` | `(layout_id, force) -> LayoutFile` | `oryx::seed_from_oryx` |
+| `get_geometry` | `() -> GeometryFile` | `geometry::get` |
+| `get_app_config` | `() -> AppConfig` (infallible) | `appcfg::get` |
+| `set_app_config` | `(cfg) -> ()` | `appcfg::set` |
+| `generate_sources` | `(layout) -> {keymapC, rulesMk, configH}` | `codegen::generate` |
+| `build_firmware` | `() -> String` (.bin path) | `build::build_firmware` |
+| `start_flash_pipeline` | `(layout) -> ()` | save → generate → build → flash |
+| `cancel_pipeline` | `() -> ()` | `flash::cancel` |
+| `list_dfu_devices` | `() -> DfuDeviceInfo[]` | `flash::list_dfu_devices` |
+| `flash_firmware` | `(bin_path) -> ()` | `flash::flash_firmware` (no rebuild) |
 
-Errors cross IPC as strings (the `Err` variant).
+## Events (`src-tauri/src/events.rs`)
 
-### Events (`src-tauri/src/events.rs`)
+The v1 `flash:progress`/`flash:done` events are **gone** (replaced, no
+aliases — nothing shipped against them).
 
 | Event | Payload | When |
 |---|---|---|
-| `flash:progress` | `{ stage, percent, message }` | During compile/flash |
-| `flash:done` | `{ success, message }` | Once per flash attempt |
+| `build-log` | `{line}` | Each MSYS make output line during `building` |
+| `pipeline-state` | `{phase, detail?, progress?}` | Every phase transition |
+| `dfu-device` | `{present}` | Bootloader (0483:df11) appears/disappears |
 
-`stage` serializes as snake_case: `compiling`, `waiting_for_bootloader`,
-`flashing`, `done`. `percent` is 0–100 within the current stage.
+`phase` ∈ `idle | saving | generating | building | waitingForBootloader |
+erasing | flashing | leaving | done | error`. `progress` is 0–100 within the
+phase. Phase `error` carries the message in `detail` (the command also
+returns the `AppError`).
 
-### Fixtures (`fixtures/ws_together/`)
+## Errors (`src-tauri/src/error.rs`)
 
-A minimal 4×4 ortho pad (2 layers, 16 keys) used by all tests:
+One `AppError` enum, serialized `{code, message, hint}` (`hint` nullable):
+`OryxUnreachable, PermutationMismatch, CodegenUnsupportedKey, BuildFailed,
+DfuNotFound, DfuAccessDenied, DfuVerifyFailed` (per plan) + `InvalidLayout`
+(foundation addition — load/save/config validation failures need a code).
 
-- `keymap.c`, `config.h`, `rules.mk` — QMK sources the seeder must parse
-- `seeded_layout.json` — the exact `SeededLayout` the seeder must produce
-  from them (byte-for-byte field equality, whitespace aside)
+## Shared data (`shared/`)
 
-Worker A's acceptance tests: seeding yields a struct equal to the parsed
-`seeded_layout.json`, and codegen from `seeded_layout.json` yields a
-`keymap.c` that re-seeds to the same struct. Worker B flashes only images
-produced by `build::compile`.
+- **`fixtures/reference_{keymap.c,rules.mk,config.h}`** — copies of the real
+  `arrows_together` sources (today's flashed firmware). Golden spec: Worker
+  A's codegen must reproduce `reference_keymap.c` byte-identically modulo
+  whitespace (QK_LOCK included). Never edit; re-copy from qmk_firmware only.
+- **`fixtures/oryx_rddD7_QzpBEp.json`** — live Oryx GraphQL snapshot
+  (7 layers × 72 keys + 2 combos, fetched 2026-07-17). Seeder unit tests run
+  against this, offline.
+- **`fixtures/seeded_layout.json`** — expected seeder output. **PARTIAL**:
+  layers 0–1 of 7 hand-derived (see its `_note`); Worker A regenerates the
+  full file and removes the note. Glow positions in it were cross-checked
+  through the permutation table.
+- **`keycodes.json`** — 212 entries `{qmk, aliases, label, longLabel,
+  category, tappable, modsApplicable}`; single source of truth for UI labels
+  ↔ QMK codes; Rust validates emitted codes against it (Worker A). Covers
+  every keycode in `reference_keymap.c`. Worker C owns/expands it post-fork.
+- **`moonlander_geometry.json`** — 72 keys (x/y/w/h/r/rx/ry, matrix, led) in
+  LAYOUT-arg order, generated by `scripts/extract-geometry.mjs` from QMK's
+  `reva/keyboard.json`. Regenerate, don't hand-edit.
+- **`layout.schema.json`** — JSON Schema generated from schema.rs.
 
-## Repo layout
+## Build/infra notes
 
-```
-fixtures/ws_together/     shared test fixture (see above)
-docs/CONTRACT.md          this file
-src-tauri/src/layout/     schema.rs — Rust schema (source of truth)
-src-tauri/src/oryx/       Worker A: Oryx seeding (stub)
-src-tauri/src/codegen/    Worker A: keymap codegen (stub)
-src-tauri/src/build/      Worker A: MSYS firmware build (stub)
-src-tauri/src/flash/      Worker B: USB/DFU flashing (stub)
-src-tauri/src/commands.rs invoke surface (delegation layer — do not edit)
-src-tauri/src/events.rs   event names + payloads (do not edit)
-src/                      Worker C: frontend (placeholder)
-src/lib/types.ts          zod mirror of schema + events (lockstep with Rust)
-src/lib/types.test.ts     vitest: fixture ↔ schema
-```
+- `.cargo/config.toml` pins `target-dir` to
+  `C:/Users/fridl/.cargo-targets/qmk-flasher` (repo is under OneDrive; keeps
+  target/ out of sync). `node_modules` is gitignored as usual.
+- The `arrows_together` keymap dir in qmk_firmware is never written to — it
+  is the known-good recovery reference. Codegen emits into
+  `keymaps/qmk_flasher/` (see `AppConfig.keymapName`; `arrows_together` is
+  rejected as a target).
+- Toolchain on this machine: rustup stable-msvc 1.97.1, VS Build Tools 2022,
+  Node 22, QMK MSYS at `C:\QMK_MSYS`, qmk_firmware at
+  `C:\Users\fridl\qmk_firmware`.
 
 ## Verification
 
-- `npm run tauri dev` — opens the placeholder window (loads fixture via IPC)
-- `cd src-tauri && cargo test` — Rust schema/stub tests
-- `npm test` — vitest validates the fixture against the zod schema
+- Phase 0: `npm run tauri dev` opens the placeholder window (loads the
+  fixture over IPC); `cd src-tauri && cargo test` green; `npm test` (vitest)
+  validates fixture + geometry + keycodes against the zod mirrors; `npx tsc
+  --noEmit` clean.
+- Worker A: seeder tests over the Oryx snapshot (mapping rules, permutation,
+  MEH-count=1, combo translation); golden codegen test vs
+  `reference_keymap.c` (diffs via `similar`).
+- Worker B: safe E2E first flashes the existing known-good arrows_together
+  .bin (zero behavior change).

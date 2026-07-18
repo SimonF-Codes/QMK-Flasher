@@ -1,18 +1,18 @@
 import { useEffect, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
-import { SeededLayoutSchema, type SeededLayout } from "./lib/types";
+import { LayoutFileSchema, type LayoutFile } from "./lib/types";
 import "./App.css";
 
 // Placeholder shell proving the IPC contract works end-to-end.
-// The real UI is built by the UI worker; see docs/CONTRACT.md.
+// The real UI is built by Worker C; see docs/CONTRACT.md.
 function App() {
-  const [layout, setLayout] = useState<SeededLayout | null>(null);
+  const [layout, setLayout] = useState<LayoutFile | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    invoke("get_layout")
-      .then((raw) => setLayout(SeededLayoutSchema.parse(raw)))
-      .catch((e) => setError(String(e)));
+    invoke("load_layout")
+      .then((raw) => setLayout(LayoutFileSchema.parse(raw)))
+      .catch((e) => setError(JSON.stringify(e)));
   }, []);
 
   return (
@@ -22,13 +22,25 @@ function App() {
       {layout ? (
         <>
           <p>
-            Loaded <strong>{layout.keyboard}</strong> / {layout.keymap} (
-            {layout.layout_macro}, {layout.key_count} keys)
+            <strong>{layout.meta.name}</strong> (Oryx{" "}
+            {layout.meta.seededFrom.layoutId}/
+            {layout.meta.seededFrom.revisionHash}, QMK{" "}
+            {layout.meta.seededFrom.qmkVersion}) — {layout.layers.length}{" "}
+            layers, {layout.combos.length} combos
           </p>
-          <ul>
-            {layout.layers.map((layer) => (
-              <li key={layer.index}>
-                {layer.name}: {layer.keys.join(" ")}
+          <ul style={{ listStyle: "none", padding: 0 }}>
+            {layout.layers.map((layer, i) => (
+              <li key={i}>
+                <span
+                  style={{
+                    display: "inline-block",
+                    width: "0.8em",
+                    height: "0.8em",
+                    background: layer.color,
+                    marginRight: "0.5em",
+                  }}
+                />
+                Layer {i}: {layer.title} ({layer.keys.length} keys)
               </li>
             ))}
           </ul>
