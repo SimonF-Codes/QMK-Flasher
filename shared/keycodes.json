@@ -2004,6 +2004,39 @@
     "modsApplicable": false
   },
   {
+    "qmk": "AS_UP",
+    "aliases": [
+      "KC_ASUP"
+    ],
+    "label": "AS ↑",
+    "longLabel": "Auto Shift Timeout Up",
+    "category": "special",
+    "tappable": false,
+    "modsApplicable": false
+  },
+  {
+    "qmk": "AS_DOWN",
+    "aliases": [
+      "KC_ASDN"
+    ],
+    "label": "AS ↓",
+    "longLabel": "Auto Shift Timeout Down",
+    "category": "special",
+    "tappable": false,
+    "modsApplicable": false
+  },
+  {
+    "qmk": "AS_RPT",
+    "aliases": [
+      "KC_ASRP"
+    ],
+    "label": "AS Rpt",
+    "longLabel": "Auto Shift Report Timeout",
+    "category": "special",
+    "tappable": false,
+    "modsApplicable": false
+  },
+  {
     "qmk": "AU_TOGG",
     "aliases": [
       "AU_TOG"
