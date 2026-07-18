@@ -83,7 +83,7 @@ export default function App() {
       <LayerTabs />
 
       <main className="flex min-h-0 flex-1">
-        <section className="min-w-0 flex-1 p-4">
+        <section className="flex min-w-0 flex-1 flex-col p-4">
           {loading && <p className="text-sm text-zinc-500">Loading layout…</p>}
           {!loading && !layout && !error && (
             <p className="text-sm text-zinc-500">No layout.</p>

@@ -16,7 +16,7 @@ export default function Keyboard() {
   return (
     <svg
       viewBox={VIEW_BOX}
-      className="mx-auto block h-full w-full max-w-5xl"
+      className="mx-auto block min-h-0 w-full max-w-5xl flex-1"
       role="group"
       aria-label={`Layer ${selectedLayer} keys`}
     >

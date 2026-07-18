@@ -59,8 +59,13 @@ export default function BuildFlashPanel() {
     void ipc.cancelPipeline();
   };
 
-  const activeStep = stepIndex(state.phase);
+  // "error"/"idle" map to no step; keep the failed step highlighted on error.
+  const lastStepRef = useRef(0);
+  const currentStep = stepIndex(state.phase);
+  if (currentStep >= 0) lastStepRef.current = currentStep;
   const failed = state.phase === "error" || error !== null;
+  const activeStep =
+    currentStep >= 0 ? currentStep : failed ? lastStepRef.current : -1;
   const waiting = state.phase === "waitingForBootloader";
   const showProgress =
     state.progress !== undefined &&
