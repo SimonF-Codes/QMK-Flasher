@@ -5,6 +5,7 @@
 //! cross-check against the Oryx source zip via the keymap.c parser
 //! (parse_keymap_c.rs). STUB: returns the checked-in fixture.
 
+pub mod parse_keymap_c;
 pub mod permute;
 pub mod seed;
 

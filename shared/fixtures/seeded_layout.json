@@ -1,5 +1,4 @@
 {
-  "_note": "PARTIAL Phase 0 fixture: layers 0-1 of 7, hand-derived from reference_keymap.c + the Oryx snapshot (glow positions cross-checked through the Oryx->LAYOUT permutation). Worker A's seeder regenerates the full 7-layer file; this note then disappears.",
   "schemaVersion": 2,
   "meta": {
     "name": "Arrows Together",
@@ -16,171 +15,2114 @@
       "title": "Layer",
       "color": "#34006b",
       "keys": [
-        { "kind": "basic", "code": "KC_ESCAPE" },
-        { "kind": "basic", "code": "KC_1" },
-        { "kind": "basic", "code": "KC_2" },
-        { "kind": "basic", "code": "KC_3" },
-        { "kind": "basic", "code": "KC_4" },
-        { "kind": "basic", "code": "KC_5" },
-        { "kind": "layerSwitch", "action": "TO", "layer": 3, "glow": "#ed1616" },
-        { "kind": "layerSwitch", "action": "TO", "layer": 4, "glow": "#0effec" },
-        { "kind": "basic", "code": "KC_6" },
-        { "kind": "basic", "code": "KC_7" },
-        { "kind": "basic", "code": "KC_8" },
-        { "kind": "basic", "code": "KC_9" },
-        { "kind": "basic", "code": "KC_0" },
-        { "kind": "basic", "code": "KC_DELETE" },
-        { "kind": "basic", "code": "KC_EQUAL" },
-        { "kind": "basic", "code": "KC_Q" },
-        { "kind": "basic", "code": "KC_W" },
-        { "kind": "basic", "code": "KC_E" },
-        { "kind": "basic", "code": "KC_R" },
-        { "kind": "basic", "code": "KC_T" },
-        { "kind": "layerSwitch", "action": "TG", "layer": 1, "glow": "#1deb0e" },
-        { "kind": "layerSwitch", "action": "TG", "layer": 2, "glow": "#1301ed" },
-        { "kind": "basic", "code": "KC_Y" },
-        { "kind": "basic", "code": "KC_U" },
-        { "kind": "basic", "code": "KC_I" },
-        { "kind": "basic", "code": "KC_O" },
-        { "kind": "basic", "code": "KC_P" },
-        { "kind": "basic", "code": "KC_QUOTE" },
-        { "kind": "basic", "code": "KC_MINUS" },
-        { "kind": "basic", "code": "KC_A" },
-        { "kind": "basic", "code": "KC_S" },
-        { "kind": "basic", "code": "KC_D" },
-        { "kind": "basic", "code": "KC_F" },
-        { "kind": "basic", "code": "KC_G" },
-        { "kind": "tapDance", "tap": "KC_BSPC", "doubleTap": "KC_CALCULATOR" },
-        { "kind": "qkLock" },
-        { "kind": "basic", "code": "KC_H" },
-        { "kind": "basic", "code": "KC_J" },
-        { "kind": "basic", "code": "KC_K" },
-        { "kind": "basic", "code": "KC_L" },
-        { "kind": "layerTap", "layer": 3, "tap": "KC_SCLN" },
-        { "kind": "modTap", "mods": ["MOD_RSFT"], "tap": "KC_ENTER" },
-        { "kind": "basic", "code": "KC_LEFT_SHIFT" },
-        { "kind": "basic", "code": "KC_Z" },
-        { "kind": "basic", "code": "KC_X" },
-        { "kind": "basic", "code": "KC_C" },
-        { "kind": "basic", "code": "KC_V" },
-        { "kind": "basic", "code": "KC_B" },
-        { "kind": "basic", "code": "KC_N" },
-        { "kind": "basic", "code": "KC_M" },
-        { "kind": "basic", "code": "KC_COMMA" },
-        { "kind": "basic", "code": "KC_DOT" },
-        { "kind": "dualFunc", "tap": { "code": "KC_UP" }, "hold": { "code": "KC_UP" }, "glow": "#006b62" },
-        { "kind": "basic", "code": "KC_TAB" },
-        { "kind": "modTap", "mods": ["MOD_LCTL"], "tap": "KC_GRAVE" },
-        { "kind": "basic", "code": "KC_CAPS" },
-        { "kind": "basic", "code": "KC_LEFT_GUI" },
-        { "kind": "modTap", "mods": ["MOD_RCTL"], "tap": "KC_BSLS" },
-        { "kind": "layerTap", "layer": 1, "tap": "KC_SLASH" },
-        { "kind": "modTap", "mods": ["MOD_LALT"], "tap": "KC_APPLICATION" },
-        { "kind": "modTap", "mods": ["MOD_RCTL"], "tap": "KC_ESCAPE" },
-        { "kind": "basic", "code": "KC_LBRC" },
-        { "kind": "basic", "code": "KC_RBRC" },
-        { "kind": "dualFunc", "tap": { "code": "KC_LEFT" }, "hold": { "code": "KC_LEFT" }, "glow": "#006b62" },
-        { "kind": "dualFunc", "tap": { "code": "KC_DOWN" }, "hold": { "code": "KC_DOWN" }, "glow": "#006b62" },
-        { "kind": "dualFunc", "tap": { "code": "KC_RIGHT" }, "hold": { "code": "KC_RIGHT" }, "glow": "#006b62" },
-        { "kind": "basic", "code": "KC_SPACE" },
-        { "kind": "basic", "code": "KC_TAB" },
-        { "kind": "tapDance", "tap": "KC_LEFT_GUI", "hold": "KC_LEFT_GUI", "doubleTap": "KC_LEFT_GUI", "tapHold": "KC_LEFT_CTRL" },
-        { "kind": "basic", "code": "KC_LEFT_ALT" },
-        { "kind": "basic", "code": "KC_BSPC" },
-        { "kind": "basic", "code": "KC_ENTER" }
+        {
+          "kind": "basic",
+          "code": "KC_ESCAPE"
+        },
+        {
+          "kind": "basic",
+          "code": "KC_1"
+        },
+        {
+          "kind": "basic",
+          "code": "KC_2"
+        },
+        {
+          "kind": "basic",
+          "code": "KC_3"
+        },
+        {
+          "kind": "basic",
+          "code": "KC_4"
+        },
+        {
+          "kind": "basic",
+          "code": "KC_5"
+        },
+        {
+          "kind": "layerSwitch",
+          "action": "TO",
+          "layer": 3,
+          "glow": "#ed1616"
+        },
+        {
+          "kind": "layerSwitch",
+          "action": "TO",
+          "layer": 4,
+          "glow": "#0effec"
+        },
+        {
+          "kind": "basic",
+          "code": "KC_6"
+        },
+        {
+          "kind": "basic",
+          "code": "KC_7"
+        },
+        {
+          "kind": "basic",
+          "code": "KC_8"
+        },
+        {
+          "kind": "basic",
+          "code": "KC_9"
+        },
+        {
+          "kind": "basic",
+          "code": "KC_0"
+        },
+        {
+          "kind": "basic",
+          "code": "KC_DELETE"
+        },
+        {
+          "kind": "basic",
+          "code": "KC_EQUAL"
+        },
+        {
+          "kind": "basic",
+          "code": "KC_Q"
+        },
+        {
+          "kind": "basic",
+          "code": "KC_W"
+        },
+        {
+          "kind": "basic",
+          "code": "KC_E"
+        },
+        {
+          "kind": "basic",
+          "code": "KC_R"
+        },
+        {
+          "kind": "basic",
+          "code": "KC_T"
+        },
+        {
+          "kind": "layerSwitch",
+          "action": "TG",
+          "layer": 1,
+          "glow": "#1deb0e"
+        },
+        {
+          "kind": "layerSwitch",
+          "action": "TG",
+          "layer": 2,
+          "glow": "#1301ed"
+        },
+        {
+          "kind": "basic",
+          "code": "KC_Y"
+        },
+        {
+          "kind": "basic",
+          "code": "KC_U"
+        },
+        {
+          "kind": "basic",
+          "code": "KC_I"
+        },
+        {
+          "kind": "basic",
+          "code": "KC_O"
+        },
+        {
+          "kind": "basic",
+          "code": "KC_P"
+        },
+        {
+          "kind": "basic",
+          "code": "KC_QUOTE"
+        },
+        {
+          "kind": "basic",
+          "code": "KC_MINUS"
+        },
+        {
+          "kind": "basic",
+          "code": "KC_A"
+        },
+        {
+          "kind": "basic",
+          "code": "KC_S"
+        },
+        {
+          "kind": "basic",
+          "code": "KC_D"
+        },
+        {
+          "kind": "basic",
+          "code": "KC_F"
+        },
+        {
+          "kind": "basic",
+          "code": "KC_G"
+        },
+        {
+          "kind": "tapDance",
+          "tap": "KC_BSPC",
+          "doubleTap": "KC_CALCULATOR"
+        },
+        {
+          "kind": "qkLock"
+        },
+        {
+          "kind": "basic",
+          "code": "KC_H"
+        },
+        {
+          "kind": "basic",
+          "code": "KC_J"
+        },
+        {
+          "kind": "basic",
+          "code": "KC_K"
+        },
+        {
+          "kind": "basic",
+          "code": "KC_L"
+        },
+        {
+          "kind": "layerTap",
+          "layer": 3,
+          "tap": "KC_SCLN"
+        },
+        {
+          "kind": "modTap",
+          "mods": [
+            "MOD_RSFT"
+          ],
+          "tap": "KC_ENTER"
+        },
+        {
+          "kind": "basic",
+          "code": "KC_LEFT_SHIFT"
+        },
+        {
+          "kind": "basic",
+          "code": "KC_Z"
+        },
+        {
+          "kind": "basic",
+          "code": "KC_X"
+        },
+        {
+          "kind": "basic",
+          "code": "KC_C"
+        },
+        {
+          "kind": "basic",
+          "code": "KC_V"
+        },
+        {
+          "kind": "basic",
+          "code": "KC_B"
+        },
+        {
+          "kind": "basic",
+          "code": "KC_N"
+        },
+        {
+          "kind": "basic",
+          "code": "KC_M"
+        },
+        {
+          "kind": "basic",
+          "code": "KC_COMMA"
+        },
+        {
+          "kind": "basic",
+          "code": "KC_DOT"
+        },
+        {
+          "kind": "dualFunc",
+          "tap": {
+            "code": "KC_UP"
+          },
+          "hold": {
+            "code": "KC_UP"
+          },
+          "glow": "#006b62"
+        },
+        {
+          "kind": "basic",
+          "code": "KC_TAB"
+        },
+        {
+          "kind": "modTap",
+          "mods": [
+            "MOD_LCTL"
+          ],
+          "tap": "KC_GRAVE"
+        },
+        {
+          "kind": "basic",
+          "code": "KC_CAPS"
+        },
+        {
+          "kind": "basic",
+          "code": "KC_LEFT_GUI"
+        },
+        {
+          "kind": "modTap",
+          "mods": [
+            "MOD_RCTL"
+          ],
+          "tap": "KC_BSLS"
+        },
+        {
+          "kind": "layerTap",
+          "layer": 1,
+          "tap": "KC_SLASH"
+        },
+        {
+          "kind": "modTap",
+          "mods": [
+            "MOD_LALT"
+          ],
+          "tap": "KC_APPLICATION"
+        },
+        {
+          "kind": "modTap",
+          "mods": [
+            "MOD_RCTL"
+          ],
+          "tap": "KC_ESCAPE"
+        },
+        {
+          "kind": "basic",
+          "code": "KC_LBRC"
+        },
+        {
+          "kind": "basic",
+          "code": "KC_RBRC"
+        },
+        {
+          "kind": "dualFunc",
+          "tap": {
+            "code": "KC_LEFT"
+          },
+          "hold": {
+            "code": "KC_LEFT"
+          },
+          "glow": "#006b62"
+        },
+        {
+          "kind": "dualFunc",
+          "tap": {
+            "code": "KC_DOWN"
+          },
+          "hold": {
+            "code": "KC_DOWN"
+          },
+          "glow": "#006b62"
+        },
+        {
+          "kind": "dualFunc",
+          "tap": {
+            "code": "KC_RIGHT"
+          },
+          "hold": {
+            "code": "KC_RIGHT"
+          },
+          "glow": "#006b62"
+        },
+        {
+          "kind": "basic",
+          "code": "KC_SPACE"
+        },
+        {
+          "kind": "basic",
+          "code": "KC_TAB"
+        },
+        {
+          "kind": "tapDance",
+          "tap": "KC_LEFT_GUI",
+          "hold": "KC_LEFT_GUI",
+          "doubleTap": "KC_LEFT_GUI",
+          "tapHold": "KC_LEFT_CTRL"
+        },
+        {
+          "kind": "basic",
+          "code": "KC_LEFT_ALT"
+        },
+        {
+          "kind": "basic",
+          "code": "KC_BSPC"
+        },
+        {
+          "kind": "basic",
+          "code": "KC_ENTER"
+        }
       ]
     },
     {
       "title": "Layer",
       "color": "#1deb0e",
       "keys": [
-        { "kind": "basic", "code": "KC_ESCAPE" },
-        { "kind": "basic", "code": "KC_F1" },
-        { "kind": "basic", "code": "KC_F2" },
-        { "kind": "basic", "code": "KC_F3" },
-        { "kind": "basic", "code": "KC_F4" },
-        { "kind": "basic", "code": "KC_F5" },
-        { "kind": "layerSwitch", "action": "TO", "layer": 3, "glow": "#ed1616" },
-        { "kind": "layerSwitch", "action": "TO", "layer": 4, "glow": "#0effec" },
-        { "kind": "basic", "code": "KC_F6" },
-        { "kind": "basic", "code": "KC_F7" },
-        { "kind": "basic", "code": "KC_F8" },
-        { "kind": "basic", "code": "KC_F9" },
-        { "kind": "basic", "code": "KC_F10" },
-        { "kind": "basic", "code": "KC_F11" },
-        { "kind": "transparent" },
-        { "kind": "basic", "code": "KC_EXLM" },
-        { "kind": "basic", "code": "KC_AT" },
-        { "kind": "basic", "code": "KC_LCBR" },
-        { "kind": "basic", "code": "KC_RCBR" },
-        { "kind": "basic", "code": "KC_PIPE" },
-        { "kind": "transparent", "glow": "#34006b" },
-        { "kind": "layerSwitch", "action": "TO", "layer": 2, "glow": "#1000d9" },
-        { "kind": "basic", "code": "KC_UP" },
-        { "kind": "basic", "code": "KC_7" },
-        { "kind": "basic", "code": "KC_8" },
-        { "kind": "basic", "code": "KC_9" },
-        { "kind": "basic", "code": "KC_ASTR" },
-        { "kind": "basic", "code": "KC_F12" },
-        { "kind": "transparent" },
-        { "kind": "basic", "code": "KC_HASH" },
-        { "kind": "basic", "code": "KC_DLR" },
-        { "kind": "basic", "code": "KC_LPRN" },
-        { "kind": "basic", "code": "KC_RPRN" },
-        { "kind": "basic", "code": "KC_GRAVE" },
-        { "kind": "transparent" },
-        { "kind": "transparent" },
-        { "kind": "basic", "code": "KC_DOWN" },
-        { "kind": "basic", "code": "KC_4" },
-        { "kind": "basic", "code": "KC_5" },
-        { "kind": "basic", "code": "KC_6" },
-        { "kind": "basic", "code": "KC_KP_PLUS" },
-        { "kind": "transparent" },
-        { "kind": "transparent" },
-        { "kind": "basic", "code": "KC_PERC" },
-        { "kind": "basic", "code": "KC_CIRC" },
-        { "kind": "basic", "code": "KC_LBRC" },
-        { "kind": "basic", "code": "KC_RBRC" },
-        { "kind": "basic", "code": "KC_TILD" },
-        { "kind": "basic", "code": "KC_AMPR" },
-        { "kind": "basic", "code": "KC_1" },
-        { "kind": "basic", "code": "KC_2" },
-        { "kind": "basic", "code": "KC_3" },
-        { "kind": "basic", "code": "KC_BSLS" },
-        { "kind": "transparent" },
-        { "kind": "transparent" },
-        { "kind": "basic", "code": "KC_COMMA" },
-        { "kind": "rgbHsv", "h": 0, "s": 245, "v": 245 },
-        { "kind": "transparent" },
-        { "kind": "transparent" },
-        { "kind": "transparent" },
-        { "kind": "transparent" },
-        { "kind": "transparent" },
-        { "kind": "basic", "code": "KC_0" },
-        { "kind": "basic", "code": "KC_DOT" },
-        { "kind": "basic", "code": "KC_EQUAL" },
-        { "kind": "transparent" },
-        { "kind": "transparent" },
-        { "kind": "transparent" },
-        { "kind": "transparent" },
-        { "kind": "transparent" },
-        { "kind": "transparent" },
-        { "kind": "transparent" }
+        {
+          "kind": "basic",
+          "code": "KC_ESCAPE"
+        },
+        {
+          "kind": "basic",
+          "code": "KC_F1"
+        },
+        {
+          "kind": "basic",
+          "code": "KC_F2"
+        },
+        {
+          "kind": "basic",
+          "code": "KC_F3"
+        },
+        {
+          "kind": "basic",
+          "code": "KC_F4"
+        },
+        {
+          "kind": "basic",
+          "code": "KC_F5"
+        },
+        {
+          "kind": "layerSwitch",
+          "action": "TO",
+          "layer": 3,
+          "glow": "#ed1616"
+        },
+        {
+          "kind": "layerSwitch",
+          "action": "TO",
+          "layer": 4,
+          "glow": "#0effec"
+        },
+        {
+          "kind": "basic",
+          "code": "KC_F6"
+        },
+        {
+          "kind": "basic",
+          "code": "KC_F7"
+        },
+        {
+          "kind": "basic",
+          "code": "KC_F8"
+        },
+        {
+          "kind": "basic",
+          "code": "KC_F9"
+        },
+        {
+          "kind": "basic",
+          "code": "KC_F10"
+        },
+        {
+          "kind": "basic",
+          "code": "KC_F11"
+        },
+        {
+          "kind": "transparent"
+        },
+        {
+          "kind": "basic",
+          "code": "KC_EXLM"
+        },
+        {
+          "kind": "basic",
+          "code": "KC_AT"
+        },
+        {
+          "kind": "basic",
+          "code": "KC_LCBR"
+        },
+        {
+          "kind": "basic",
+          "code": "KC_RCBR"
+        },
+        {
+          "kind": "basic",
+          "code": "KC_PIPE"
+        },
+        {
+          "kind": "transparent",
+          "glow": "#34006b"
+        },
+        {
+          "kind": "layerSwitch",
+          "action": "TO",
+          "layer": 2,
+          "glow": "#1000d9"
+        },
+        {
+          "kind": "basic",
+          "code": "KC_UP"
+        },
+        {
+          "kind": "basic",
+          "code": "KC_7"
+        },
+        {
+          "kind": "basic",
+          "code": "KC_8"
+        },
+        {
+          "kind": "basic",
+          "code": "KC_9"
+        },
+        {
+          "kind": "basic",
+          "code": "KC_ASTR"
+        },
+        {
+          "kind": "basic",
+          "code": "KC_F12"
+        },
+        {
+          "kind": "transparent"
+        },
+        {
+          "kind": "basic",
+          "code": "KC_HASH"
+        },
+        {
+          "kind": "basic",
+          "code": "KC_DLR"
+        },
+        {
+          "kind": "basic",
+          "code": "KC_LPRN"
+        },
+        {
+          "kind": "basic",
+          "code": "KC_RPRN"
+        },
+        {
+          "kind": "basic",
+          "code": "KC_GRAVE"
+        },
+        {
+          "kind": "transparent"
+        },
+        {
+          "kind": "transparent"
+        },
+        {
+          "kind": "basic",
+          "code": "KC_DOWN"
+        },
+        {
+          "kind": "basic",
+          "code": "KC_4"
+        },
+        {
+          "kind": "basic",
+          "code": "KC_5"
+        },
+        {
+          "kind": "basic",
+          "code": "KC_6"
+        },
+        {
+          "kind": "basic",
+          "code": "KC_KP_PLUS"
+        },
+        {
+          "kind": "transparent"
+        },
+        {
+          "kind": "transparent"
+        },
+        {
+          "kind": "basic",
+          "code": "KC_PERC"
+        },
+        {
+          "kind": "basic",
+          "code": "KC_CIRC"
+        },
+        {
+          "kind": "basic",
+          "code": "KC_LBRC"
+        },
+        {
+          "kind": "basic",
+          "code": "KC_RBRC"
+        },
+        {
+          "kind": "basic",
+          "code": "KC_TILD"
+        },
+        {
+          "kind": "basic",
+          "code": "KC_AMPR"
+        },
+        {
+          "kind": "basic",
+          "code": "KC_1"
+        },
+        {
+          "kind": "basic",
+          "code": "KC_2"
+        },
+        {
+          "kind": "basic",
+          "code": "KC_3"
+        },
+        {
+          "kind": "basic",
+          "code": "KC_BSLS"
+        },
+        {
+          "kind": "transparent"
+        },
+        {
+          "kind": "transparent"
+        },
+        {
+          "kind": "basic",
+          "code": "KC_COMMA"
+        },
+        {
+          "kind": "rgbHsv",
+          "h": 0,
+          "s": 245,
+          "v": 245
+        },
+        {
+          "kind": "transparent"
+        },
+        {
+          "kind": "transparent"
+        },
+        {
+          "kind": "transparent"
+        },
+        {
+          "kind": "transparent"
+        },
+        {
+          "kind": "transparent"
+        },
+        {
+          "kind": "basic",
+          "code": "KC_0"
+        },
+        {
+          "kind": "basic",
+          "code": "KC_DOT"
+        },
+        {
+          "kind": "basic",
+          "code": "KC_EQUAL"
+        },
+        {
+          "kind": "transparent"
+        },
+        {
+          "kind": "transparent"
+        },
+        {
+          "kind": "transparent"
+        },
+        {
+          "kind": "transparent"
+        },
+        {
+          "kind": "transparent"
+        },
+        {
+          "kind": "transparent"
+        },
+        {
+          "kind": "transparent"
+        }
+      ]
+    },
+    {
+      "title": "Layer",
+      "color": "#1301ed",
+      "keys": [
+        {
+          "kind": "special",
+          "code": "AU_TOGG"
+        },
+        {
+          "kind": "transparent"
+        },
+        {
+          "kind": "transparent"
+        },
+        {
+          "kind": "transparent"
+        },
+        {
+          "kind": "transparent"
+        },
+        {
+          "kind": "transparent"
+        },
+        {
+          "kind": "layerSwitch",
+          "action": "TO",
+          "layer": 3,
+          "glow": "#ed1616"
+        },
+        {
+          "kind": "layerSwitch",
+          "action": "TO",
+          "layer": 4,
+          "glow": "#0effec"
+        },
+        {
+          "kind": "transparent"
+        },
+        {
+          "kind": "transparent"
+        },
+        {
+          "kind": "transparent"
+        },
+        {
+          "kind": "transparent"
+        },
+        {
+          "kind": "transparent"
+        },
+        {
+          "kind": "special",
+          "code": "QK_BOOT"
+        },
+        {
+          "kind": "special",
+          "code": "MU_TOGG"
+        },
+        {
+          "kind": "transparent"
+        },
+        {
+          "kind": "transparent"
+        },
+        {
+          "kind": "basic",
+          "code": "KC_MS_UP"
+        },
+        {
+          "kind": "transparent"
+        },
+        {
+          "kind": "transparent"
+        },
+        {
+          "kind": "layerSwitch",
+          "action": "TO",
+          "layer": 1,
+          "glow": "#1deb0e"
+        },
+        {
+          "kind": "transparent",
+          "glow": "#1000d9"
+        },
+        {
+          "kind": "transparent"
+        },
+        {
+          "kind": "transparent"
+        },
+        {
+          "kind": "transparent"
+        },
+        {
+          "kind": "transparent"
+        },
+        {
+          "kind": "transparent"
+        },
+        {
+          "kind": "transparent"
+        },
+        {
+          "kind": "special",
+          "code": "MU_NEXT"
+        },
+        {
+          "kind": "transparent"
+        },
+        {
+          "kind": "basic",
+          "code": "KC_MS_LEFT"
+        },
+        {
+          "kind": "basic",
+          "code": "KC_MS_DOWN"
+        },
+        {
+          "kind": "basic",
+          "code": "KC_MS_RIGHT"
+        },
+        {
+          "kind": "transparent"
+        },
+        {
+          "kind": "transparent"
+        },
+        {
+          "kind": "transparent"
+        },
+        {
+          "kind": "transparent"
+        },
+        {
+          "kind": "transparent"
+        },
+        {
+          "kind": "transparent"
+        },
+        {
+          "kind": "transparent"
+        },
+        {
+          "kind": "transparent"
+        },
+        {
+          "kind": "basic",
+          "code": "KC_MEDIA_PLAY_PAUSE"
+        },
+        {
+          "kind": "transparent"
+        },
+        {
+          "kind": "transparent"
+        },
+        {
+          "kind": "transparent"
+        },
+        {
+          "kind": "transparent"
+        },
+        {
+          "kind": "transparent"
+        },
+        {
+          "kind": "transparent"
+        },
+        {
+          "kind": "transparent"
+        },
+        {
+          "kind": "transparent"
+        },
+        {
+          "kind": "basic",
+          "code": "KC_MEDIA_PREV_TRACK"
+        },
+        {
+          "kind": "basic",
+          "code": "KC_MEDIA_NEXT_TRACK"
+        },
+        {
+          "kind": "transparent"
+        },
+        {
+          "kind": "transparent"
+        },
+        {
+          "kind": "transparent"
+        },
+        {
+          "kind": "transparent"
+        },
+        {
+          "kind": "transparent"
+        },
+        {
+          "kind": "transparent"
+        },
+        {
+          "kind": "transparent"
+        },
+        {
+          "kind": "transparent"
+        },
+        {
+          "kind": "transparent"
+        },
+        {
+          "kind": "basic",
+          "code": "KC_AUDIO_VOL_UP"
+        },
+        {
+          "kind": "basic",
+          "code": "KC_AUDIO_VOL_DOWN"
+        },
+        {
+          "kind": "basic",
+          "code": "KC_AUDIO_MUTE"
+        },
+        {
+          "kind": "transparent"
+        },
+        {
+          "kind": "transparent"
+        },
+        {
+          "kind": "basic",
+          "code": "KC_MS_BTN1"
+        },
+        {
+          "kind": "basic",
+          "code": "KC_MS_BTN2"
+        },
+        {
+          "kind": "transparent"
+        },
+        {
+          "kind": "transparent"
+        },
+        {
+          "kind": "transparent"
+        },
+        {
+          "kind": "basic",
+          "code": "KC_WWW_BACK"
+        }
+      ]
+    },
+    {
+      "title": "Layer",
+      "color": "#ed1616",
+      "keys": [
+        {
+          "kind": "transparent"
+        },
+        {
+          "kind": "transparent"
+        },
+        {
+          "kind": "transparent"
+        },
+        {
+          "kind": "transparent"
+        },
+        {
+          "kind": "transparent"
+        },
+        {
+          "kind": "transparent"
+        },
+        {
+          "kind": "layerSwitch",
+          "action": "TO",
+          "layer": 0,
+          "glow": "#34006b"
+        },
+        {
+          "kind": "layerSwitch",
+          "action": "TO",
+          "layer": 4,
+          "glow": "#0effec"
+        },
+        {
+          "kind": "transparent"
+        },
+        {
+          "kind": "transparent"
+        },
+        {
+          "kind": "transparent"
+        },
+        {
+          "kind": "transparent"
+        },
+        {
+          "kind": "transparent"
+        },
+        {
+          "kind": "transparent"
+        },
+        {
+          "kind": "transparent"
+        },
+        {
+          "kind": "transparent"
+        },
+        {
+          "kind": "macro",
+          "label": "push",
+          "steps": [
+            {
+              "code": "KC_P",
+              "delay": 100
+            },
+            {
+              "code": "KC_U",
+              "delay": 100
+            },
+            {
+              "code": "KC_S",
+              "delay": 100
+            },
+            {
+              "code": "KC_H",
+              "delay": 100
+            }
+          ]
+        },
+        {
+          "kind": "transparent"
+        },
+        {
+          "kind": "transparent"
+        },
+        {
+          "kind": "transparent"
+        },
+        {
+          "kind": "layerSwitch",
+          "action": "TO",
+          "layer": 1,
+          "glow": "#1deb0e"
+        },
+        {
+          "kind": "layerSwitch",
+          "action": "TO",
+          "layer": 2,
+          "glow": "#1000d9"
+        },
+        {
+          "kind": "transparent"
+        },
+        {
+          "kind": "transparent"
+        },
+        {
+          "kind": "transparent"
+        },
+        {
+          "kind": "transparent"
+        },
+        {
+          "kind": "transparent"
+        },
+        {
+          "kind": "transparent"
+        },
+        {
+          "kind": "transparent"
+        },
+        {
+          "kind": "transparent"
+        },
+        {
+          "kind": "macro",
+          "label": "pull",
+          "steps": [
+            {
+              "code": "KC_P",
+              "delay": 100
+            },
+            {
+              "code": "KC_U",
+              "delay": 100
+            },
+            {
+              "code": "KC_L",
+              "delay": 100
+            },
+            {
+              "code": "KC_L",
+              "delay": 100
+            }
+          ]
+        },
+        {
+          "kind": "transparent"
+        },
+        {
+          "kind": "macro",
+          "label": "fetch",
+          "steps": [
+            {
+              "code": "KC_F",
+              "delay": 100
+            },
+            {
+              "code": "KC_E",
+              "delay": 100
+            },
+            {
+              "code": "KC_T",
+              "delay": 100
+            },
+            {
+              "code": "KC_C",
+              "delay": 100
+            },
+            {
+              "code": "KC_H",
+              "delay": 100
+            }
+          ]
+        },
+        {
+          "kind": "macro",
+          "label": "git",
+          "steps": [
+            {
+              "code": "KC_G",
+              "delay": 100
+            },
+            {
+              "code": "KC_I",
+              "delay": 100
+            },
+            {
+              "code": "KC_T",
+              "delay": 100
+            },
+            {
+              "code": "KC_SPACE",
+              "delay": 100
+            }
+          ]
+        },
+        {
+          "kind": "transparent"
+        },
+        {
+          "kind": "transparent"
+        },
+        {
+          "kind": "transparent"
+        },
+        {
+          "kind": "transparent"
+        },
+        {
+          "kind": "transparent"
+        },
+        {
+          "kind": "transparent"
+        },
+        {
+          "kind": "transparent"
+        },
+        {
+          "kind": "transparent"
+        },
+        {
+          "kind": "transparent"
+        },
+        {
+          "kind": "transparent"
+        },
+        {
+          "kind": "transparent"
+        },
+        {
+          "kind": "macro",
+          "label": "cd",
+          "steps": [
+            {
+              "code": "KC_C",
+              "delay": 100
+            },
+            {
+              "code": "KC_D",
+              "delay": 100
+            },
+            {
+              "code": "KC_SPACE",
+              "delay": 100
+            }
+          ]
+        },
+        {
+          "kind": "macro",
+          "label": "vim",
+          "steps": [
+            {
+              "code": "KC_V",
+              "delay": 100
+            },
+            {
+              "code": "KC_I",
+              "delay": 100
+            },
+            {
+              "code": "KC_M",
+              "delay": 100
+            },
+            {
+              "code": "KC_SPACE",
+              "delay": 100
+            }
+          ]
+        },
+        {
+          "kind": "transparent"
+        },
+        {
+          "kind": "transparent"
+        },
+        {
+          "kind": "transparent"
+        },
+        {
+          "kind": "transparent"
+        },
+        {
+          "kind": "transparent"
+        },
+        {
+          "kind": "transparent"
+        },
+        {
+          "kind": "transparent"
+        },
+        {
+          "kind": "transparent"
+        },
+        {
+          "kind": "transparent"
+        },
+        {
+          "kind": "transparent"
+        },
+        {
+          "kind": "transparent"
+        },
+        {
+          "kind": "transparent"
+        },
+        {
+          "kind": "transparent"
+        },
+        {
+          "kind": "transparent"
+        },
+        {
+          "kind": "transparent"
+        },
+        {
+          "kind": "transparent"
+        },
+        {
+          "kind": "transparent"
+        },
+        {
+          "kind": "transparent"
+        },
+        {
+          "kind": "transparent"
+        },
+        {
+          "kind": "transparent"
+        },
+        {
+          "kind": "transparent"
+        },
+        {
+          "kind": "transparent"
+        },
+        {
+          "kind": "transparent"
+        },
+        {
+          "kind": "transparent"
+        },
+        {
+          "kind": "transparent"
+        }
+      ]
+    },
+    {
+      "title": "Media",
+      "color": "#0effec",
+      "keys": [
+        {
+          "kind": "transparent"
+        },
+        {
+          "kind": "transparent"
+        },
+        {
+          "kind": "transparent"
+        },
+        {
+          "kind": "transparent"
+        },
+        {
+          "kind": "transparent"
+        },
+        {
+          "kind": "transparent"
+        },
+        {
+          "kind": "layerSwitch",
+          "action": "TO",
+          "layer": 3,
+          "glow": "#ed1616"
+        },
+        {
+          "kind": "layerSwitch",
+          "action": "TO",
+          "layer": 0,
+          "glow": "#34006b"
+        },
+        {
+          "kind": "macro",
+          "label": "Screenshot",
+          "steps": [
+            {
+              "code": "KC_5",
+              "delay": 100,
+              "mods": [
+                "MOD_LCTL",
+                "MOD_LSFT"
+              ]
+            }
+          ],
+          "glow": "#e2d300"
+        },
+        {
+          "kind": "transparent"
+        },
+        {
+          "kind": "transparent"
+        },
+        {
+          "kind": "transparent"
+        },
+        {
+          "kind": "transparent"
+        },
+        {
+          "kind": "basic",
+          "code": "KC_AUDIO_VOL_UP",
+          "glow": "#1deb0e"
+        },
+        {
+          "kind": "transparent"
+        },
+        {
+          "kind": "rgb",
+          "code": "RGB_SPI",
+          "glow": "#1deb0e"
+        },
+        {
+          "kind": "rgb",
+          "code": "RGB_SAI",
+          "glow": "#1deb0e"
+        },
+        {
+          "kind": "rgb",
+          "code": "RGB_VAI",
+          "glow": "#1deb0e"
+        },
+        {
+          "kind": "rgb",
+          "code": "RGB_HUI",
+          "glow": "#1deb0e"
+        },
+        {
+          "kind": "rgb",
+          "code": "RGB_SLD"
+        },
+        {
+          "kind": "layerSwitch",
+          "action": "TO",
+          "layer": 1,
+          "glow": "#1deb0e"
+        },
+        {
+          "kind": "layerSwitch",
+          "action": "TO",
+          "layer": 2,
+          "glow": "#1000d9"
+        },
+        {
+          "kind": "special",
+          "code": "AU_TOGG"
+        },
+        {
+          "kind": "transparent"
+        },
+        {
+          "kind": "transparent"
+        },
+        {
+          "kind": "transparent"
+        },
+        {
+          "kind": "transparent"
+        },
+        {
+          "kind": "basic",
+          "code": "KC_AUDIO_VOL_DOWN",
+          "glow": "#e2d300"
+        },
+        {
+          "kind": "transparent"
+        },
+        {
+          "kind": "rgb",
+          "code": "RGB_SPD",
+          "glow": "#ed1616"
+        },
+        {
+          "kind": "rgb",
+          "code": "RGB_SAD",
+          "glow": "#ed1616"
+        },
+        {
+          "kind": "rgb",
+          "code": "RGB_VAD",
+          "glow": "#ed1616"
+        },
+        {
+          "kind": "rgb",
+          "code": "RGB_HUD",
+          "glow": "#ed1616"
+        },
+        {
+          "kind": "special",
+          "code": "TOGGLE_LAYER_COLOR"
+        },
+        {
+          "kind": "transparent"
+        },
+        {
+          "kind": "transparent"
+        },
+        {
+          "kind": "special",
+          "code": "MU_TOGG"
+        },
+        {
+          "kind": "dualFunc",
+          "tap": {
+            "code": "KC_MEDIA_PREV_TRACK"
+          },
+          "hold": {
+            "code": "KC_MEDIA_REWIND"
+          },
+          "glow": "#ed1616"
+        },
+        {
+          "kind": "basic",
+          "code": "KC_MEDIA_PLAY_PAUSE",
+          "glow": "#1deb0e"
+        },
+        {
+          "kind": "dualFunc",
+          "tap": {
+            "code": "KC_MEDIA_NEXT_TRACK"
+          },
+          "hold": {
+            "code": "KC_MEDIA_FAST_FORWARD"
+          },
+          "glow": "#1000d9"
+        },
+        {
+          "kind": "basic",
+          "code": "KC_MS_BTN3",
+          "glow": "#0cff3e"
+        },
+        {
+          "kind": "basic",
+          "code": "KC_AUDIO_MUTE",
+          "glow": "#ed1616"
+        },
+        {
+          "kind": "transparent"
+        },
+        {
+          "kind": "rgb",
+          "code": "RGB_MODE_FORWARD",
+          "glow": "#1000d9"
+        },
+        {
+          "kind": "rgbHsv",
+          "h": 82,
+          "s": 251,
+          "v": 228,
+          "glow": "#14e403"
+        },
+        {
+          "kind": "rgbHsv",
+          "h": 163,
+          "s": 255,
+          "v": 203,
+          "glow": "#0029cb"
+        },
+        {
+          "kind": "rgbHsv",
+          "h": 195,
+          "s": 255,
+          "v": 84,
+          "glow": "#5e02ae"
+        },
+        {
+          "kind": "rgb",
+          "code": "RGB_TOG"
+        },
+        {
+          "kind": "special",
+          "code": "MU_NEXT"
+        },
+        {
+          "kind": "transparent"
+        },
+        {
+          "kind": "basic",
+          "code": "KC_MS_WH_UP",
+          "glow": "#e2d300"
+        },
+        {
+          "kind": "basic",
+          "code": "KC_MS_BTN1",
+          "glow": "#0cff3e"
+        },
+        {
+          "kind": "basic",
+          "code": "KC_MS_UP",
+          "glow": "#0cff3e"
+        },
+        {
+          "kind": "basic",
+          "code": "KC_MS_BTN2",
+          "glow": "#0cff3e"
+        },
+        {
+          "kind": "transparent"
+        },
+        {
+          "kind": "special",
+          "code": "QK_BOOT",
+          "glow": "#6f0b6b"
+        },
+        {
+          "kind": "special",
+          "code": "AS_OFF",
+          "glow": "#ed1616"
+        },
+        {
+          "kind": "special",
+          "code": "AS_TOGG",
+          "glow": "#e2d300"
+        },
+        {
+          "kind": "special",
+          "code": "AS_ON",
+          "glow": "#1deb0e"
+        },
+        {
+          "kind": "transparent"
+        },
+        {
+          "kind": "transparent"
+        },
+        {
+          "kind": "transparent"
+        },
+        {
+          "kind": "basic",
+          "code": "KC_MS_WH_DOWN",
+          "glow": "#e2d300"
+        },
+        {
+          "kind": "basic",
+          "code": "KC_MS_LEFT",
+          "glow": "#0cff3e"
+        },
+        {
+          "kind": "basic",
+          "code": "KC_MS_DOWN",
+          "glow": "#0cff3e"
+        },
+        {
+          "kind": "basic",
+          "code": "KC_MS_RIGHT",
+          "glow": "#0cff3e"
+        },
+        {
+          "kind": "transparent"
+        },
+        {
+          "kind": "transparent"
+        },
+        {
+          "kind": "transparent"
+        },
+        {
+          "kind": "transparent"
+        },
+        {
+          "kind": "transparent"
+        },
+        {
+          "kind": "transparent"
+        }
+      ]
+    },
+    {
+      "title": "Mirror",
+      "color": "#c00eb9",
+      "keys": [
+        {
+          "kind": "basic",
+          "code": "KC_DELETE"
+        },
+        {
+          "kind": "basic",
+          "code": "KC_0"
+        },
+        {
+          "kind": "basic",
+          "code": "KC_9"
+        },
+        {
+          "kind": "basic",
+          "code": "KC_8"
+        },
+        {
+          "kind": "basic",
+          "code": "KC_7"
+        },
+        {
+          "kind": "basic",
+          "code": "KC_6"
+        },
+        {
+          "kind": "transparent"
+        },
+        {
+          "kind": "transparent"
+        },
+        {
+          "kind": "basic",
+          "code": "KC_5"
+        },
+        {
+          "kind": "basic",
+          "code": "KC_4"
+        },
+        {
+          "kind": "basic",
+          "code": "KC_3"
+        },
+        {
+          "kind": "basic",
+          "code": "KC_2"
+        },
+        {
+          "kind": "basic",
+          "code": "KC_1"
+        },
+        {
+          "kind": "basic",
+          "code": "KC_ESCAPE"
+        },
+        {
+          "kind": "basic",
+          "code": "KC_QUOTE"
+        },
+        {
+          "kind": "basic",
+          "code": "KC_P"
+        },
+        {
+          "kind": "basic",
+          "code": "KC_O"
+        },
+        {
+          "kind": "basic",
+          "code": "KC_I"
+        },
+        {
+          "kind": "basic",
+          "code": "KC_U"
+        },
+        {
+          "kind": "basic",
+          "code": "KC_Y"
+        },
+        {
+          "kind": "transparent"
+        },
+        {
+          "kind": "transparent"
+        },
+        {
+          "kind": "basic",
+          "code": "KC_T"
+        },
+        {
+          "kind": "basic",
+          "code": "KC_R"
+        },
+        {
+          "kind": "basic",
+          "code": "KC_E"
+        },
+        {
+          "kind": "basic",
+          "code": "KC_W"
+        },
+        {
+          "kind": "basic",
+          "code": "KC_Q"
+        },
+        {
+          "kind": "basic",
+          "code": "KC_EQUAL"
+        },
+        {
+          "kind": "basic",
+          "code": "KC_ENTER"
+        },
+        {
+          "kind": "basic",
+          "code": "KC_SCLN"
+        },
+        {
+          "kind": "basic",
+          "code": "KC_L"
+        },
+        {
+          "kind": "basic",
+          "code": "KC_K"
+        },
+        {
+          "kind": "basic",
+          "code": "KC_J"
+        },
+        {
+          "kind": "basic",
+          "code": "KC_H"
+        },
+        {
+          "kind": "transparent"
+        },
+        {
+          "kind": "transparent"
+        },
+        {
+          "kind": "basic",
+          "code": "KC_G"
+        },
+        {
+          "kind": "basic",
+          "code": "KC_F"
+        },
+        {
+          "kind": "basic",
+          "code": "KC_D"
+        },
+        {
+          "kind": "basic",
+          "code": "KC_S"
+        },
+        {
+          "kind": "basic",
+          "code": "KC_A"
+        },
+        {
+          "kind": "basic",
+          "code": "KC_MINUS"
+        },
+        {
+          "kind": "basic",
+          "code": "KC_BSPC"
+        },
+        {
+          "kind": "basic",
+          "code": "KC_UP"
+        },
+        {
+          "kind": "basic",
+          "code": "KC_DOT"
+        },
+        {
+          "kind": "basic",
+          "code": "KC_COMMA"
+        },
+        {
+          "kind": "basic",
+          "code": "KC_M"
+        },
+        {
+          "kind": "basic",
+          "code": "KC_N"
+        },
+        {
+          "kind": "basic",
+          "code": "KC_B"
+        },
+        {
+          "kind": "basic",
+          "code": "KC_V"
+        },
+        {
+          "kind": "basic",
+          "code": "KC_C"
+        },
+        {
+          "kind": "basic",
+          "code": "KC_X"
+        },
+        {
+          "kind": "basic",
+          "code": "KC_Z"
+        },
+        {
+          "kind": "basic",
+          "code": "KC_LEFT_SHIFT"
+        },
+        {
+          "kind": "basic",
+          "code": "KC_LEFT"
+        },
+        {
+          "kind": "basic",
+          "code": "KC_DOWN"
+        },
+        {
+          "kind": "basic",
+          "code": "KC_RIGHT"
+        },
+        {
+          "kind": "basic",
+          "code": "KC_LBRC"
+        },
+        {
+          "kind": "basic",
+          "code": "KC_RBRC"
+        },
+        {
+          "kind": "modTap",
+          "mods": [
+            "MOD_LCTL"
+          ],
+          "tap": "KC_ESCAPE"
+        },
+        {
+          "kind": "modTap",
+          "mods": [
+            "MOD_RALT"
+          ],
+          "tap": "KC_APPLICATION"
+        },
+        {
+          "kind": "basic",
+          "code": "KC_BSLS"
+        },
+        {
+          "kind": "basic",
+          "code": "KC_SLASH"
+        },
+        {
+          "kind": "basic",
+          "code": "KC_LEFT_GUI"
+        },
+        {
+          "kind": "special",
+          "code": "CW_TOGG"
+        },
+        {
+          "kind": "basic",
+          "code": "KC_GRAVE"
+        },
+        {
+          "kind": "basic",
+          "code": "KC_ENTER"
+        },
+        {
+          "kind": "basic",
+          "code": "KC_TAB"
+        },
+        {
+          "kind": "modTap",
+          "mods": [
+            "MOD_LALT"
+          ],
+          "tap": "KC_ENTER"
+        },
+        {
+          "kind": "basic",
+          "code": "KC_LEFT_GUI"
+        },
+        {
+          "kind": "basic",
+          "code": "KC_BSPC"
+        },
+        {
+          "kind": "basic",
+          "code": "KC_SPACE"
+        }
+      ]
+    },
+    {
+      "title": "Layer",
+      "color": "#5f3dc6",
+      "keys": [
+        {
+          "kind": "basic",
+          "code": "KC_ESCAPE"
+        },
+        {
+          "kind": "transparent"
+        },
+        {
+          "kind": "transparent"
+        },
+        {
+          "kind": "transparent"
+        },
+        {
+          "kind": "transparent"
+        },
+        {
+          "kind": "transparent"
+        },
+        {
+          "kind": "transparent"
+        },
+        {
+          "kind": "transparent"
+        },
+        {
+          "kind": "transparent"
+        },
+        {
+          "kind": "transparent"
+        },
+        {
+          "kind": "transparent"
+        },
+        {
+          "kind": "transparent"
+        },
+        {
+          "kind": "transparent"
+        },
+        {
+          "kind": "transparent"
+        },
+        {
+          "kind": "transparent"
+        },
+        {
+          "kind": "transparent"
+        },
+        {
+          "kind": "basic",
+          "code": "KC_W",
+          "glow": "#0cff3e"
+        },
+        {
+          "kind": "transparent"
+        },
+        {
+          "kind": "transparent"
+        },
+        {
+          "kind": "transparent"
+        },
+        {
+          "kind": "transparent"
+        },
+        {
+          "kind": "transparent"
+        },
+        {
+          "kind": "transparent"
+        },
+        {
+          "kind": "transparent"
+        },
+        {
+          "kind": "transparent"
+        },
+        {
+          "kind": "transparent"
+        },
+        {
+          "kind": "transparent"
+        },
+        {
+          "kind": "transparent"
+        },
+        {
+          "kind": "basic",
+          "code": "KC_TAB"
+        },
+        {
+          "kind": "basic",
+          "code": "KC_A",
+          "glow": "#0cff3e"
+        },
+        {
+          "kind": "basic",
+          "code": "KC_S",
+          "glow": "#0cff3e"
+        },
+        {
+          "kind": "basic",
+          "code": "KC_D",
+          "glow": "#0cff3e"
+        },
+        {
+          "kind": "transparent"
+        },
+        {
+          "kind": "transparent"
+        },
+        {
+          "kind": "special",
+          "code": "AS_TOGG"
+        },
+        {
+          "kind": "transparent"
+        },
+        {
+          "kind": "transparent"
+        },
+        {
+          "kind": "transparent"
+        },
+        {
+          "kind": "transparent"
+        },
+        {
+          "kind": "transparent"
+        },
+        {
+          "kind": "transparent"
+        },
+        {
+          "kind": "transparent"
+        },
+        {
+          "kind": "transparent"
+        },
+        {
+          "kind": "transparent"
+        },
+        {
+          "kind": "transparent"
+        },
+        {
+          "kind": "transparent"
+        },
+        {
+          "kind": "transparent"
+        },
+        {
+          "kind": "transparent"
+        },
+        {
+          "kind": "transparent"
+        },
+        {
+          "kind": "transparent"
+        },
+        {
+          "kind": "transparent"
+        },
+        {
+          "kind": "transparent"
+        },
+        {
+          "kind": "transparent"
+        },
+        {
+          "kind": "transparent"
+        },
+        {
+          "kind": "transparent"
+        },
+        {
+          "kind": "transparent"
+        },
+        {
+          "kind": "transparent"
+        },
+        {
+          "kind": "transparent"
+        },
+        {
+          "kind": "transparent"
+        },
+        {
+          "kind": "transparent"
+        },
+        {
+          "kind": "transparent"
+        },
+        {
+          "kind": "transparent"
+        },
+        {
+          "kind": "transparent"
+        },
+        {
+          "kind": "transparent"
+        },
+        {
+          "kind": "transparent"
+        },
+        {
+          "kind": "transparent"
+        },
+        {
+          "kind": "transparent"
+        },
+        {
+          "kind": "transparent"
+        },
+        {
+          "kind": "transparent"
+        },
+        {
+          "kind": "transparent"
+        },
+        {
+          "kind": "transparent"
+        },
+        {
+          "kind": "transparent"
+        }
       ]
     }
   ],
   "combos": [
     {
       "name": "Mirror 1",
-      "keys": [21, 7],
+      "keys": [
+        21,
+        7
+      ],
       "layer": 0,
-      "action": { "kind": "layerSwitch", "action": "TG", "layer": 5 }
+      "action": {
+        "kind": "layerSwitch",
+        "action": "TG",
+        "layer": 5
+      }
     },
     {
       "name": "Mirror 2",
-      "keys": [20, 6],
+      "keys": [
+        20,
+        6
+      ],
       "layer": 0,
-      "action": { "kind": "layerSwitch", "action": "TG", "layer": 5 }
+      "action": {
+        "kind": "layerSwitch",
+        "action": "TG",
+        "layer": 5
+      }
     }
   ],
   "settings": {

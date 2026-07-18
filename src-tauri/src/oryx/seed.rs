@@ -504,3 +504,420 @@ pub fn layout_from_snapshot(
     layout.validate().map_err(AppError::InvalidLayout)?;
     Ok(layout)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::oryx::parse_keymap_c::{self, ParsedKeymap};
+    use crate::oryx::permute::{layout_index_for_oryx, ORYX_TO_LAYOUT};
+
+    const REFERENCE_KEYMAP_C: &str = include_str!(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/../shared/fixtures/reference_keymap.c"
+    ));
+
+    /// seededAt used for the committed fixture (regen keeps it stable).
+    const FIXTURE_SEEDED_AT: &str = "2026-07-17T22:00:00Z";
+
+    fn seeded() -> LayoutFile {
+        layout_from_snapshot(SNAPSHOT, "rddD7", FIXTURE_SEEDED_AT).unwrap()
+    }
+
+    /// Key at Oryx coordinates (layer, oryx index), post-permutation.
+    fn at(layout: &LayoutFile, layer: usize, oryx_idx: usize) -> &KeyAction {
+        &layout.layers[layer].keys[layout_index_for_oryx(oryx_idx).unwrap()]
+    }
+
+    #[test]
+    fn seeds_seven_layers_of_72_keys() {
+        let layout = seeded();
+        assert_eq!(layout.layers.len(), 7);
+        for (i, layer) in layout.layers.iter().enumerate() {
+            assert_eq!(layer.keys.len(), 72, "layer {i}");
+        }
+        assert_eq!(layout.schema_version, SCHEMA_VERSION);
+        assert_eq!(layout.meta.name, LAYOUT_NAME);
+        assert_eq!(layout.meta.seeded_from.layout_id, "rddD7");
+        assert_eq!(layout.meta.seeded_from.revision_hash, "QzpBEp");
+    }
+
+    #[test]
+    fn maps_every_key_action_kind() {
+        let layout = seeded();
+        // basic (tap-only)
+        assert_eq!(
+            at(&layout, 0, 0),
+            &KeyAction::Basic { code: "KC_ESCAPE".into(), mods: None, glow: None }
+        );
+        // basic (hold-only modifier)
+        assert_eq!(
+            at(&layout, 0, 21),
+            &KeyAction::Basic { code: "KC_LEFT_SHIFT".into(), mods: None, glow: None }
+        );
+        // layerSwitch with glow (Oryx glowColor lowercased)
+        assert_eq!(
+            at(&layout, 0, 6),
+            &KeyAction::LayerSwitch {
+                action: LayerSwitchAction::TO,
+                layer: 3,
+                glow: Some("#ed1616".into())
+            }
+        );
+        // modTap
+        assert_eq!(
+            at(&layout, 0, 56),
+            &KeyAction::ModTap {
+                mods: vec!["MOD_RSFT".into()],
+                tap: "KC_ENTER".into(),
+                glow: None
+            }
+        );
+        // layerTap
+        assert_eq!(
+            at(&layout, 0, 55),
+            &KeyAction::LayerTap { layer: 3, tap: "KC_SCLN".into(), glow: None }
+        );
+        // dualFunc (tap/hold pair that is neither mod nor MO)
+        assert_eq!(
+            at(&layout, 0, 61),
+            &KeyAction::DualFunc {
+                tap: TapSpec { code: "KC_UP".into(), mods: None },
+                hold: TapSpec { code: "KC_UP".into(), mods: None },
+                glow: Some("#006b62".into())
+            }
+        );
+        // tapDance: doubleTap only
+        assert_eq!(
+            at(&layout, 0, 20),
+            &KeyAction::TapDance {
+                tap: Some("KC_BSPC".into()),
+                hold: None,
+                double_tap: Some("KC_CALCULATOR".into()),
+                tap_hold: None,
+                tapping_term: None,
+                glow: None
+            }
+        );
+        // tapDance: tapHold set, empty doubleTap falls back to the tap code
+        assert_eq!(
+            at(&layout, 0, 35),
+            &KeyAction::TapDance {
+                tap: Some("KC_LEFT_GUI".into()),
+                hold: Some("KC_LEFT_GUI".into()),
+                double_tap: Some("KC_LEFT_GUI".into()),
+                tap_hold: Some("KC_LEFT_CTRL".into()),
+                tapping_term: None,
+                glow: None
+            }
+        );
+        // macro: trailing KC_TRANSPARENT padding dropped, delays kept
+        match at(&layout, 3, 9) {
+            KeyAction::Macro { label, steps, .. } => {
+                assert_eq!(label, "push");
+                assert_eq!(
+                    steps.iter().map(|s| s.code.as_str()).collect::<Vec<_>>(),
+                    ["KC_P", "KC_U", "KC_S", "KC_H"]
+                );
+                assert!(steps.iter().all(|s| s.delay == Some(100)));
+                assert!(steps.iter().all(|s| s.mods.is_none()));
+            }
+            other => panic!("expected macro, got {other:?}"),
+        }
+        // macro with modifiers (Screenshot: Ctrl+Shift+5)
+        match at(&layout, 4, 37) {
+            KeyAction::Macro { label, steps, .. } => {
+                assert_eq!(label, "Screenshot");
+                assert_eq!(steps.len(), 1);
+                assert_eq!(steps[0].code, "KC_5");
+                assert_eq!(
+                    steps[0].mods.as_deref(),
+                    Some(&["MOD_LCTL".to_string(), "MOD_LSFT".to_string()][..])
+                );
+            }
+            other => panic!("expected macro, got {other:?}"),
+        }
+        // rgb
+        assert_eq!(
+            at(&layout, 4, 26),
+            &KeyAction::Rgb { code: "RGB_TOG".into(), glow: None }
+        );
+        // rgbHsv (Oryx RGB key with tap.color)
+        assert_eq!(
+            at(&layout, 1, 29),
+            &KeyAction::RgbHsv { h: 0, s: 245, v: 245, glow: None }
+        );
+        // special
+        assert_eq!(
+            at(&layout, 2, 42),
+            &KeyAction::Special { code: "QK_BOOT".into(), glow: None }
+        );
+        assert_eq!(
+            at(&layout, 4, 19),
+            &KeyAction::Special { code: "TOGGLE_LAYER_COLOR".into(), glow: None }
+        );
+        // transparent (unassigned, glow-only key)
+        assert_eq!(
+            at(&layout, 1, 13),
+            &KeyAction::Transparent { glow: Some("#34006b".into()) }
+        );
+    }
+
+    #[test]
+    fn key_lock_transform_replaces_the_single_meh_key() {
+        let layout = seeded();
+        let mut qk_locks = Vec::new();
+        for (li, layer) in layout.layers.iter().enumerate() {
+            for (ki, key) in layer.keys.iter().enumerate() {
+                match key {
+                    KeyAction::QkLock { .. } => qk_locks.push((li, ki)),
+                    KeyAction::Basic { code, .. } => {
+                        assert_ne!(code, "KC_MEH", "no KC_MEH may survive the transform")
+                    }
+                    _ => {}
+                }
+            }
+        }
+        // Oryx 50 (hold-only MEH_T on layer 0) lands at LAYOUT arg 35.
+        assert_eq!(qk_locks, vec![(0, layout_index_for_oryx(50).unwrap())]);
+        assert_eq!(qk_locks, vec![(0, 35)]);
+    }
+
+    #[test]
+    fn key_lock_transform_rejects_zero_or_multiple_meh() {
+        let mut v: serde_json::Value = serde_json::from_str(SNAPSHOT).unwrap();
+        // Zero MEH: repoint the hold-only MEH_T key (oryx 50) at plain Alt.
+        v["data"]["layout"]["revision"]["layers"][0]["keys"][50]["hold"]["code"] =
+            "KC_LEFT_ALT".into();
+        let zero = serde_json::to_string(&v).unwrap();
+        assert!(layout_from_snapshot(&zero, "rddD7", FIXTURE_SEEDED_AT).is_err());
+
+        // Two MEH: restore, then clone MEH onto a second key.
+        let keys = v["data"]["layout"]["revision"]["layers"][0]["keys"]
+            .as_array_mut()
+            .unwrap();
+        keys[50]["hold"]["code"] = "MEH_T".into();
+        keys[0] = keys[50].clone();
+        let two = serde_json::to_string(&v).unwrap();
+        assert!(layout_from_snapshot(&two, "rddD7", FIXTURE_SEEDED_AT).is_err());
+    }
+
+    #[test]
+    fn combos_translate_key_indices_through_the_permutation() {
+        let layout = seeded();
+        assert_eq!(layout.combos.len(), 2);
+        let c0 = &layout.combos[0];
+        assert_eq!(c0.name, "Mirror 1");
+        assert_eq!(c0.keys, vec![21, 7]); // oryx [43, 36]
+        assert_eq!(c0.layer, 0);
+        assert_eq!(
+            c0.action,
+            KeyAction::LayerSwitch { action: LayerSwitchAction::TG, layer: 5, glow: None }
+        );
+        let c1 = &layout.combos[1];
+        assert_eq!(c1.name, "Mirror 2");
+        assert_eq!(c1.keys, vec![20, 6]); // oryx [13, 6]
+        assert_eq!(c1.layer, 0);
+    }
+
+    #[test]
+    fn settings_derived_from_layout_content() {
+        let s = seeded().settings;
+        assert!(s.auto_shift, "AS_* keys present on layer 4");
+        assert!(s.caps_word, "CW_TOGG present on layer 5");
+        assert!(s.tap_dance);
+        assert!(s.combos);
+        assert!(s.key_lock);
+        assert_eq!(s.serial_number, "rddD7/QzpBEp");
+    }
+
+    #[test]
+    fn hex_to_hsv_matches_oryx_ledmap_bases() {
+        // All 7 (Oryx layer color → reference ledmap base HSV) pairs, plus
+        // the 4 RGB-key colors behind the reference HSV_h_s_v enum names.
+        let cases = [
+            ("#34006b", (192, 255, 107)),
+            ("#1deb0e", (83, 239, 235)),
+            ("#1301ed", (175, 253, 237)),
+            ("#ed1616", (0, 231, 237)),
+            ("#0effec", (125, 241, 255)),
+            ("#c00eb9", (216, 236, 192)),
+            ("#5f3dc6", (182, 176, 198)),
+            ("#f50909", (0, 245, 245)),
+            ("#14e403", (82, 251, 228)),
+            ("#0029cb", (163, 255, 203)),
+            ("#2d0054", (195, 255, 84)),
+        ];
+        for (hex, want) in cases {
+            assert_eq!(hex_to_hsv(hex).unwrap(), want, "{hex}");
+        }
+        // Grey/black edges:
+        assert_eq!(hex_to_hsv("#000000").unwrap(), (0, 0, 0));
+        assert_eq!(hex_to_hsv("#ffffff").unwrap(), (0, 0, 255));
+        assert!(hex_to_hsv("34006b").is_err());
+        assert!(hex_to_hsv("#34006g").is_err());
+    }
+
+    // -----------------------------------------------------------------------
+    // Permutation re-derivation from the fixture pair (the A1 centerpiece):
+    // canonicalize both the un-permuted seeded actions and the parsed
+    // reference tokens into one semantic space, then the unique
+    // column-matching between them must reproduce ORYX_TO_LAYOUT exactly.
+    // -----------------------------------------------------------------------
+
+    /// Canonical semantic token for a seeded action. `KC_MEH` canonicalizes
+    /// to `QK_LOCK` (the transform the app always applies).
+    fn canon_action(a: &KeyAction) -> String {
+        fn macro_canon(steps: &[MacroStep]) -> String {
+            let last = steps.len().saturating_sub(1);
+            let parts: Vec<String> = steps
+                .iter()
+                .enumerate()
+                .map(|(i, s)| {
+                    // The final step's delay is never rendered (SEND_STRING
+                    // has no trailing SS_DELAY), so it is not comparable.
+                    let delay = if i == last { None } else { s.delay };
+                    format!(
+                        "{}@{}+{}",
+                        s.code,
+                        delay.map_or(String::new(), |d| d.to_string()),
+                        s.mods.as_deref().unwrap_or_default().join("|")
+                    )
+                })
+                .collect();
+            format!("MACRO({})", parts.join(","))
+        }
+        match a {
+            KeyAction::None { .. } => "KC_NO".into(),
+            KeyAction::Transparent { .. } => "KC_TRANSPARENT".into(),
+            KeyAction::QkLock { .. } => "QK_LOCK".into(),
+            KeyAction::Basic { code, mods: None, .. } if code == "KC_MEH" => "QK_LOCK".into(),
+            KeyAction::Basic { code, mods: None, .. } => code.clone(),
+            KeyAction::Basic { code, mods: Some(m), .. } => {
+                format!("MODS({},{})", m.join("|"), code)
+            }
+            KeyAction::LayerSwitch { action, layer, .. } => format!("{action:?}({layer})"),
+            KeyAction::ModTap { mods, tap, .. } => {
+                format!("MT({}, {})", mods.join(" | "), tap)
+            }
+            KeyAction::LayerTap { layer, tap, .. } => format!("LT({layer}, {tap})"),
+            KeyAction::DualFunc { tap, hold, .. } => {
+                format!("DF({},{})", tap.code, hold.code)
+            }
+            KeyAction::Special { code, .. } | KeyAction::Rgb { code, .. } => code.clone(),
+            KeyAction::TapDance { tap, hold, double_tap, tap_hold, .. } => format!(
+                "TD({},{},{},{})",
+                tap.as_deref().unwrap_or(""),
+                hold.as_deref().unwrap_or(""),
+                double_tap.as_deref().unwrap_or(""),
+                tap_hold.as_deref().unwrap_or("")
+            ),
+            KeyAction::Macro { steps, .. } => macro_canon(steps),
+            KeyAction::RgbHsv { h, s, v, .. } => format!("HSV_{h}_{s}_{v}"),
+        }
+    }
+
+    /// Canonical semantic token for a reference keymap.c LAYOUT token,
+    /// resolving DUAL_FUNC_n / TD(DANCE_n) / ST_MACRO_n through the parser.
+    fn canon_ref_token(tok: &str, p: &ParsedKeymap) -> String {
+        if let Some(n) = tok.strip_prefix("DUAL_FUNC_") {
+            let b = &p.dual_funcs[&n.parse::<u32>().unwrap()];
+            return format!("DF({},{})", b.tap, b.hold);
+        }
+        if let Some(inner) = tok.strip_prefix("TD(DANCE_") {
+            let n: u32 = inner.trim_end_matches(')').parse().unwrap();
+            let d = &p.dances[&n];
+            return format!(
+                "TD({},{},{},{})",
+                d.tap.as_deref().unwrap_or(""),
+                d.hold.as_deref().unwrap_or(""),
+                d.double_tap.as_deref().unwrap_or(""),
+                d.tap_hold.as_deref().unwrap_or("")
+            );
+        }
+        if let Some(n) = tok.strip_prefix("ST_MACRO_") {
+            let steps = &p.st_macros[&n.parse::<u32>().unwrap()];
+            let parts: Vec<String> = steps
+                .iter()
+                .map(|s| {
+                    format!(
+                        "{}@{}+{}",
+                        s.code,
+                        s.delay.map_or(String::new(), |d| d.to_string()),
+                        s.mods.join("|")
+                    )
+                })
+                .collect();
+            return format!("MACRO({})", parts.join(","));
+        }
+        tok.to_string()
+    }
+
+    #[test]
+    fn permutation_rederived_from_fixture_pair_matches_table() {
+        let parsed = parse_keymap_c::parse(REFERENCE_KEYMAP_C).unwrap();
+        assert_eq!(parsed.layers.len(), 7);
+
+        // Un-permuted seeded actions, canonicalized: canon_oryx[layer][oryx].
+        let root: SnapshotRoot = serde_json::from_str(SNAPSHOT).unwrap();
+        let rev = root.data.layout.revision;
+        let default_key = OryxKey::default();
+        let canon_oryx: Vec<Vec<String>> = rev
+            .layers
+            .iter()
+            .map(|l| {
+                l.keys
+                    .iter()
+                    .map(|k| {
+                        let k = k.as_ref().unwrap_or(&default_key);
+                        canon_action(&map_key(k, "test").unwrap())
+                    })
+                    .collect()
+            })
+            .collect();
+        let canon_ref: Vec<Vec<String>> = parsed
+            .layers
+            .iter()
+            .map(|l| l.iter().map(|t| canon_ref_token(t, &parsed)).collect())
+            .collect();
+
+        // For each LAYOUT arg, the oryx indices whose token column matches
+        // across all 7 layers. The match must be unique and equal the table.
+        for arg in 0..72 {
+            let candidates: Vec<usize> = (0..72)
+                .filter(|&oryx| {
+                    (0..7).all(|l| canon_oryx[l][oryx] == canon_ref[l][arg])
+                })
+                .collect();
+            assert_eq!(
+                candidates,
+                vec![ORYX_TO_LAYOUT[arg]],
+                "arg {arg}: expected unique match {} (ref column: {:?})",
+                ORYX_TO_LAYOUT[arg],
+                (0..7).map(|l| canon_ref[l][arg].clone()).collect::<Vec<_>>()
+            );
+        }
+    }
+
+    /// `shared/fixtures/seeded_layout.json` is the full seeder output over the
+    /// committed snapshot. Run `REGEN_FIXTURE=1 cargo test seeded_layout` to
+    /// regenerate after seeder changes (announce via cos-coord note — Worker C
+    /// mocks sync to it).
+    #[test]
+    fn seeded_layout_fixture_up_to_date() {
+        let layout = seeded();
+        let generated = serde_json::to_string_pretty(&layout).unwrap() + "\n";
+        let path = concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../shared/fixtures/seeded_layout.json"
+        );
+        if std::env::var("REGEN_FIXTURE").is_ok() {
+            std::fs::write(path, &generated).unwrap();
+        }
+        let committed = std::fs::read_to_string(path).unwrap();
+        assert_eq!(
+            committed.replace("\r\n", "\n"),
+            generated,
+            "seeded_layout.json is stale — run REGEN_FIXTURE=1 cargo test seeded_layout"
+        );
+    }
+}
