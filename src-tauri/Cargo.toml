@@ -29,7 +29,18 @@ zip = { version = "2", default-features = false, features = ["deflate"] }
 regex = "1"
 tokio = { version = "1", features = ["rt", "process", "io-util", "macros", "time"] }
 chrono = "0.4"
+nusb = "0.2.5"
+dfu-core = "0.11.1"
+dfu-nusb = "0.2.0"
+pollster = "1.0.1"
+log = "0.4.33"
 
 [dev-dependencies]
 similar = "2"
+
+[features]
+# Compiles the dfu-util.exe fallback Flasher (selected at runtime via
+# QMK_FLASHER_DFU_BACKEND=dfu-util). The dfu-core/dfu-nusb backend is
+# always compiled and is the default.
+dfu-util-fallback = []
 

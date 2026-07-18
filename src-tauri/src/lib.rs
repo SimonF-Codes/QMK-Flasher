@@ -13,6 +13,13 @@ pub mod oryx;
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
+        .setup(|app| {
+            // App-lifetime USB watcher: presence edges of the DFU
+            // bootloader (0483:df11) become `dfu-device` events.
+            let handle = app.handle().clone();
+            flash::watcher::spawn(move |present| events::emit_dfu_device(&handle, present));
+            Ok(())
+        })
         .invoke_handler(tauri::generate_handler![
             commands::load_layout,
             commands::save_layout,
