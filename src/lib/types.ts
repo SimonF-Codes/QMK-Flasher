@@ -195,6 +195,16 @@ export const AppConfigSchema = z.object({
 
 export type AppConfig = z.infer<typeof AppConfigSchema>;
 
+// ---- Generated sources (src-tauri/src/codegen/mod.rs) ----
+
+export const GeneratedSourcesSchema = z.object({
+  keymapC: z.string(),
+  rulesMk: z.string(),
+  configH: z.string(),
+});
+
+export type GeneratedSources = z.infer<typeof GeneratedSourcesSchema>;
+
 // ---- Events (src-tauri/src/events.rs) ----
 
 export const EVENT_BUILD_LOG = "build-log";
