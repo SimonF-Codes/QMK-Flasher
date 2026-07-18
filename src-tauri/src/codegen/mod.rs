@@ -110,6 +110,14 @@ pub fn generate(layout: &LayoutFile) -> Result<GeneratedSources, AppError> {
     })
 }
 
+/// The fourth file next to the generated three: pulls in the QMK community
+/// modules the Oryx-generated code depends on (`rgb_matrix_kb.inc`,
+/// `rawhid_state`, ORYX protocol — all live in `modules/zsa/`). Same content
+/// as the arrows_together reference. Without it the build fails at
+/// `#include "rgb_matrix_kb.inc"`.
+const KEYMAP_JSON: &str =
+    "{\n    \"modules\": [\n        \"zsa/oryx\",\n        \"zsa/defaults\"\n    ]\n}\n";
+
 /// Generate and write the sources into
 /// `<qmkFirmwarePath>\keyboards\zsa\moonlander\keymaps\<keymapName>\`.
 /// Returns the keymap directory.
@@ -131,6 +139,7 @@ pub fn write_sources(layout: &LayoutFile, cfg: &AppConfig) -> Result<PathBuf, Ap
     std::fs::write(dir.join("keymap.c"), &sources.keymap_c).map_err(io)?;
     std::fs::write(dir.join("rules.mk"), &sources.rules_mk).map_err(io)?;
     std::fs::write(dir.join("config.h"), &sources.config_h).map_err(io)?;
+    std::fs::write(dir.join("keymap.json"), KEYMAP_JSON).map_err(io)?;
     Ok(dir)
 }
 
