@@ -5,6 +5,9 @@
 //! cross-check against the Oryx source zip via the keymap.c parser
 //! (parse_keymap_c.rs). STUB: returns the checked-in fixture.
 
+pub mod permute;
+pub mod seed;
+
 use crate::error::AppError;
 use crate::layout::{store, LayoutFile};
 
