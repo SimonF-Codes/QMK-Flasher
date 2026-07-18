@@ -24,4 +24,15 @@ serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 schemars = "1"
 thiserror = "2"
+nusb = "0.2.5"
+dfu-core = "0.11.1"
+dfu-nusb = "0.2.0"
+pollster = "1.0.1"
+log = "0.4.33"
+
+[features]
+# Compiles the dfu-util.exe fallback Flasher (selected at runtime via
+# QMK_FLASHER_DFU_BACKEND=dfu-util). The dfu-core/dfu-nusb backend is
+# always compiled and is the default.
+dfu-util-fallback = []
 

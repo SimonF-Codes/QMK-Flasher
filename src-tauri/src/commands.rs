@@ -62,18 +62,16 @@ pub fn build_firmware(app: AppHandle) -> Result<String, AppError> {
 /// Full pipeline: save → generate → build → flash, driven by
 /// `pipeline-state` (+ `build-log`) events. On error, emits phase `error`
 /// with the message in `detail` and also returns the `AppError`.
-#[tauri::command]
+/// `(async)`: runs on a worker thread — it blocks for minutes (build) and
+/// on the user pressing the reset button.
+#[tauri::command(async)]
 pub fn start_flash_pipeline(app: AppHandle, layout: LayoutFile) -> Result<(), AppError> {
-    let run = |app: &AppHandle| -> Result<(), AppError> {
-        emit_pipeline_state(app, PipelineState::phase(PipelinePhase::Saving));
-        store::save(&layout)?;
-        emit_pipeline_state(app, PipelineState::phase(PipelinePhase::Generating));
-        codegen::generate(&layout)?;
-        emit_pipeline_state(app, PipelineState::phase(PipelinePhase::Building));
-        let bin = build::build_firmware(|line| emit_build_log(app, line))?;
-        flash::flash_firmware(&bin, |state| emit_pipeline_state(app, state))
-    };
-    run(&app).inspect_err(|e| {
+    flash::pipeline::run_full(
+        &layout,
+        |state| emit_pipeline_state(&app, state),
+        |line| emit_build_log(&app, line),
+    )
+    .inspect_err(|e| {
         emit_pipeline_state(
             &app,
             PipelineState {
@@ -96,9 +94,21 @@ pub fn list_dfu_devices() -> Result<Vec<DfuDeviceInfo>, AppError> {
 }
 
 /// Flash an already-built image (no rebuild). Streams `pipeline-state`.
-#[tauri::command]
+/// `(async)`: blocks on the user pressing the reset button.
+#[tauri::command(async)]
 pub fn flash_firmware(app: AppHandle, bin_path: String) -> Result<(), AppError> {
-    flash::flash_firmware(&bin_path, |state| emit_pipeline_state(&app, state))
+    flash::flash_firmware(&bin_path, |state| emit_pipeline_state(&app, state)).inspect_err(
+        |e| {
+            emit_pipeline_state(
+                &app,
+                PipelineState {
+                    phase: PipelinePhase::Error,
+                    detail: Some(e.to_string()),
+                    progress: None,
+                },
+            )
+        },
+    )
 }
 
 #[cfg(test)]
