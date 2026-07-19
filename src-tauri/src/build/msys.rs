@@ -88,7 +88,9 @@ pub fn build(cfg: &AppConfig, on_log: &mut dyn FnMut(String)) -> Result<String, 
     ];
     // The channel closes when both pump threads drop their senders.
     for line in rx {
-        on_log(line);
+        if !is_known_noise(&line) {
+            on_log(line);
+        }
     }
     for p in pumps {
         let _ = p.join();
@@ -121,6 +123,17 @@ pub fn build(cfg: &AppConfig, on_log: &mut dyn FnMut(String)) -> Result<String, 
     Ok(dest.to_string_lossy().into_owned())
 }
 
+/// Known-harmless noise in QMK's Makefile parse phase: `qmk list-layouts
+/// --keyboard zsa/moonlander/reva` (community-layout discovery) trips over
+/// the parent folder `zsa/moonlander` not being a keyboard itself and prints
+/// a one-line `ValueError` to stderr while make proceeds normally. A real
+/// bad target still fails `make` itself (exit code + its own error lines),
+/// which this filter never touches.
+fn is_known_noise(line: &str) -> bool {
+    line.trim_start_matches(['☒', ' '])
+        .starts_with("ValueError: Invalid keyboard: ")
+}
+
 fn pump(reader: impl std::io::Read, tx: mpsc::Sender<String>) {
     let lines = std::io::BufReader::new(reader).lines();
     for line in lines {
@@ -148,6 +161,17 @@ mod tests {
     #[test]
     fn make_target_never_uses_qmk_compile() {
         assert_eq!(make_target("qmk_flasher"), "zsa/moonlander/reva:qmk_flasher");
+    }
+
+    #[test]
+    fn known_noise_filter_is_narrow() {
+        // The exact line (milc prints a ☒ glyph prefix) and a bare variant.
+        assert!(is_known_noise("☒ ValueError: Invalid keyboard: zsa/moonlander"));
+        assert!(is_known_noise("ValueError: Invalid keyboard: zsa/moonlander"));
+        // Real build output must never be filtered.
+        assert!(!is_known_noise("Compiling: keyboards/zsa/moonlander/matrix.c"));
+        assert!(!is_known_noise("make: *** No rule to make target 'zsa/moonlander:x'. Stop."));
+        assert!(!is_known_noise("error: 'ValueError: Invalid keyboard: ' in a C string"));
     }
 
     /// Regression test for the `start_flash_pipeline` panic: Tauri runs the
