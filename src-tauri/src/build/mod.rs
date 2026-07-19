@@ -14,10 +14,11 @@ use crate::{appcfg, codegen, layout};
 
 pub fn build_firmware<F: FnMut(String)>(mut on_log: F) -> Result<String, AppError> {
     let layout = layout::store::load()?;
+    let keyboard = crate::keyboards::supported(&layout.meta.geometry)?;
     let cfg = appcfg::get();
     let dir = codegen::write_sources(&layout, &cfg)?;
     on_log(format!("Sources written to {}", dir.display()));
-    msys::build(&cfg, &mut on_log)
+    msys::build(&cfg, keyboard, &mut on_log)
 }
 
 #[cfg(test)]

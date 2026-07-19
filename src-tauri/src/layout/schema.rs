@@ -267,14 +267,24 @@ impl LayoutFile {
         if !self.settings.key_lock {
             return Err("settings.keyLock must always be true".into());
         }
+        // Per-keyboard key count from the registry (`meta.geometry` is the
+        // keyboard id; only the 72-key Moonlander exists today).
+        let key_count = crate::keyboards::find(&self.meta.geometry)
+            .map(|kb| kb.key_count as usize)
+            .ok_or_else(|| {
+                format!(
+                    "meta.geometry {:?} is not a keyboard in shared/keyboards.json",
+                    self.meta.geometry
+                )
+            })?;
         for (i, layer) in self.layers.iter().enumerate() {
-            if layer.keys.len() != MOONLANDER_KEY_COUNT {
+            if layer.keys.len() != key_count {
                 return Err(format!(
                     "layer {} ({}) has {} keys, expected {}",
                     i,
                     layer.title,
                     layer.keys.len(),
-                    MOONLANDER_KEY_COUNT
+                    key_count
                 ));
             }
             if !is_hex_color(&layer.color) {
@@ -304,12 +314,12 @@ impl LayoutFile {
                 ));
             }
             for &k in &combo.keys {
-                if k as usize >= MOONLANDER_KEY_COUNT {
+                if k as usize >= key_count {
                     return Err(format!(
                         "combo {:?} references key index {} (max {})",
                         combo.name,
                         k,
-                        MOONLANDER_KEY_COUNT - 1
+                        key_count - 1
                     ));
                 }
             }

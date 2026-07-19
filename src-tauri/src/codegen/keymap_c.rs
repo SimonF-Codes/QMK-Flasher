@@ -437,6 +437,15 @@ fn render_tap_spec(spec: &TapSpec) -> Result<String, AppError> {
 
 /// Render the whole keymap.c.
 pub fn render(layout: &LayoutFile) -> Result<String, AppError> {
+    // The renderer is Moonlander-shaped (LAYOUT_moonlander, its row split,
+    // its ledmap): adding a keyboard to the registry requires generalizing
+    // this file, so refuse anything else loudly rather than emit garbage.
+    if layout.meta.geometry != "moonlander" {
+        return Err(unsupported(format!(
+            "codegen only supports the Moonlander today (layout is for {:?})",
+            layout.meta.geometry
+        )));
+    }
     let plan = RenderPlan::build(layout);
     let mut out = header(&plan);
     out.push_str(&keymaps(layout, &plan)?);

@@ -26,7 +26,10 @@ pub fn seed_from_oryx(layout_id: &str, force: bool) -> Result<LayoutFile, AppErr
         }
     }
 
-    let snapshot = client::fetch_layout_snapshot(layout_id)?;
+    // Seeding replaces the ACTIVE layout; its keyboard decides the Oryx
+    // geometry (and must be one the seeder's permutation supports).
+    let keyboard = crate::keyboards::supported(&store::load()?.meta.geometry)?;
+    let snapshot = client::fetch_layout_snapshot(layout_id, &keyboard.oryx_geometry)?;
     let seeded_at = chrono::Utc::now().to_rfc3339_opts(chrono::SecondsFormat::Secs, true);
     let layout = seed::layout_from_snapshot(&snapshot, layout_id, &seeded_at)?;
 

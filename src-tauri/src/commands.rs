@@ -15,6 +15,8 @@ use crate::events::{
 };
 use crate::flash::{self, DfuDeviceInfo};
 use crate::geometry::{self, GeometryFile};
+use crate::keyboards::{self, KeyboardInfo};
+use crate::layout::store::LayoutSummary;
 use crate::layout::{store, LayoutFile};
 use crate::{build, oryx};
 
@@ -36,6 +38,53 @@ pub fn seed_from_oryx(layout_id: String, force: bool) -> Result<LayoutFile, AppE
 #[tauri::command]
 pub fn get_geometry() -> Result<GeometryFile, AppError> {
     geometry::get()
+}
+
+// -- multi-layout / multi-keyboard (additive, 2026-07-19) -------------------
+
+#[tauri::command]
+pub fn list_layouts() -> Result<Vec<LayoutSummary>, AppError> {
+    store::list_layouts()
+}
+
+/// Sets the active layout and returns it.
+#[tauri::command]
+pub fn select_layout(id: String) -> Result<LayoutFile, AppError> {
+    store::select_layout(&id)
+}
+
+/// Creates a blank layout for `keyboard_id`; does NOT change the active
+/// layout.
+#[tauri::command]
+pub fn create_layout(name: String, keyboard_id: String) -> Result<LayoutSummary, AppError> {
+    store::create_layout(&name, &keyboard_id)
+}
+
+#[tauri::command]
+pub fn duplicate_layout(id: String, new_name: String) -> Result<LayoutSummary, AppError> {
+    store::duplicate_layout(&id, &new_name)
+}
+
+/// Renames the display name; the id (filename) is stable.
+#[tauri::command]
+pub fn rename_layout(id: String, name: String) -> Result<LayoutSummary, AppError> {
+    store::rename_layout(&id, &name)
+}
+
+/// Refuses to delete the active layout.
+#[tauri::command]
+pub fn delete_layout(id: String) -> Result<(), AppError> {
+    store::delete_layout(&id)
+}
+
+#[tauri::command]
+pub fn list_keyboards() -> Vec<KeyboardInfo> {
+    keyboards::all().to_vec()
+}
+
+#[tauri::command]
+pub fn get_keyboard_geometry(keyboard_id: String) -> Result<GeometryFile, AppError> {
+    geometry::get_for_keyboard(&keyboard_id)
 }
 
 #[tauri::command]

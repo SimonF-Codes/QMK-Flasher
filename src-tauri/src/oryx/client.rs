@@ -27,14 +27,15 @@ fn client() -> Result<reqwest::blocking::Client, AppError> {
 }
 
 /// Fetch the latest revision of `layout_id` as the raw GraphQL response body
-/// (input to [`super::seed::layout_from_snapshot`]).
-pub fn fetch_layout_snapshot(layout_id: &str) -> Result<String, AppError> {
+/// (input to [`super::seed::layout_from_snapshot`]). `oryx_geometry` comes
+/// from the keyboard registry (e.g. "moonlander").
+pub fn fetch_layout_snapshot(layout_id: &str, oryx_geometry: &str) -> Result<String, AppError> {
     let body = serde_json::json!({
         "query": LAYOUT_QUERY,
         "variables": {
             "hashId": layout_id,
             "revisionId": "latest",
-            "geometry": "moonlander",
+            "geometry": oryx_geometry,
         },
     });
     let resp = client()?

@@ -185,6 +185,42 @@ export const GeometryFileSchema = z.object({
 export type GeometryKey = z.infer<typeof GeometryKeySchema>;
 export type GeometryFile = z.infer<typeof GeometryFileSchema>;
 
+// ---- Multi-layout storage (src-tauri/src/layout/store.rs) ----
+
+export const LayoutSummarySchema = z.object({
+  /** Filename slug, stable across renames. */
+  id: z.string().min(1),
+  /** Display name (meta.name). */
+  name: z.string(),
+  /** Keyboard id (meta.geometry). */
+  keyboard: z.string().min(1),
+  /** RFC 3339 file modification time. */
+  modifiedAt: z.string(),
+});
+
+export type LayoutSummary = z.infer<typeof LayoutSummarySchema>;
+
+// ---- Keyboard registry (shared/keyboards.json, src-tauri/src/keyboards.rs) ----
+
+export const KeyboardInfoSchema = z.object({
+  /** Registry id; LayoutFile.meta.geometry stores this. */
+  id: z.string().min(1),
+  /** Display name, e.g. "ZSA Moonlander". */
+  name: z.string().min(1),
+  /** QMK keyboard path in the make target, e.g. "zsa/moonlander/reva". */
+  qmkKeyboard: z.string().min(1),
+  /** Geometry string for the Oryx GraphQL query. */
+  oryxGeometry: z.string().min(1),
+  layoutMacro: z.string().min(1),
+  keyCount: z.number().int().positive(),
+  /** Geometry JSON under shared/. */
+  geometryFile: z.string().min(1),
+  /** False = listed in the UI but seed/codegen/build refuse it. */
+  supported: z.boolean(),
+});
+
+export type KeyboardInfo = z.infer<typeof KeyboardInfoSchema>;
+
 // ---- App config (src-tauri/src/appcfg.rs) ----
 
 export const AppConfigSchema = z.object({
