@@ -61,8 +61,30 @@ settings   { autoShift, capsWord, tapDance, combos, keyLock: true (always),
 | `rgbHsv` | `h, s, v` (0–255) | Oryx HSV_h_s_v key, v1 read-only |
 
 Validation beyond shape (Rust `validate()` / zod): schemaVersion matches, ≥1
-layer, every layer exactly 72 keys, `settings.keyLock === true`, colors/glows
+layer, every layer exactly `keyCount` keys for the layout's keyboard (from
+`shared/keyboards.json`; `meta.geometry` is the keyboard id — 72 for the
+Moonlander, the only board today), `settings.keyLock === true`, colors/glows
 are `#rrggbb`, combo layer/key indices in range.
+
+### Multi-layout storage + keyboard registry (added 2026-07-19, additive)
+
+`%APPDATA%\qmk-flasher\layouts\<id>.json` holds one LayoutFile per saved
+layout (`id` = filename slug, stable across renames); `state.json` holds
+`{activeLayoutId}`. The legacy single `layout.json` auto-migrates to
+`layouts/arrows-together.json` on first access, and a fresh install
+materializes the seeded fixture there — the store always has ≥1 layout and a
+valid active id. `load_layout`/`save_layout`/`seed_from_oryx`/
+`generate_sources`/`build_firmware`/`start_flash_pipeline` all operate on the
+**active** layout.
+
+`shared/keyboards.json` is the keyboard target registry
+(`KeyboardInfo {id, name, qmkKeyboard, oryxGeometry, layoutMacro, keyCount,
+geometryFile, supported}`); mirrors: `keyboards.rs` (serde) + `types.ts`
+(zod). Only the Moonlander is `supported` today — seed/codegen/build refuse
+other ids with `CodegenUnsupportedKey`; adding a board requires its geometry
+JSON, an Oryx→LAYOUT permutation table, and generalizing codegen's
+Moonlander-shaped rendering. `LayoutSummary {id, name, keyboard, modifiedAt}`
+mirrors in `types.ts`.
 
 **Key order**: keys and combo indices are stored in **LAYOUT_moonlander
 argument order**; the seeder applies the Oryx→LAYOUT permutation exactly once
@@ -75,10 +97,18 @@ All results are `Result<T, AppError>` unless noted; errors cross IPC as
 
 | Command | Signature | Delegates to |
 |---|---|---|
-| `load_layout` | `() -> LayoutFile` | `layout::store::load` |
-| `save_layout` | `(layout) -> ()` | `layout::store::save` |
-| `seed_from_oryx` | `(layout_id, force) -> LayoutFile` | `oryx::seed_from_oryx` |
-| `get_geometry` | `() -> GeometryFile` | `geometry::get` |
+| `load_layout` | `() -> LayoutFile` | `layout::store::load` (the **active** layout) |
+| `save_layout` | `(layout) -> ()` | `layout::store::save` (writes the active layout) |
+| `seed_from_oryx` | `(layout_id, force) -> LayoutFile` | `oryx::seed_from_oryx` (re-seeds the active layout) |
+| `get_geometry` | `() -> GeometryFile` | `geometry::get` (Moonlander; see `get_keyboard_geometry`) |
+| `list_layouts` | `() -> LayoutSummary[]` | `layout::store::list_layouts` |
+| `select_layout` | `(id) -> LayoutFile` | sets the active layout and returns it |
+| `create_layout` | `(name, keyboard_id) -> LayoutSummary` | blank layout; does not change the active |
+| `duplicate_layout` | `(id, new_name) -> LayoutSummary` | copy under a fresh id |
+| `rename_layout` | `(id, name) -> LayoutSummary` | display name only; id stays |
+| `delete_layout` | `(id) -> ()` | refuses the active layout |
+| `list_keyboards` | `() -> KeyboardInfo[]` (infallible) | `keyboards::all` (shared/keyboards.json) |
+| `get_keyboard_geometry` | `(keyboard_id) -> GeometryFile` | `geometry::get_for_keyboard` |
 | `get_app_config` | `() -> AppConfig` (infallible) | `appcfg::get` |
 | `set_app_config` | `(cfg) -> ()` | `appcfg::set` |
 | `generate_sources` | `(layout) -> {keymapC, rulesMk, configH}` | `codegen::generate` |

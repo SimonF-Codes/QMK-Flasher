@@ -55,6 +55,19 @@ pub fn get() -> Result<GeometryFile, AppError> {
     Ok(geo)
 }
 
+/// Geometry for a registry keyboard. Geometry JSONs are compiled in; adding
+/// a board to `shared/keyboards.json` means embedding its file here too.
+pub fn get_for_keyboard(keyboard_id: &str) -> Result<GeometryFile, AppError> {
+    let kb = crate::keyboards::get(keyboard_id)?;
+    match kb.geometry_file.as_str() {
+        "moonlander_geometry.json" => get(),
+        other => Err(AppError::InvalidLayout(format!(
+            "no geometry embedded for {other:?} (keyboard {:?})",
+            kb.id
+        ))),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

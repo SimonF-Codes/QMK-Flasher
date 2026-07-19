@@ -1,0 +1,12 @@
+[
+  {
+    "id": "moonlander",
+    "name": "ZSA Moonlander",
+    "qmkKeyboard": "zsa/moonlander/reva",
+    "oryxGeometry": "moonlander",
+    "layoutMacro": "LAYOUT_moonlander",
+    "keyCount": 72,
+    "geometryFile": "moonlander_geometry.json",
+    "supported": true
+  }
+]

@@ -118,8 +118,22 @@ pub fn generate(layout: &LayoutFile) -> Result<GeneratedSources, AppError> {
 const KEYMAP_JSON: &str =
     "{\n    \"modules\": [\n        \"zsa/oryx\",\n        \"zsa/defaults\"\n    ]\n}\n";
 
-/// Generate and write the sources into
-/// `<qmkFirmwarePath>\keyboards\zsa\moonlander\keymaps\<keymapName>\`.
+/// Where the generated keymap dir lives for a keyboard. Keymaps sit one
+/// level above a versioned leaf (`zsa/moonlander/reva` builds read
+/// `zsa/moonlander/keymaps/`) — QMK resolves keymap dirs up the folder
+/// hierarchy, so a trailing `revX` segment is stripped.
+fn keymap_dir(cfg: &AppConfig, kb: &crate::keyboards::KeyboardInfo) -> PathBuf {
+    let parts: Vec<&str> = kb.qmk_keyboard.split('/').collect();
+    let strip_rev = parts.len() > 1 && parts.last().unwrap().starts_with("rev");
+    let kb_parts = if strip_rev { &parts[..parts.len() - 1] } else { &parts[..] };
+    let mut dir = PathBuf::from(&cfg.qmk_firmware_path).join("keyboards");
+    for part in kb_parts {
+        dir = dir.join(part);
+    }
+    dir.join("keymaps").join(&cfg.keymap_name)
+}
+
+/// Generate and write the sources into the keyboard's keymap dir.
 /// Returns the keymap directory.
 pub fn write_sources(layout: &LayoutFile, cfg: &AppConfig) -> Result<PathBuf, AppError> {
     if cfg.keymap_name == "arrows_together" {
@@ -127,13 +141,9 @@ pub fn write_sources(layout: &LayoutFile, cfg: &AppConfig) -> Result<PathBuf, Ap
             "refusing to write into arrows_together (recovery reference)".into(),
         ));
     }
+    let keyboard = crate::keyboards::supported(&layout.meta.geometry)?;
     let sources = generate(layout)?;
-    let dir = PathBuf::from(&cfg.qmk_firmware_path)
-        .join("keyboards")
-        .join("zsa")
-        .join("moonlander")
-        .join("keymaps")
-        .join(&cfg.keymap_name);
+    let dir = keymap_dir(cfg, keyboard);
     let io = |e: std::io::Error| AppError::BuildFailed(format!("writing sources: {e}"));
     std::fs::create_dir_all(&dir).map_err(io)?;
     std::fs::write(dir.join("keymap.c"), &sources.keymap_c).map_err(io)?;
@@ -146,8 +156,13 @@ pub fn write_sources(layout: &LayoutFile, cfg: &AppConfig) -> Result<PathBuf, Ap
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::layout::store;
     use similar::TextDiff;
+
+    /// The committed seeded fixture — NOT `store::load()`, which reads the
+    /// user's real (possibly edited) layout from %APPDATA%.
+    fn fixture() -> LayoutFile {
+        serde_json::from_str(crate::layout::store::FIXTURE_LAYOUT).unwrap()
+    }
 
     const REFERENCE_KEYMAP_C: &str = include_str!(concat!(
         env!("CARGO_MANIFEST_DIR"),
@@ -176,7 +191,7 @@ mod tests {
     /// sources (QK_LOCK included), byte-identical modulo whitespace.
     #[test]
     fn golden_generated_sources_match_reference() {
-        let sources = generate(&store::load().unwrap()).unwrap();
+        let sources = generate(&fixture()).unwrap();
         for (name, got, want) in [
             ("keymap.c", &sources.keymap_c, REFERENCE_KEYMAP_C),
             ("rules.mk", &sources.rules_mk, REFERENCE_RULES_MK),
@@ -201,14 +216,14 @@ mod tests {
 
     #[test]
     fn generate_rejects_invalid_layout() {
-        let mut layout = store::load().unwrap();
+        let mut layout = fixture();
         layout.layers[0].keys.pop();
         assert!(generate(&layout).is_err());
     }
 
     #[test]
     fn generate_rejects_unknown_keycode() {
-        let mut layout = store::load().unwrap();
+        let mut layout = fixture();
         layout.layers[0].keys[0] =
             KeyAction::Basic { code: "KC_NOT_A_KEY".into(), mods: None, glow: None };
         let err = generate(&layout).unwrap_err();
@@ -216,9 +231,21 @@ mod tests {
     }
 
     #[test]
+    fn keymap_dir_strips_the_versioned_leaf() {
+        let cfg = crate::appcfg::get();
+        let kb = crate::keyboards::get("moonlander").unwrap();
+        let dir = keymap_dir(&cfg, kb);
+        assert!(
+            dir.ends_with("keyboards/zsa/moonlander/keymaps/qmk_flasher"),
+            "{}",
+            dir.display()
+        );
+    }
+
+    #[test]
     fn write_sources_refuses_arrows_together() {
         let mut cfg = crate::appcfg::get();
         cfg.keymap_name = "arrows_together".into();
-        assert!(write_sources(&store::load().unwrap(), &cfg).is_err());
+        assert!(write_sources(&fixture(), &cfg).is_err());
     }
 }

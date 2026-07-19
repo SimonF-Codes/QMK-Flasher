@@ -18,6 +18,7 @@ use std::sync::mpsc;
 
 use crate::appcfg::AppConfig;
 use crate::error::AppError;
+use crate::keyboards::KeyboardInfo;
 use crate::layout::store;
 
 /// `C:\Users\fridl\qmk_firmware` → `/c/Users/fridl/qmk_firmware`.
@@ -32,19 +33,27 @@ fn to_msys_path(win: &str) -> String {
 }
 
 /// The make target QMK derives the output name from.
-fn make_target(keymap: &str) -> String {
-    format!("zsa/moonlander/reva:{keymap}")
+fn make_target(kb: &KeyboardInfo, keymap: &str) -> String {
+    format!("{}:{keymap}", kb.qmk_keyboard)
 }
 
-/// Where QMK drops the final image: `<qmk>\zsa_moonlander_reva_<keymap>.bin`.
-fn built_bin_path(cfg: &AppConfig) -> PathBuf {
-    Path::new(&cfg.qmk_firmware_path)
-        .join(format!("zsa_moonlander_reva_{}.bin", cfg.keymap_name))
+/// Where QMK drops the final image:
+/// `<qmk>\<qmkKeyboard with / → _>_<keymap>.bin`.
+fn built_bin_path(cfg: &AppConfig, kb: &KeyboardInfo) -> PathBuf {
+    Path::new(&cfg.qmk_firmware_path).join(format!(
+        "{}_{}.bin",
+        kb.qmk_keyboard.replace('/', "_"),
+        cfg.keymap_name
+    ))
 }
 
-/// Run the build, streaming every output line. Returns the path of the copy
-/// under `%APPDATA%\qmk-flasher\builds\`.
-pub fn build(cfg: &AppConfig, on_log: &mut dyn FnMut(String)) -> Result<String, AppError> {
+/// Run the build for `kb`, streaming every output line. Returns the path of
+/// the copy under `%APPDATA%\qmk-flasher\builds\`.
+pub fn build(
+    cfg: &AppConfig,
+    kb: &KeyboardInfo,
+    on_log: &mut dyn FnMut(String),
+) -> Result<String, AppError> {
     let bash = Path::new(&cfg.msys_path).join("usr").join("bin").join("bash.exe");
     if !bash.exists() {
         return Err(AppError::BuildFailed(format!(
@@ -55,7 +64,7 @@ pub fn build(cfg: &AppConfig, on_log: &mut dyn FnMut(String)) -> Result<String, 
     let script = format!(
         "cd {} && make {}",
         to_msys_path(&cfg.qmk_firmware_path),
-        make_target(&cfg.keymap_name)
+        make_target(kb, &cfg.keymap_name)
     );
     on_log(format!("$ bash -lc \"{script}\""));
 
@@ -106,7 +115,7 @@ pub fn build(cfg: &AppConfig, on_log: &mut dyn FnMut(String)) -> Result<String, 
         )));
     }
 
-    let bin = built_bin_path(cfg);
+    let bin = built_bin_path(cfg, kb);
     if !bin.exists() {
         return Err(AppError::BuildFailed(format!(
             "build succeeded but {} was not produced",
@@ -158,9 +167,19 @@ mod tests {
         assert_eq!(to_msys_path("relative/path"), "relative/path");
     }
 
+    fn moonlander() -> &'static KeyboardInfo {
+        crate::keyboards::get("moonlander").unwrap()
+    }
+
     #[test]
-    fn make_target_never_uses_qmk_compile() {
-        assert_eq!(make_target("qmk_flasher"), "zsa/moonlander/reva:qmk_flasher");
+    fn make_target_and_bin_name_derive_from_the_registry() {
+        assert_eq!(
+            make_target(moonlander(), "qmk_flasher"),
+            "zsa/moonlander/reva:qmk_flasher"
+        );
+        let cfg = crate::appcfg::get();
+        assert!(built_bin_path(&cfg, moonlander())
+            .ends_with("zsa_moonlander_reva_qmk_flasher.bin"));
     }
 
     #[test]
@@ -204,7 +223,7 @@ mod tests {
         let (err, lines) = rt.block_on(async move {
             tokio::spawn(async move {
                 let mut lines = Vec::new();
-                let err = build(&cfg, &mut |l| lines.push(l)).unwrap_err();
+                let err = build(&cfg, moonlander(), &mut |l| lines.push(l)).unwrap_err();
                 (err, lines)
             })
             .await
@@ -220,7 +239,7 @@ mod tests {
             msys_path: r"C:\definitely\not\msys".into(),
             ..crate::appcfg::get()
         };
-        let err = build(&cfg, &mut |_| {}).unwrap_err();
+        let err = build(&cfg, moonlander(), &mut |_| {}).unwrap_err();
         assert_eq!(err.code(), "BuildFailed");
         assert!(err.to_string().contains("bash not found"));
     }

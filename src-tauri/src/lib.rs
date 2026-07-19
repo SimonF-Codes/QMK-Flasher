@@ -6,6 +6,7 @@ pub mod error;
 pub mod events;
 pub mod flash;
 pub mod geometry;
+pub mod keyboards;
 pub mod layout;
 pub mod oryx;
 
@@ -25,6 +26,14 @@ pub fn run() {
             commands::save_layout,
             commands::seed_from_oryx,
             commands::get_geometry,
+            commands::list_layouts,
+            commands::select_layout,
+            commands::create_layout,
+            commands::duplicate_layout,
+            commands::rename_layout,
+            commands::delete_layout,
+            commands::list_keyboards,
+            commands::get_keyboard_geometry,
             commands::get_app_config,
             commands::set_app_config,
             commands::generate_sources,
