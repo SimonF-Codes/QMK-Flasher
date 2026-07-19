@@ -1,9 +1,10 @@
 # Design proposal: multi-layout & multi-keyboard selector
 
-Status: **draft for Alpha review** (Worker C, 2026-07-19). Nothing here is
-implemented; contract changes route through Alpha per CONTRACT.md. Feature
-request from Simon: a menu to select between multiple saved layouts and
-multiple keyboard designs/targets.
+Status: **approved with amendments** (Alpha, 2026-07-19). The shipped
+baseline is Worker A's merged surface (main @ f85e1af) — see the addendum
+at the bottom, which supersedes the "Proposed contract delta" section.
+Feature request from Simon: a menu to select between multiple saved layouts
+and multiple keyboard designs/targets.
 
 Ownership per Alpha: Worker C = frontend selector UI; Worker A = backend
 (multi-layout storage + multi-keyboard codegen/build). Worker B unaffected
@@ -171,3 +172,55 @@ Header gains a **layout switcher** (left of the app title block, Oryx-style):
   fake 4-key geometry (proves no 72-key assumptions remain).
 - CDP smoke on the real app once S3 lands: create → edit → switch →
   switch back → save → build for the non-default target (no flash).
+
+---
+
+## Addendum — approved baseline (supersedes "Proposed contract delta")
+
+Alpha sign-off 2026-07-19: build against Worker A's merged surface
+(main @ f85e1af, **additive**, SCHEMA_VERSION stays 2):
+
+- Storage: `%APPDATA%\qmk-flasher\layouts\<id>.json` + `state.json
+  {activeLayoutId}`; `id` is a filename slug stable across renames; legacy
+  `layout.json` auto-migrates; store guarantees ≥1 layout + valid active id.
+- Identity: `meta.geometry` doubles as the keyboard id (no `meta.id`;
+  the layout id lives outside the file). `LayoutSummary {id, name,
+  keyboard, modifiedAt}`, `KeyboardInfo {id, name, qmkKeyboard,
+  oryxGeometry, layoutMacro, keyCount, geometryFile, supported}` — zod
+  mirrors already in `types.ts`.
+- Commands: `list_layouts`, `select_layout(id) -> LayoutFile`,
+  `create_layout(name, keyboardId) -> LayoutSummary`,
+  `duplicate_layout(id, newName)`, `rename_layout(id, name)`,
+  `delete_layout(id)` (refuses active), `list_keyboards` (infallible),
+  `get_keyboard_geometry(keyboardId)`. All existing commands
+  (load/save/seed/generate/build/pipeline) operate on the **active**
+  layout; `select_layout` switches and returns the layout.
+- Unsupported boards (`supported: false`) are listable for the menu but
+  seed/codegen/build refuse them — the UI should show them disabled with
+  a "coming soon" affordance rather than hide them.
+
+Deferred to a follow-up contract rev **after S1 ships** (do not block):
+`meta.id` inside the file, geometry-driven key-count in the zod/serde
+schema layer (today `keyCount` comes from the registry and only the
+72-key Moonlander is supported), `seed_from_oryx` creating a new entry
+instead of re-seeding the active layout.
+
+### S1 concrete work plan (frontend, mock IPC first)
+
+1. `lib/ipc.ts`: add the 8 new wrappers; mock implements an in-memory
+   `Map<id, LayoutFile>` seeded from the fixture + `activeId`, slug
+   generation matching the store's rename-stable semantics, and
+   delete-active refusal — same `AppError` codes as the real store.
+2. `state/layoutStore.ts`: `layouts: LayoutSummary[]`, `activeId`,
+   `refreshLayouts()`, `switchLayout(id)` (dirty-guard prompt),
+   `createLayout(name, keyboardId)`, `duplicateLayout`, `renameLayout`,
+   `deleteLayout`. Selection/dirty state resets on switch.
+3. `components/LayoutMenu.tsx`: header dropdown — active name + keyboard
+   chip; list grouped by keyboard (single group today); actions New…
+   (keyboard picker from `list_keyboards`, disabled unsupported entries),
+   Duplicate, Rename (inline), Delete (confirm), Seed from Oryx…
+   (re-seeds active, per baseline semantics, with a warning).
+4. vitest: store switch/dirty-guard semantics, mock slug/delete-active
+   parity, menu action wiring.
+5. S2 (geometry-driven rendering via `get_keyboard_geometry`) and S3
+   (real-IPC CDP smoke) as phased above.
