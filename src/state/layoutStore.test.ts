@@ -53,6 +53,56 @@ describe("layoutStore (mock IPC)", () => {
     expect(useLayoutStore.getState().isDirty()).toBe(true);
   });
 
+  it("recomputes settings.tapDance from content; last dance removed clears it", () => {
+    const s = useLayoutStore.getState();
+    const layout = s.layout!;
+    // Fixture ships with tap-dance keys and settings.tapDance = true.
+    const positions: Array<[number, number]> = [];
+    layout.layers.forEach((layer, li) =>
+      layer.keys.forEach((k, ki) => {
+        if (k.kind === "tapDance") positions.push([li, ki]);
+      }),
+    );
+    expect(positions.length).toBeGreaterThan(0);
+    expect(layout.settings.tapDance).toBe(true);
+
+    // Overwrite each dance key; the flag must stay true until the last removal.
+    positions.forEach(([li, ki], i) => {
+      const st = useLayoutStore.getState();
+      st.selectLayer(li);
+      st.selectKey(ki);
+      st.setKeyAction({ kind: "basic", code: "KC_A" });
+      const remaining = positions.length - (i + 1);
+      expect(useLayoutStore.getState().layout!.settings.tapDance).toBe(
+        remaining > 0,
+      );
+    });
+    expect(useLayoutStore.getState().layout!.settings.tapDance).toBe(false);
+  });
+
+  it("adding a tap-dance key sets settings.tapDance true", () => {
+    const s = useLayoutStore.getState();
+    // Clear any existing dances first so we start from false.
+    const layout = s.layout!;
+    layout.layers.forEach((layer, li) =>
+      layer.keys.forEach((k, ki) => {
+        if (k.kind === "tapDance") {
+          const st = useLayoutStore.getState();
+          st.selectLayer(li);
+          st.selectKey(ki);
+          st.setKeyAction({ kind: "basic", code: "KC_A" });
+        }
+      }),
+    );
+    expect(useLayoutStore.getState().layout!.settings.tapDance).toBe(false);
+
+    const st = useLayoutStore.getState();
+    st.selectLayer(0);
+    st.selectKey(0);
+    st.setKeyAction({ kind: "tapDance", tap: "KC_A", doubleTap: "KC_B" });
+    expect(useLayoutStore.getState().layout!.settings.tapDance).toBe(true);
+  });
+
   it("edits only affect the selected layer", () => {
     const s = useLayoutStore.getState();
     s.selectLayer(1);

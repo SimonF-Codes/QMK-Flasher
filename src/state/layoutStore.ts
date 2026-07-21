@@ -4,7 +4,12 @@
  */
 import { create } from "zustand";
 import { ipc, toAppError } from "../lib/ipc";
-import type { AppError, KeyAction, LayoutFile } from "../lib/types";
+import type { AppError, KeyAction, Layer, LayoutFile } from "../lib/types";
+
+/** True iff any key across all layers is a tap-dance action. */
+function layersUseTapDance(layers: Layer[]): boolean {
+  return layers.some((layer) => layer.keys.some((k) => k.kind === "tapDance"));
+}
 
 interface LayoutState {
   layout: LayoutFile | null;
@@ -81,7 +86,15 @@ export const useLayoutStore = create<LayoutState>()((set, get) => ({
           }
         : layer,
     );
-    set({ layout: { ...layout, layers } });
+    // Keep settings.tapDance in sync with actual content so removing the last
+    // tap-dance key clears the flag (a stale-true flag broke TAP_DANCE_ENABLE
+    // codegen). Only touch settings when the derived value actually changes.
+    const tapDance = layersUseTapDance(layers);
+    const settings =
+      tapDance === layout.settings.tapDance
+        ? layout.settings
+        : { ...layout.settings, tapDance };
+    set({ layout: { ...layout, layers, settings } });
   },
 
   renameLayer(index, title) {
