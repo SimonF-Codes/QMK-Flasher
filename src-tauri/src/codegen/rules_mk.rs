@@ -14,7 +14,15 @@ pub fn render(layout: &LayoutFile) -> String {
     flag("AUTO_SHIFT_ENABLE", s.auto_shift);
     flag("ORYX_ENABLE", s.oryx);
     flag("RGB_MATRIX_CUSTOM_KB", s.rgb_matrix_custom);
-    flag("TAP_DANCE_ENABLE", s.tap_dance);
+    // Derived from the layout's ACTUAL tap-dance usage, not `s.tap_dance`: the
+    // stored flag can drift (an edit rebinds the last tap-dance key but leaves
+    // it `true`), and enabling the feature without emitting `tap_dance_actions[]`
+    // breaks the build. `uses_tap_dance` is the same predicate keymap.c uses to
+    // emit that array, so the two can never disagree. See its doc comment.
+    flag(
+        "TAP_DANCE_ENABLE",
+        super::keymap_c::uses_tap_dance(layout),
+    );
     out.push_str("SPACE_CADET_ENABLE = no\n");
     let mut flag = |name: &str, on: bool| {
         if on {

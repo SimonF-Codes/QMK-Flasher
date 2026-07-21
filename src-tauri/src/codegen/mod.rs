@@ -214,6 +214,77 @@ mod tests {
         }
     }
 
+    /// Replace every `TapDance` key (in layers and combos) with a transparent
+    /// key, leaving `settings.tap_dance` untouched. Models the real regression:
+    /// an edit rebound the layout's only tap-dance keys to other actions but
+    /// left the stored `tapDance: true` flag behind.
+    fn strip_tap_dances(layout: &mut LayoutFile) {
+        let blank = || KeyAction::Transparent { glow: None };
+        for layer in &mut layout.layers {
+            for key in &mut layer.keys {
+                if matches!(key, KeyAction::TapDance { .. }) {
+                    *key = blank();
+                }
+            }
+        }
+        for combo in &mut layout.combos {
+            if matches!(combo.action, KeyAction::TapDance { .. }) {
+                combo.action = blank();
+            }
+        }
+    }
+
+    /// The bug this brief chased: `settings.tap_dance == true` while the layout
+    /// has no tap-dance actions must NOT enable the feature in rules.mk, or QMK's
+    /// introspection references an undefined `tap_dance_actions[]` and the build
+    /// fails. rules.mk and keymap.c must agree — both off here.
+    #[test]
+    fn stale_tap_dance_flag_does_not_enable_without_actions() {
+        let mut layout = fixture();
+        assert!(layout.settings.tap_dance, "fixture starts with the flag set");
+        strip_tap_dances(&mut layout);
+        assert!(
+            layout.settings.tap_dance,
+            "flag is intentionally left stale to reproduce the desync"
+        );
+        let sources = generate(&layout).unwrap();
+        assert!(
+            !sources.rules_mk.contains("TAP_DANCE_ENABLE"),
+            "rules.mk must not enable tap dance when no actions exist:\n{}",
+            sources.rules_mk
+        );
+        assert!(
+            !sources.keymap_c.contains("tap_dance_actions"),
+            "keymap.c must not reference tap_dance_actions when none exist"
+        );
+    }
+
+    /// Inverse drift: actions present but the flag is off. Usage wins — the
+    /// feature is enabled and the array is emitted, so `TD(DANCE_n)` resolves.
+    #[test]
+    fn tap_dance_actions_enable_the_feature_even_if_flag_is_off() {
+        let mut layout = fixture();
+        layout.settings.tap_dance = false;
+        assert!(
+            layout
+                .layers
+                .iter()
+                .flat_map(|l| &l.keys)
+                .any(|k| matches!(k, KeyAction::TapDance { .. })),
+            "fixture must contain tap-dance keys for this test"
+        );
+        let sources = generate(&layout).unwrap();
+        assert!(
+            sources.rules_mk.contains("TAP_DANCE_ENABLE = yes"),
+            "rules.mk must enable tap dance when actions exist:\n{}",
+            sources.rules_mk
+        );
+        assert!(
+            sources.keymap_c.contains("tap_dance_actions"),
+            "keymap.c must define tap_dance_actions when actions exist"
+        );
+    }
+
     #[test]
     fn generate_rejects_invalid_layout() {
         let mut layout = fixture();
