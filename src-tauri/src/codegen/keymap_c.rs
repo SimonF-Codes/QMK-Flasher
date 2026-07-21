@@ -74,6 +74,22 @@ impl RenderPlan {
     }
 }
 
+/// Whether the layout actually uses any tap dance. This is the SINGLE source of
+/// truth for the two coupled emissions that must never disagree:
+///   * `keymap.c` defines `tap_dance_actions[]` (+ the `DANCE_n` enum / fns), and
+///   * `rules.mk` sets `TAP_DANCE_ENABLE = yes`.
+///
+/// It is derived from the presence of `KeyAction::TapDance` in the layout, NOT
+/// from `settings.tap_dance` — that stored flag can drift out of sync (e.g. an
+/// edit rebinds the only tap-dance keys to mod-taps but leaves the flag `true`),
+/// and a `TAP_DANCE_ENABLE=yes` with no `tap_dance_actions[]` fails to compile
+/// (`tap_dance_actions undeclared` in QMK's `keymap_introspection.c`, guarded by
+/// `#if defined(TAP_DANCE_ENABLE)`). Keying both sides off actual usage makes any
+/// drift in the flag harmless.
+pub fn uses_tap_dance(layout: &LayoutFile) -> bool {
+    !RenderPlan::build(layout).dances.is_empty()
+}
+
 fn unsupported(what: impl std::fmt::Display) -> AppError {
     AppError::CodegenUnsupportedKey(what.to_string())
 }
