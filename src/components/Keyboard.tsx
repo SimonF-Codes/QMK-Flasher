@@ -1,4 +1,5 @@
 import { GEOMETRY, viewBox } from "../lib/geometry";
+import { useDisplayStore } from "../state/displayStore";
 import { useLayoutStore } from "../state/layoutStore";
 import Key from "./Key";
 
@@ -9,9 +10,12 @@ export default function Keyboard() {
   const selectedLayer = useLayoutStore((s) => s.selectedLayer);
   const selectedKey = useLayoutStore((s) => s.selectedKey);
   const selectKey = useLayoutStore((s) => s.selectKey);
+  const mode = useDisplayStore((s) => s.mode);
 
   const layer = layout?.layers[selectedLayer];
   if (!layer) return null;
+
+  const layerNames = layout!.layers.map((l) => l.title);
 
   return (
     <svg
@@ -26,6 +30,8 @@ export default function Keyboard() {
           geo={geo}
           action={layer.keys[i]}
           selected={selectedKey === i}
+          mode={mode}
+          layerNames={layerNames}
           onSelect={() => selectKey(selectedKey === i ? null : i)}
         />
       ))}

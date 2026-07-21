@@ -320,6 +320,10 @@ export const KeycodeEntrySchema = z.object({
   tappable: z.boolean(),
   /** Valid inside LCTL()-style mod wrappers. */
   modsApplicable: z.boolean(),
+  /** Friendly keycap label in Mac display mode (glyphs like ⌘⏎). Optional. */
+  mac: z.string().optional(),
+  /** Friendly keycap label in Windows display mode. Optional. */
+  windows: z.string().optional(),
 });
 
 export type KeycodeEntry = z.infer<typeof KeycodeEntrySchema>;

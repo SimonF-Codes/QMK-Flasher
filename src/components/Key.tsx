@@ -1,4 +1,5 @@
-import { badge, holdLabel, tapLabel } from "../lib/labels";
+import { badge } from "../lib/labels";
+import { keycapLabels, type DisplayMode } from "../lib/display";
 import { keyRect } from "../lib/geometry";
 import type { GeometryKey, KeyAction } from "../lib/types";
 
@@ -6,6 +7,8 @@ interface KeyProps {
   geo: GeometryKey;
   action: KeyAction;
   selected: boolean;
+  mode: DisplayMode;
+  layerNames: readonly string[];
   onSelect(): void;
 }
 
@@ -14,10 +17,16 @@ function fontSize(label: string, w: number): number {
   return Math.min(base, (w / Math.max(label.length, 1)) * 1.7);
 }
 
-export default function Key({ geo, action, selected, onSelect }: KeyProps) {
+export default function Key({
+  geo,
+  action,
+  selected,
+  mode,
+  layerNames,
+  onSelect,
+}: KeyProps) {
   const r = keyRect(geo);
-  const tap = tapLabel(action);
-  const hold = holdLabel(action);
+  const { tap, hold } = keycapLabels(action, mode, layerNames);
   const b = badge(action);
   const transparent = action.kind === "transparent" || action.kind === "none";
 

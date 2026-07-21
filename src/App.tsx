@@ -1,5 +1,6 @@
 import { useEffect } from "react";
 import BuildFlashPanel from "./components/BuildFlashPanel";
+import DisplayModeToggle from "./components/DisplayModeToggle";
 import Keyboard from "./components/Keyboard";
 import KeyPicker from "./components/KeyPicker";
 import LayerTabs from "./components/LayerTabs";
@@ -57,6 +58,7 @@ export default function App() {
           </span>
         )}
         <div className="ml-auto flex items-center gap-2">
+          <DisplayModeToggle />
           {dirty && (
             <span className="text-xs text-amber-400" title="Unsaved changes">
               ● unsaved
