@@ -63,6 +63,8 @@ interface LayoutState {
   duplicateLayout(id: string, newName: string): Promise<LayoutSummary | null>;
   renameLayout(id: string, name: string): Promise<void>;
   deleteLayout(id: string): Promise<void>;
+  /** Re-seed the active layout from its Oryx source (meta.seededFrom.layoutId). */
+  seedActiveFromOryx(): Promise<void>;
   selectLayer(index: number): void;
   selectKey(index: number | null): void;
   setKeyAction(action: KeyAction): void;
@@ -199,6 +201,39 @@ export const useLayoutStore = create<LayoutState>()((set, get) => ({
       await get().refreshLayouts();
     } catch (e) {
       set({ error: toAppError(e) });
+    }
+  },
+
+  async seedActiveFromOryx() {
+    const layout = get().layout;
+    if (!layout) return;
+    // seed_from_oryx takes the ORYX hashId, not the local store id.
+    const oryxId = layout.meta.seededFrom.layoutId;
+    if (!oryxId || oryxId === "local") {
+      set({
+        error: {
+          code: "OryxUnreachable",
+          message: "This layout has no Oryx source to re-seed from.",
+          hint: "Only layouts created by seeding from Oryx can be re-seeded.",
+        },
+      });
+      return;
+    }
+    set({ error: null, loading: true });
+    try {
+      // force=true: re-fetch from Oryx and overwrite. With force=false the
+      // backend short-circuits to the already-saved layout (a no-op re-seed).
+      const seeded = await ipc.seedFromOryx(oryxId, true);
+      set({
+        layout: seeded,
+        savedJson: JSON.stringify(seeded),
+        selectedLayer: 0,
+        selectedKey: null,
+        loading: false,
+      });
+      await get().refreshLayouts();
+    } catch (e) {
+      set({ error: toAppError(e), loading: false });
     }
   },
 

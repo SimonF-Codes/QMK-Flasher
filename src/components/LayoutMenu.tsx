@@ -18,7 +18,7 @@ export default function LayoutMenu() {
   const duplicateLayout = useLayoutStore((s) => s.duplicateLayout);
   const renameLayout = useLayoutStore((s) => s.renameLayout);
   const deleteLayout = useLayoutStore((s) => s.deleteLayout);
-  const load = useLayoutStore((s) => s.load);
+  const seedActiveFromOryx = useLayoutStore((s) => s.seedActiveFromOryx);
 
   const [open, setOpen] = useState(false);
   const [keyboards, setKeyboards] = useState<KeyboardInfo[]>([]);
@@ -102,15 +102,14 @@ export default function LayoutMenu() {
     if (created) await requestSwitch(created.id);
   };
 
+  // Only layouts seeded from Oryx have a hashId to re-seed from.
+  const oryxSource = layout.meta.seededFrom.layoutId;
+  const canSeed = !!oryxSource && oryxSource !== "local";
+
   const doSeed = async () => {
     setConfirmSeed(false);
-    try {
-      await ipc.seedFromOryx(activeId ?? "", false);
-      await load();
-      closeMenu();
-    } catch {
-      /* store surfaces errors on its own paths; seed here is best-effort */
-    }
+    await seedActiveFromOryx(); // surfaces errors via the store's error bar
+    closeMenu();
   };
 
   // Group summaries by keyboard for the menu body.
@@ -307,7 +306,15 @@ export default function LayoutMenu() {
                   </div>
                 </div>
               ) : (
-                <MenuAction onClick={() => setConfirmSeed(true)}>
+                <MenuAction
+                  onClick={() => setConfirmSeed(true)}
+                  disabled={!canSeed}
+                  title={
+                    canSeed
+                      ? `Re-seed from Oryx ${oryxSource}`
+                      : "This layout wasn't seeded from Oryx"
+                  }
+                >
                   ↻ Seed active from Oryx…
                 </MenuAction>
               )}
@@ -377,14 +384,20 @@ function IconBtn({
 function MenuAction({
   children,
   onClick,
+  disabled,
+  title,
 }: {
   children: React.ReactNode;
   onClick: () => void;
+  disabled?: boolean;
+  title?: string;
 }) {
   return (
     <button
       onClick={onClick}
-      className="block w-full px-3 py-1.5 text-left text-sm text-zinc-300 hover:bg-zinc-800 hover:text-zinc-100"
+      disabled={disabled}
+      title={title}
+      className="block w-full px-3 py-1.5 text-left text-sm text-zinc-300 enabled:hover:bg-zinc-800 enabled:hover:text-zinc-100 disabled:opacity-40"
     >
       {children}
     </button>

@@ -222,6 +222,35 @@ describe("layoutStore multi-layout (mock IPC)", () => {
     expect(s.isDirty()).toBe(false); // rename is not a pending edit
   });
 
+  it("seed re-seeds a layout that has an Oryx source", async () => {
+    const s = useLayoutStore.getState();
+    expect(s.layout?.meta.seededFrom.layoutId).toBe("rddD7"); // has a source
+    // Dirty it, then seed should replace content and clear dirty.
+    s.selectKey(0);
+    s.setKeyAction({ kind: "basic", code: "KC_F13" });
+    expect(useLayoutStore.getState().isDirty()).toBe(true);
+
+    await useLayoutStore.getState().seedActiveFromOryx();
+    const after = useLayoutStore.getState();
+    expect(after.error).toBeNull();
+    expect(after.isDirty()).toBe(false);
+    expect(after.layout?.layers).toHaveLength(7);
+  });
+
+  it("seed refuses a layout with no Oryx source (local)", async () => {
+    await useLayoutStore.getState().createLayout("Gaming", "moonlander");
+    await useLayoutStore.getState().switchLayout("gaming");
+    expect(
+      useLayoutStore.getState().layout?.meta.seededFrom.layoutId,
+    ).toBe("local");
+
+    await useLayoutStore.getState().seedActiveFromOryx();
+    const after = useLayoutStore.getState();
+    expect(after.error?.code).toBe("OryxUnreachable");
+    // Content untouched (still the blank single layer).
+    expect(after.layout?.layers).toHaveLength(1);
+  });
+
   it("delete refuses the active layout but removes an inactive one", async () => {
     const s = useLayoutStore.getState();
     await s.createLayout("Gaming", "moonlander");
