@@ -16,7 +16,7 @@ use crate::events::{
 use crate::flash::{self, DfuDeviceInfo};
 use crate::geometry::{self, GeometryFile};
 use crate::keyboards::{self, KeyboardInfo};
-use crate::layout::store::LayoutSummary;
+use crate::layout::store::{LayoutSummary, LayoutVersionSummary, VersionReason};
 use crate::layout::{store, LayoutFile};
 use crate::{build, oryx};
 
@@ -27,7 +27,7 @@ pub fn load_layout() -> Result<LayoutFile, AppError> {
 
 #[tauri::command]
 pub fn save_layout(layout: LayoutFile) -> Result<(), AppError> {
-    store::save(&layout)
+    store::save_with_history(&layout)
 }
 
 #[tauri::command]
@@ -75,6 +75,41 @@ pub fn rename_layout(id: String, name: String) -> Result<LayoutSummary, AppError
 #[tauri::command]
 pub fn delete_layout(id: String) -> Result<(), AppError> {
     store::delete_layout(&id)
+}
+
+// -- layout version history (additive, 2026-07-21) --------------------------
+
+/// Versions of `layout_id`, newest first.
+#[tauri::command]
+pub fn list_layout_versions(layout_id: String) -> Result<Vec<LayoutVersionSummary>, AppError> {
+    store::list_layout_versions(&layout_id)
+}
+
+/// Snapshots the current as `preRestore`, overwrites it with `version_id`'s
+/// content, and returns the restored layout (now active/current). The restore
+/// is itself undoable via the `preRestore` snapshot it creates.
+#[tauri::command]
+pub fn restore_layout_version(
+    layout_id: String,
+    version_id: String,
+) -> Result<LayoutFile, AppError> {
+    store::restore_layout_version(&layout_id, &version_id)
+}
+
+/// Explicit user-requested snapshot. `reason` must be `"manual"`; the other
+/// reasons are auto-snapshot only.
+#[tauri::command]
+pub fn snapshot_layout(
+    layout_id: String,
+    reason: String,
+    label: Option<String>,
+) -> Result<LayoutVersionSummary, AppError> {
+    if reason != "manual" {
+        return Err(AppError::InvalidLayout(format!(
+            "snapshot_layout only accepts reason \"manual\", got {reason:?}"
+        )));
+    }
+    store::snapshot_layout(&layout_id, VersionReason::Manual, label)
 }
 
 #[tauri::command]

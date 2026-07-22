@@ -200,6 +200,33 @@ export const LayoutSummarySchema = z.object({
 
 export type LayoutSummary = z.infer<typeof LayoutSummarySchema>;
 
+// ---- Layout version history (src-tauri/src/layout/store.rs) ----
+
+/** Why a layout version snapshot was taken. */
+export const VersionReasonSchema = z.enum([
+  /** Auto-snapshot after a save_layout. */
+  "save",
+  /** Auto-snapshot of the current before a reseed overwrites it. */
+  "preReseed",
+  /** Auto-snapshot of the current before a restore overwrites it. */
+  "preRestore",
+  /** Explicit user-requested snapshot via snapshot_layout. */
+  "manual",
+]);
+
+export const LayoutVersionSummarySchema = z.object({
+  /** Sortable id, e.g. "20260721-143000-123". */
+  versionId: z.string().min(1),
+  /** RFC 3339 (ISO 8601) creation time. */
+  createdAt: z.string().min(1),
+  reason: VersionReasonSchema,
+  /** Optional human note (only set for manual snapshots today). */
+  label: z.string().optional(),
+});
+
+export type VersionReason = z.infer<typeof VersionReasonSchema>;
+export type LayoutVersionSummary = z.infer<typeof LayoutVersionSummarySchema>;
+
 // ---- Keyboard registry (shared/keyboards.json, src-tauri/src/keyboards.rs) ----
 
 export const KeyboardInfoSchema = z.object({
