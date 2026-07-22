@@ -39,6 +39,11 @@ pub fn seed_from_oryx(layout_id: &str, force: bool) -> Result<LayoutFile, AppErr
     let keymap_c = client::keymap_c_from_zip(&zip)?;
     seed::cross_check(&layout, &keymap_c)?;
 
+    // Snapshot the current active layout before overwriting it, so a reseed is
+    // recoverable (and backs the UI's override warning). Done only after all
+    // fallible fetch/build/cross-check steps pass — no snapshot on a failed
+    // reseed that never overwrites.
+    store::snapshot_active_pre_reseed()?;
     store::save(&layout)?;
     Ok(layout)
 }

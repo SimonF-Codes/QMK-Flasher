@@ -548,7 +548,9 @@
     "longLabel": "Enter",
     "category": "punct",
     "tappable": true,
-    "modsApplicable": true
+    "modsApplicable": true,
+    "mac": "⏎",
+    "windows": "Enter"
   },
   {
     "qmk": "KC_ESCAPE",
@@ -559,7 +561,9 @@
     "longLabel": "Escape",
     "category": "punct",
     "tappable": true,
-    "modsApplicable": true
+    "modsApplicable": true,
+    "mac": "⎋",
+    "windows": "Esc"
   },
   {
     "qmk": "KC_BACKSPACE",
@@ -570,7 +574,9 @@
     "longLabel": "Backspace",
     "category": "punct",
     "tappable": true,
-    "modsApplicable": true
+    "modsApplicable": true,
+    "mac": "⌫",
+    "windows": "Bksp"
   },
   {
     "qmk": "KC_TAB",
@@ -579,7 +585,9 @@
     "longLabel": "Tab",
     "category": "punct",
     "tappable": true,
-    "modsApplicable": true
+    "modsApplicable": true,
+    "mac": "⇥",
+    "windows": "Tab"
   },
   {
     "qmk": "KC_SPACE",
@@ -590,7 +598,9 @@
     "longLabel": "Space",
     "category": "punct",
     "tappable": true,
-    "modsApplicable": true
+    "modsApplicable": true,
+    "mac": "␣",
+    "windows": "Space"
   },
   {
     "qmk": "KC_MINUS",
@@ -968,7 +978,9 @@
     "longLabel": "Delete",
     "category": "nav",
     "tappable": true,
-    "modsApplicable": true
+    "modsApplicable": true,
+    "mac": "⌦",
+    "windows": "Del"
   },
   {
     "qmk": "KC_HOME",
@@ -1358,7 +1370,9 @@
     "longLabel": "Left Control",
     "category": "modifier",
     "tappable": false,
-    "modsApplicable": false
+    "modsApplicable": false,
+    "mac": "⌃",
+    "windows": "Ctrl"
   },
   {
     "qmk": "KC_LEFT_SHIFT",
@@ -1369,7 +1383,9 @@
     "longLabel": "Left Shift",
     "category": "modifier",
     "tappable": false,
-    "modsApplicable": false
+    "modsApplicable": false,
+    "mac": "⇧",
+    "windows": "Shift"
   },
   {
     "qmk": "KC_LEFT_ALT",
@@ -1381,7 +1397,9 @@
     "longLabel": "Left Alt",
     "category": "modifier",
     "tappable": false,
-    "modsApplicable": false
+    "modsApplicable": false,
+    "mac": "⌥",
+    "windows": "Alt"
   },
   {
     "qmk": "KC_LEFT_GUI",
@@ -1394,7 +1412,9 @@
     "longLabel": "Left GUI",
     "category": "modifier",
     "tappable": false,
-    "modsApplicable": false
+    "modsApplicable": false,
+    "mac": "⌘",
+    "windows": "Win"
   },
   {
     "qmk": "KC_RIGHT_CTRL",
@@ -1405,7 +1425,9 @@
     "longLabel": "Right Control",
     "category": "modifier",
     "tappable": false,
-    "modsApplicable": false
+    "modsApplicable": false,
+    "mac": "⌃",
+    "windows": "Ctrl"
   },
   {
     "qmk": "KC_RIGHT_SHIFT",
@@ -1416,7 +1438,9 @@
     "longLabel": "Right Shift",
     "category": "modifier",
     "tappable": false,
-    "modsApplicable": false
+    "modsApplicable": false,
+    "mac": "⇧",
+    "windows": "Shift"
   },
   {
     "qmk": "KC_RIGHT_ALT",
@@ -1429,7 +1453,9 @@
     "longLabel": "Right Alt",
     "category": "modifier",
     "tappable": false,
-    "modsApplicable": false
+    "modsApplicable": false,
+    "mac": "⌥",
+    "windows": "Alt"
   },
   {
     "qmk": "KC_RIGHT_GUI",
@@ -1442,7 +1468,9 @@
     "longLabel": "Right GUI",
     "category": "modifier",
     "tappable": false,
-    "modsApplicable": false
+    "modsApplicable": false,
+    "mac": "⌘",
+    "windows": "Win"
   },
   {
     "qmk": "KC_MEH",

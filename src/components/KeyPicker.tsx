@@ -54,7 +54,10 @@ export default function KeyPicker() {
   const layout = useLayoutStore((s) => s.layout);
   const selectedLayer = useLayoutStore((s) => s.selectedLayer);
   const selectedKey = useLayoutStore((s) => s.selectedKey);
+  const swapSource = useLayoutStore((s) => s.swapSource);
   const setKeyAction = useLayoutStore((s) => s.setKeyAction);
+  const beginSwap = useLayoutStore((s) => s.beginSwap);
+  const cancelSwap = useLayoutStore((s) => s.cancelSwap);
 
   const [query, setQuery] = useState("");
   const [openCategory, setOpenCategory] = useState<string | null>("letter");
@@ -98,14 +101,37 @@ export default function KeyPicker() {
         )}
       </header>
 
-      <input
-        value={query}
-        onChange={(e) => setQuery(e.target.value)}
-        placeholder="Search all keycodes…"
-        className="w-full rounded bg-zinc-900 px-2 py-1.5 text-sm outline-none ring-1 ring-zinc-700 focus:ring-sky-500"
-      />
+      {swapSource !== null ? (
+        <section className="rounded border border-amber-500/50 bg-amber-950/30 p-3">
+          <p className="text-sm text-amber-200">
+            Swapping key <span className="font-semibold">{swapSource}</span> —
+            click another key to swap it with.
+          </p>
+          <button
+            onClick={() => cancelSwap()}
+            className="mt-2 w-full rounded bg-zinc-800 py-1.5 text-sm text-zinc-200 hover:bg-zinc-700"
+          >
+            Cancel swap
+          </button>
+        </section>
+      ) : (
+        <>
+          <button
+            onClick={() => beginSwap(selectedKey)}
+            className="rounded bg-zinc-800 py-1.5 text-sm text-zinc-200 hover:bg-zinc-700"
+            title="Swap this key's action with another key on this layer"
+          >
+            ⇄ Swap with…
+          </button>
 
-      {query ? (
+          <input
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Search all keycodes…"
+            className="w-full rounded bg-zinc-900 px-2 py-1.5 text-sm outline-none ring-1 ring-zinc-700 focus:ring-sky-500"
+          />
+
+          {query ? (
         <div className="flex flex-wrap gap-1">
           {results.map((e) => (
             <KeycodeButton key={e.qmk} entry={e} onPick={pick} />
@@ -236,6 +262,8 @@ export default function KeyPicker() {
               );
             })}
           </section>
+        </>
+      )}
         </>
       )}
     </aside>

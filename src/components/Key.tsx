@@ -1,4 +1,5 @@
-import { badge, holdLabel, tapLabel } from "../lib/labels";
+import { badge } from "../lib/labels";
+import { keycapLabels, type DisplayMode } from "../lib/display";
 import { keyRect } from "../lib/geometry";
 import type { GeometryKey, KeyAction } from "../lib/types";
 
@@ -6,6 +7,12 @@ interface KeyProps {
   geo: GeometryKey;
   action: KeyAction;
   selected: boolean;
+  /** This key is the anchor of an in-progress "swap with…". */
+  swapSource?: boolean;
+  /** A swap is in progress (this key is a candidate target). */
+  swapTargeting?: boolean;
+  mode: DisplayMode;
+  layerNames: readonly string[];
   onSelect(): void;
 }
 
@@ -14,12 +21,29 @@ function fontSize(label: string, w: number): number {
   return Math.min(base, (w / Math.max(label.length, 1)) * 1.7);
 }
 
-export default function Key({ geo, action, selected, onSelect }: KeyProps) {
+export default function Key({
+  geo,
+  action,
+  selected,
+  swapSource = false,
+  swapTargeting = false,
+  mode,
+  layerNames,
+  onSelect,
+}: KeyProps) {
   const r = keyRect(geo);
-  const tap = tapLabel(action);
-  const hold = holdLabel(action);
+  const { tap, hold } = keycapLabels(action, mode, layerNames);
   const b = badge(action);
   const transparent = action.kind === "transparent" || action.kind === "none";
+
+  // Swap mode: the anchor gets an amber ring; other keys glow as targets.
+  const rectClass = swapSource
+    ? "fill-amber-900 stroke-amber-400"
+    : swapTargeting
+      ? "fill-zinc-800 stroke-amber-500/60 hover:fill-amber-900/40"
+      : selected
+        ? "fill-sky-900 stroke-sky-400"
+        : "fill-zinc-800 stroke-zinc-700 hover:fill-zinc-700";
 
   return (
     <g
@@ -34,12 +58,8 @@ export default function Key({ geo, action, selected, onSelect }: KeyProps) {
         width={r.w}
         height={r.h}
         rx={6}
-        className={
-          selected
-            ? "fill-sky-900 stroke-sky-400"
-            : "fill-zinc-800 stroke-zinc-700 hover:fill-zinc-700"
-        }
-        strokeWidth={selected ? 2 : 1}
+        className={rectClass}
+        strokeWidth={selected || swapSource ? 2 : 1}
       />
       {action.glow && (
         <rect

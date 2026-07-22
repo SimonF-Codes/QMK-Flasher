@@ -1,8 +1,11 @@
 import { useEffect } from "react";
 import BuildFlashPanel from "./components/BuildFlashPanel";
+import DisplayModeToggle from "./components/DisplayModeToggle";
 import Keyboard from "./components/Keyboard";
 import KeyPicker from "./components/KeyPicker";
 import LayerTabs from "./components/LayerTabs";
+import LayoutMenu from "./components/LayoutMenu";
+import VersionHistoryPanel from "./components/VersionHistoryPanel";
 import { MOCK } from "./lib/ipc";
 import { useLayoutStore } from "./state/layoutStore";
 
@@ -43,9 +46,10 @@ export default function App() {
     <div className="flex h-screen flex-col">
       <header className="flex items-center gap-3 border-b border-zinc-800 px-4 py-2.5">
         <h1 className="text-base font-semibold tracking-tight">QMK Flasher</h1>
+        <LayoutMenu />
         {layout && (
           <span className="text-xs text-zinc-500">
-            {layout.meta.name} · Oryx {layout.meta.seededFrom.layoutId}/
+            Oryx {layout.meta.seededFrom.layoutId}/
             {layout.meta.seededFrom.revisionHash}
           </span>
         )}
@@ -55,6 +59,8 @@ export default function App() {
           </span>
         )}
         <div className="ml-auto flex items-center gap-2">
+          <VersionHistoryPanel />
+          <DisplayModeToggle />
           {dirty && (
             <span className="text-xs text-amber-400" title="Unsaved changes">
               ● unsaved
