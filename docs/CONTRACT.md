@@ -90,6 +90,38 @@ mirrors in `types.ts`.
 argument order**; the seeder applies the Oryx→LAYOUT permutation exactly once
 at seed time (full table in the plan's Discovery findings).
 
+### Layout version history (added 2026-07-21, additive)
+
+Additive — **no existing signature changes**, `SCHEMA_VERSION` unchanged
+(`LayoutFile` shape is untouched). Every layout keeps a history of prior
+versions so the user can browse and revert; revert is itself undoable.
+
+Snapshots live under `%APPDATA%\qmk-flasher\versions\<id>\<versionId>.json`,
+one file per version = a `LayoutVersionSummary` header flattened alongside a
+full `LayoutFile` copy under `layout`. `<versionId>` is a sortable timestamp
+id (`YYYYMMDD-HHMMSS-mmm`, with a `-N` suffix on same-millisecond
+collisions). All versions are kept in v1 (a per-layout cap/prune is a
+documented follow-up). Existing layouts start with empty history — no
+migration; the current layout stays exactly where it is (`layouts\<id>.json`).
+
+```
+LayoutVersionSummary { versionId, createdAt (ISO8601),
+                       reason: "save"|"preReseed"|"preRestore"|"manual",
+                       label? }
+```
+mirrors: `store.rs` (serde, `VersionReason` + `LayoutVersionSummary`) +
+`types.ts` (zod).
+
+Auto-snapshot behavior on existing commands (signatures unchanged):
+- `save_layout` writes the active layout, then snapshots reason `save`,
+  **deduped** — skipped when byte-identical to the newest existing version.
+- `seed_from_oryx` snapshots the current active layout reason `preReseed`
+  **before** overwriting it (only after fetch/build/cross-check succeed — a
+  failed reseed that never overwrites leaves no snapshot). The pipeline's
+  internal `store::save` and other paths do **not** auto-snapshot.
+- `restore_layout_version` snapshots the current reason `preRestore` first,
+  then overwrites the current with the chosen version and returns it.
+
 ## Commands (`src-tauri/src/commands.rs`)
 
 All results are `Result<T, AppError>` unless noted; errors cross IPC as
@@ -98,7 +130,7 @@ All results are `Result<T, AppError>` unless noted; errors cross IPC as
 | Command | Signature | Delegates to |
 |---|---|---|
 | `load_layout` | `() -> LayoutFile` | `layout::store::load` (the **active** layout) |
-| `save_layout` | `(layout) -> ()` | `layout::store::save` (writes the active layout) |
+| `save_layout` | `(layout) -> ()` | `layout::store::save_with_history` (writes the active layout + auto-snapshots) |
 | `seed_from_oryx` | `(layout_id, force) -> LayoutFile` | `oryx::seed_from_oryx` (re-seeds the active layout) |
 | `get_geometry` | `() -> GeometryFile` | `geometry::get` (Moonlander; see `get_keyboard_geometry`) |
 | `list_layouts` | `() -> LayoutSummary[]` | `layout::store::list_layouts` |
@@ -107,6 +139,9 @@ All results are `Result<T, AppError>` unless noted; errors cross IPC as
 | `duplicate_layout` | `(id, new_name) -> LayoutSummary` | copy under a fresh id |
 | `rename_layout` | `(id, name) -> LayoutSummary` | display name only; id stays |
 | `delete_layout` | `(id) -> ()` | refuses the active layout |
+| `list_layout_versions` | `(layout_id) -> LayoutVersionSummary[]` | version history, newest first |
+| `restore_layout_version` | `(layout_id, version_id) -> LayoutFile` | snapshots current (`preRestore`), then restores |
+| `snapshot_layout` | `(layout_id, reason, label?) -> LayoutVersionSummary` | explicit snapshot; `reason` must be `"manual"` |
 | `list_keyboards` | `() -> KeyboardInfo[]` (infallible) | `keyboards::all` (shared/keyboards.json) |
 | `get_keyboard_geometry` | `(keyboard_id) -> GeometryFile` | `geometry::get_for_keyboard` |
 | `get_app_config` | `() -> AppConfig` (infallible) | `appcfg::get` |

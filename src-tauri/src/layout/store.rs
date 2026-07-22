@@ -41,6 +41,47 @@ pub struct LayoutSummary {
     pub modified_at: String,
 }
 
+/// Why a layout version snapshot was taken.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub enum VersionReason {
+    /// Auto-snapshot after a `save_layout`.
+    Save,
+    /// Auto-snapshot of the current layout before a reseed overwrites it.
+    PreReseed,
+    /// Auto-snapshot of the current layout before a restore overwrites it
+    /// (makes the restore itself undoable).
+    PreRestore,
+    /// Explicit user-requested snapshot via `snapshot_layout`.
+    Manual,
+}
+
+/// Metadata for one stored layout version. The full [`LayoutFile`] copy lives
+/// in the same file under `layout`; listing reads only this header.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct LayoutVersionSummary {
+    /// Sortable id, e.g. `20260721-143000-123`.
+    pub version_id: String,
+    /// RFC 3339 (ISO 8601) creation time.
+    pub created_at: String,
+    pub reason: VersionReason,
+    /// Optional human note (only ever set for `manual` snapshots today).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub label: Option<String>,
+}
+
+/// On-disk version record: the summary header flattened alongside a full
+/// [`LayoutFile`] copy. Listing deserializes only the header (the `layout`
+/// field is ignored), keeping `list_layout_versions` cheap.
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct VersionRecord {
+    #[serde(flatten)]
+    summary: LayoutVersionSummary,
+    layout: LayoutFile,
+}
+
 #[derive(Debug, Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct StoreState {
@@ -316,6 +357,189 @@ impl Store {
         }
         std::fs::remove_file(&path).map_err(io_err(&path))
     }
+
+    // -- version history (additive, 2026-07-21) -----------------------------
+
+    fn versions_dir(&self, id: &str) -> PathBuf {
+        self.root.join("versions").join(id)
+    }
+
+    fn version_path(&self, id: &str, version_id: &str) -> PathBuf {
+        self.versions_dir(id).join(format!("{version_id}.json"))
+    }
+
+    /// Version ids for `id`, ascending (== chronological, since ids sort by
+    /// time). Empty when the layout has no history yet.
+    fn version_ids(&self, id: &str) -> Result<Vec<String>, AppError> {
+        let dir = self.versions_dir(id);
+        if !dir.exists() {
+            return Ok(Vec::new());
+        }
+        let mut ids = Vec::new();
+        for entry in std::fs::read_dir(&dir).map_err(io_err(&dir))? {
+            let path = entry.map_err(io_err(&dir))?.path();
+            if path.extension().is_some_and(|e| e == "json") {
+                if let Some(stem) = path.file_stem().and_then(|s| s.to_str()) {
+                    ids.push(stem.to_string());
+                }
+            }
+        }
+        ids.sort();
+        Ok(ids)
+    }
+
+    /// A unique, sortable version id: `YYYYMMDD-HHMMSS-mmm`, with a `-N`
+    /// suffix appended only on same-millisecond collisions (still sorts
+    /// after the bare id and before the next millisecond).
+    fn new_version_id(&self, id: &str) -> String {
+        let now = chrono::Utc::now();
+        let base = format!(
+            "{}-{:03}",
+            now.format("%Y%m%d-%H%M%S"),
+            now.timestamp_subsec_millis()
+        );
+        let mut candidate = base.clone();
+        let mut n = 1;
+        while self.version_path(id, &candidate).exists() {
+            candidate = format!("{base}-{n}");
+            n += 1;
+        }
+        candidate
+    }
+
+    fn write_version(
+        &self,
+        id: &str,
+        layout: &LayoutFile,
+        reason: VersionReason,
+        label: Option<String>,
+    ) -> Result<LayoutVersionSummary, AppError> {
+        let version_id = self.new_version_id(id);
+        let summary = LayoutVersionSummary {
+            version_id: version_id.clone(),
+            created_at: chrono::Utc::now()
+                .to_rfc3339_opts(chrono::SecondsFormat::Millis, true),
+            reason,
+            label,
+        };
+        let record = VersionRecord { summary: summary.clone(), layout: layout.clone() };
+        let json = serde_json::to_string_pretty(&record)
+            .map_err(|e| AppError::InvalidLayout(e.to_string()))?
+            + "\n";
+        atomic_write(&self.version_path(id, &version_id), &json)?;
+        Ok(summary)
+    }
+
+    /// The newest stored version's layout for `id`, if any (used for the
+    /// save-snapshot dedup check).
+    fn newest_version_layout(&self, id: &str) -> Result<Option<LayoutFile>, AppError> {
+        match self.version_ids(id)?.last() {
+            None => Ok(None),
+            Some(vid) => {
+                let path = self.version_path(id, vid);
+                let json = std::fs::read_to_string(&path).map_err(io_err(&path))?;
+                let record: VersionRecord = serde_json::from_str(&json).map_err(|e| {
+                    AppError::InvalidLayout(format!("{}: {e}", path.display()))
+                })?;
+                Ok(Some(record.layout))
+            }
+        }
+    }
+
+    /// Snapshot the CURRENT on-disk content of layout `id`. When `dedup` is
+    /// set, skip writing (returning `None`) if the content is identical to the
+    /// newest existing version.
+    fn snapshot_current(
+        &self,
+        id: &str,
+        reason: VersionReason,
+        label: Option<String>,
+        dedup: bool,
+    ) -> Result<Option<LayoutVersionSummary>, AppError> {
+        let layout = self.read_layout(id)?;
+        if dedup {
+            if let Some(prev) = self.newest_version_layout(id)? {
+                if prev == layout {
+                    return Ok(None);
+                }
+            }
+        }
+        self.write_version(id, &layout, reason, label).map(Some)
+    }
+
+    /// Write the active layout, then auto-snapshot it (reason `save`, deduped
+    /// against the newest existing version).
+    pub fn save_with_history(&self, layout: &LayoutFile) -> Result<(), AppError> {
+        let active = self.active_layout_id()?;
+        self.write_layout(&active, layout)?;
+        self.snapshot_current(&active, VersionReason::Save, None, true)?;
+        Ok(())
+    }
+
+    /// Explicit snapshot of the current content of layout `id`. Never deduped
+    /// (explicit user intent).
+    pub fn snapshot(
+        &self,
+        id: &str,
+        reason: VersionReason,
+        label: Option<String>,
+    ) -> Result<LayoutVersionSummary, AppError> {
+        self.ensure_initialized()?;
+        self.snapshot_current(id, reason, label, false)
+            .map(|w| w.expect("non-dedup snapshot always writes"))
+    }
+
+    /// Snapshot the current active layout before a reseed overwrites it, so a
+    /// reseed is recoverable. No-op contract-wise if there is no active
+    /// layout, but `ensure_initialized` guarantees one exists.
+    pub fn snapshot_active_pre_reseed(&self) -> Result<(), AppError> {
+        let active = self.active_layout_id()?;
+        self.snapshot_current(&active, VersionReason::PreReseed, None, false)?;
+        Ok(())
+    }
+
+    /// Versions for `id`, newest first.
+    pub fn list_versions(&self, id: &str) -> Result<Vec<LayoutVersionSummary>, AppError> {
+        self.ensure_initialized()?;
+        let mut ids = self.version_ids(id)?;
+        ids.reverse();
+        let mut out = Vec::with_capacity(ids.len());
+        for vid in ids {
+            let path = self.version_path(id, &vid);
+            let json = std::fs::read_to_string(&path).map_err(io_err(&path))?;
+            // Deserialize only the header; the `layout` field is ignored.
+            let summary: LayoutVersionSummary = serde_json::from_str(&json)
+                .map_err(|e| AppError::InvalidLayout(format!("{}: {e}", path.display())))?;
+            out.push(summary);
+        }
+        Ok(out)
+    }
+
+    /// Restore `version_id`: snapshot the current as `preRestore` (so the
+    /// revert is undoable), overwrite the current with the chosen version's
+    /// content, and return it (now the active/current layout).
+    pub fn restore_version(
+        &self,
+        id: &str,
+        version_id: &str,
+    ) -> Result<LayoutFile, AppError> {
+        self.ensure_initialized()?;
+        let path = self.version_path(id, version_id);
+        if !path.exists() {
+            return Err(AppError::InvalidLayout(format!(
+                "no version {version_id:?} for layout {id:?}"
+            )));
+        }
+        let json = std::fs::read_to_string(&path).map_err(io_err(&path))?;
+        let record: VersionRecord = serde_json::from_str(&json)
+            .map_err(|e| AppError::InvalidLayout(format!("{}: {e}", path.display())))?;
+        // 1) snapshot the current so the restore can itself be undone.
+        self.snapshot_current(id, VersionReason::PreRestore, None, false)?;
+        // 2) overwrite the current with the chosen version's content.
+        self.write_layout(id, &record.layout)?;
+        // 3) return the restored layout.
+        Ok(record.layout)
+    }
 }
 
 /// A minimal valid layout for a fresh keyboard: one all-transparent layer.
@@ -408,6 +632,35 @@ pub fn rename_layout(id: &str, name: &str) -> Result<LayoutSummary, AppError> {
 
 pub fn delete_layout(id: &str) -> Result<(), AppError> {
     Store::real()?.delete(id)
+}
+
+// -- version history --------------------------------------------------------
+
+/// `save_layout`'s history-aware save: write the active layout, then
+/// auto-snapshot (reason `save`, deduped).
+pub fn save_with_history(layout: &LayoutFile) -> Result<(), AppError> {
+    Store::real()?.save_with_history(layout)
+}
+
+/// Snapshot the current active layout before a reseed overwrites it.
+pub fn snapshot_active_pre_reseed() -> Result<(), AppError> {
+    Store::real()?.snapshot_active_pre_reseed()
+}
+
+pub fn list_layout_versions(id: &str) -> Result<Vec<LayoutVersionSummary>, AppError> {
+    Store::real()?.list_versions(id)
+}
+
+pub fn restore_layout_version(id: &str, version_id: &str) -> Result<LayoutFile, AppError> {
+    Store::real()?.restore_version(id, version_id)
+}
+
+pub fn snapshot_layout(
+    id: &str,
+    reason: VersionReason,
+    label: Option<String>,
+) -> Result<LayoutVersionSummary, AppError> {
+    Store::real()?.snapshot(id, reason, label)
 }
 
 #[cfg(test)]
@@ -539,5 +792,109 @@ mod tests {
         layout.settings.key_lock = false;
         assert_eq!(t.store.save(&layout).unwrap_err().code(), "InvalidLayout");
         assert_eq!(t.store.load().unwrap().settings.key_lock, true);
+    }
+
+    // -- version history ----------------------------------------------------
+
+    #[test]
+    fn save_with_history_snapshots_and_dedups_identical_content() {
+        let t = TempStore::new("history-save");
+        let active = t.store.active_layout_id().unwrap();
+
+        let mut layout = t.store.load().unwrap();
+        layout.meta.name = "V1".into();
+        t.store.save_with_history(&layout).unwrap();
+        let versions = t.store.list_versions(&active).unwrap();
+        assert_eq!(versions.len(), 1);
+        assert_eq!(versions[0].reason, VersionReason::Save);
+        assert!(versions[0].label.is_none());
+
+        // A byte-identical re-save must not spam a second version.
+        t.store.save_with_history(&layout).unwrap();
+        assert_eq!(t.store.list_versions(&active).unwrap().len(), 1);
+
+        // A changed save adds a version.
+        layout.meta.name = "V2".into();
+        t.store.save_with_history(&layout).unwrap();
+        assert_eq!(t.store.list_versions(&active).unwrap().len(), 2);
+    }
+
+    #[test]
+    fn list_versions_is_newest_first_and_ids_are_unique() {
+        let t = TempStore::new("history-order");
+        let active = t.store.active_layout_id().unwrap();
+
+        // Three explicit snapshots in quick succession (same content, so this
+        // also exercises unique-id disambiguation within a millisecond).
+        let a = t.store.snapshot(&active, VersionReason::Manual, Some("a".into())).unwrap();
+        let b = t.store.snapshot(&active, VersionReason::PreReseed, None).unwrap();
+        let c = t.store.snapshot(&active, VersionReason::Manual, Some("c".into())).unwrap();
+        assert_ne!(a.version_id, b.version_id);
+        assert_ne!(b.version_id, c.version_id);
+
+        let list = t.store.list_versions(&active).unwrap();
+        assert_eq!(
+            list.iter().map(|v| v.version_id.clone()).collect::<Vec<_>>(),
+            vec![c.version_id, b.version_id, a.version_id],
+            "newest first"
+        );
+        assert_eq!(list[1].reason, VersionReason::PreReseed);
+        assert_eq!(list[0].label.as_deref(), Some("c"));
+    }
+
+    #[test]
+    fn snapshot_active_pre_reseed_captures_current() {
+        let t = TempStore::new("history-prereseed");
+        let active = t.store.active_layout_id().unwrap();
+
+        let mut layout = t.store.load().unwrap();
+        layout.meta.name = "Before reseed".into();
+        t.store.save(&layout).unwrap(); // plain save: no snapshot
+
+        assert!(t.store.list_versions(&active).unwrap().is_empty());
+        t.store.snapshot_active_pre_reseed().unwrap();
+
+        let list = t.store.list_versions(&active).unwrap();
+        assert_eq!(list.len(), 1);
+        assert_eq!(list[0].reason, VersionReason::PreReseed);
+    }
+
+    #[test]
+    fn restore_snapshots_current_first_and_is_undoable() {
+        let t = TempStore::new("history-restore");
+        let active = t.store.active_layout_id().unwrap();
+
+        let mut layout = t.store.load().unwrap();
+        layout.meta.name = "V1".into();
+        t.store.save_with_history(&layout).unwrap();
+        let v1_id = t.store.list_versions(&active).unwrap()[0].version_id.clone();
+
+        layout.meta.name = "V2".into();
+        t.store.save_with_history(&layout).unwrap();
+        assert_eq!(t.store.load().unwrap().meta.name, "V2");
+
+        // Restore V1: current (V2) is snapshotted preRestore, current -> V1.
+        let restored = t.store.restore_version(&active, &v1_id).unwrap();
+        assert_eq!(restored.meta.name, "V1");
+        assert_eq!(t.store.load().unwrap().meta.name, "V1");
+
+        let list = t.store.list_versions(&active).unwrap();
+        assert_eq!(list[0].reason, VersionReason::PreRestore, "newest is the undo point");
+
+        // Restoring that preRestore snapshot brings V2 back — revert is undoable.
+        let pre_restore_id = list[0].version_id.clone();
+        let back = t.store.restore_version(&active, &pre_restore_id).unwrap();
+        assert_eq!(back.meta.name, "V2");
+        assert_eq!(t.store.load().unwrap().meta.name, "V2");
+    }
+
+    #[test]
+    fn restore_unknown_version_is_an_error() {
+        let t = TempStore::new("history-badrestore");
+        let active = t.store.active_layout_id().unwrap();
+        assert_eq!(
+            t.store.restore_version(&active, "nope").unwrap_err().code(),
+            "InvalidLayout"
+        );
     }
 }
