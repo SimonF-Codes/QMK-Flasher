@@ -7,6 +7,10 @@ interface KeyProps {
   geo: GeometryKey;
   action: KeyAction;
   selected: boolean;
+  /** This key is the anchor of an in-progress "swap with…". */
+  swapSource?: boolean;
+  /** A swap is in progress (this key is a candidate target). */
+  swapTargeting?: boolean;
   mode: DisplayMode;
   layerNames: readonly string[];
   onSelect(): void;
@@ -21,6 +25,8 @@ export default function Key({
   geo,
   action,
   selected,
+  swapSource = false,
+  swapTargeting = false,
   mode,
   layerNames,
   onSelect,
@@ -29,6 +35,15 @@ export default function Key({
   const { tap, hold } = keycapLabels(action, mode, layerNames);
   const b = badge(action);
   const transparent = action.kind === "transparent" || action.kind === "none";
+
+  // Swap mode: the anchor gets an amber ring; other keys glow as targets.
+  const rectClass = swapSource
+    ? "fill-amber-900 stroke-amber-400"
+    : swapTargeting
+      ? "fill-zinc-800 stroke-amber-500/60 hover:fill-amber-900/40"
+      : selected
+        ? "fill-sky-900 stroke-sky-400"
+        : "fill-zinc-800 stroke-zinc-700 hover:fill-zinc-700";
 
   return (
     <g
@@ -43,12 +58,8 @@ export default function Key({
         width={r.w}
         height={r.h}
         rx={6}
-        className={
-          selected
-            ? "fill-sky-900 stroke-sky-400"
-            : "fill-zinc-800 stroke-zinc-700 hover:fill-zinc-700"
-        }
-        strokeWidth={selected ? 2 : 1}
+        className={rectClass}
+        strokeWidth={selected || swapSource ? 2 : 1}
       />
       {action.glow && (
         <rect

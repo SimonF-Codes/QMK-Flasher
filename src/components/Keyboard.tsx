@@ -9,13 +9,28 @@ export default function Keyboard() {
   const layout = useLayoutStore((s) => s.layout);
   const selectedLayer = useLayoutStore((s) => s.selectedLayer);
   const selectedKey = useLayoutStore((s) => s.selectedKey);
+  const swapSource = useLayoutStore((s) => s.swapSource);
   const selectKey = useLayoutStore((s) => s.selectKey);
+  const swapKeys = useLayoutStore((s) => s.swapKeys);
+  const cancelSwap = useLayoutStore((s) => s.cancelSwap);
   const mode = useDisplayStore((s) => s.mode);
 
   const layer = layout?.layers[selectedLayer];
   if (!layer) return null;
 
   const layerNames = layout!.layers.map((l) => l.title);
+  const swapping = swapSource !== null;
+
+  // In swap mode a click picks the target (or cancels if it's the anchor);
+  // otherwise it toggles the selection as usual.
+  const onKey = (i: number) => {
+    if (swapping) {
+      if (i === swapSource) cancelSwap();
+      else swapKeys(swapSource, i);
+      return;
+    }
+    selectKey(selectedKey === i ? null : i);
+  };
 
   return (
     <svg
@@ -30,9 +45,11 @@ export default function Keyboard() {
           geo={geo}
           action={layer.keys[i]}
           selected={selectedKey === i}
+          swapSource={swapping && swapSource === i}
+          swapTargeting={swapping && swapSource !== i}
           mode={mode}
           layerNames={layerNames}
-          onSelect={() => selectKey(selectedKey === i ? null : i)}
+          onSelect={() => onKey(i)}
         />
       ))}
     </svg>

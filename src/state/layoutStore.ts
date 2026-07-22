@@ -4,6 +4,11 @@
  */
 import { create } from "zustand";
 import { ipc, toAppError } from "../lib/ipc";
+import {
+  swapKeysInLayer,
+  swapLayers as swapLayersInLayout,
+  transposeIndex,
+} from "../lib/layers";
 import type {
   AppError,
   KeyAction,
@@ -46,6 +51,11 @@ interface LayoutState {
   activeId: string | null;
   selectedLayer: number;
   selectedKey: number | null;
+  /**
+   * When set, the UI is in "swap with…" mode: the next key clicked on the
+   * keyboard is swapped with this position (within the selected layer).
+   */
+  swapSource: number | null;
   loading: boolean;
   saving: boolean;
   error: AppError | null;
@@ -69,6 +79,21 @@ interface LayoutState {
   selectKey(index: number | null): void;
   setKeyAction(action: KeyAction): void;
   renameLayer(index: number, title: string): void;
+  /** Enter "swap with…" mode, anchored on the given key in the selected layer. */
+  beginSwap(source: number): void;
+  /** Leave "swap with…" mode without swapping. */
+  cancelSwap(): void;
+  /**
+   * Swap two keys within the selected layer and mark dirty. Leaves swap mode
+   * and moves the selection to the target position. No-op if a === b.
+   */
+  swapKeys(a: number, b: number): void;
+  /**
+   * Swap two whole layers, remapping every layer-index reference (MO/LT/TG/TO/
+   * TT + combos) so behavior is preserved. Marks dirty and keeps the currently
+   * viewed layer's content selected.
+   */
+  swapLayers(a: number, b: number): void;
   isDirty(): boolean;
 }
 
@@ -79,6 +104,7 @@ export const useLayoutStore = create<LayoutState>()((set, get) => ({
   activeId: null,
   selectedLayer: 0,
   selectedKey: null,
+  swapSource: null,
   loading: false,
   saving: false,
   error: null,
@@ -97,6 +123,7 @@ export const useLayoutStore = create<LayoutState>()((set, get) => ({
         savedJson: JSON.stringify(layout),
         selectedLayer: 0,
         selectedKey: null,
+        swapSource: null,
         loading: false,
       });
     } catch (e) {
@@ -140,6 +167,7 @@ export const useLayoutStore = create<LayoutState>()((set, get) => ({
         savedJson: JSON.stringify(layout),
         selectedLayer: 0,
         selectedKey: null,
+        swapSource: null,
       });
       return true;
     } catch (e) {
@@ -229,6 +257,7 @@ export const useLayoutStore = create<LayoutState>()((set, get) => ({
         savedJson: JSON.stringify(seeded),
         selectedLayer: 0,
         selectedKey: null,
+        swapSource: null,
         loading: false,
       });
       await get().refreshLayouts();
@@ -238,7 +267,7 @@ export const useLayoutStore = create<LayoutState>()((set, get) => ({
   },
 
   selectLayer(index) {
-    set({ selectedLayer: index, selectedKey: null });
+    set({ selectedLayer: index, selectedKey: null, swapSource: null });
   },
 
   selectKey(index) {
@@ -274,6 +303,44 @@ export const useLayoutStore = create<LayoutState>()((set, get) => ({
       li === index ? { ...layer, title } : layer,
     );
     set({ layout: { ...layout, layers } });
+  },
+
+  beginSwap(source) {
+    set({ swapSource: source, selectedKey: source });
+  },
+
+  cancelSwap() {
+    set({ swapSource: null });
+  },
+
+  swapKeys(a, b) {
+    const { layout, selectedLayer } = get();
+    if (!layout || a === b) {
+      set({ swapSource: null });
+      return;
+    }
+    const next = swapKeysInLayer(layout, selectedLayer, a, b);
+    // Swapping within one layer never changes the multiset of key kinds, so
+    // settings.tapDance is unaffected — no need to recompute it here.
+    set({ layout: next, swapSource: null, selectedKey: b });
+  },
+
+  swapLayers(a, b) {
+    const { layout, selectedLayer } = get();
+    if (!layout || a === b) return;
+    if (a < 0 || b < 0 || a >= layout.layers.length || b >= layout.layers.length) {
+      return;
+    }
+    const next = swapLayersInLayout(layout, a, b);
+    // Keep the currently viewed layer's content in view: its slot moved via the
+    // same a↔b transposition used to remap references.
+    const selectedLayerNext = transposeIndex(a, b)(selectedLayer);
+    set({
+      layout: next,
+      selectedLayer: selectedLayerNext,
+      selectedKey: null,
+      swapSource: null,
+    });
   },
 
   isDirty() {

@@ -118,6 +118,149 @@ describe("layoutStore (mock IPC)", () => {
   });
 });
 
+describe("layoutStore swap keys (mock IPC)", () => {
+  beforeEach(async () => {
+    resetMockStore();
+    useLayoutStore.setState({
+      layout: null,
+      savedJson: null,
+      layouts: [],
+      activeId: null,
+      selectedLayer: 0,
+      selectedKey: null,
+      swapSource: null,
+      error: null,
+    });
+    await useLayoutStore.getState().load();
+  });
+
+  it("beginSwap enters swap mode anchored on a key; cancel leaves it", () => {
+    const s = useLayoutStore.getState();
+    s.beginSwap(4);
+    expect(useLayoutStore.getState().swapSource).toBe(4);
+    expect(useLayoutStore.getState().selectedKey).toBe(4);
+    useLayoutStore.getState().cancelSwap();
+    expect(useLayoutStore.getState().swapSource).toBeNull();
+  });
+
+  it("swapKeys exchanges two keys on the selected layer, dirties, and selects the target", () => {
+    const s = useLayoutStore.getState();
+    const before = s.layout!.layers[0].keys;
+    const k0 = before[0];
+    const k3 = before[3];
+    expect(k0).not.toEqual(k3);
+
+    s.beginSwap(0);
+    useLayoutStore.getState().swapKeys(0, 3);
+
+    const after = useLayoutStore.getState();
+    expect(after.layout!.layers[0].keys[0]).toEqual(k3);
+    expect(after.layout!.layers[0].keys[3]).toEqual(k0);
+    expect(after.swapSource).toBeNull();
+    expect(after.selectedKey).toBe(3);
+    expect(after.isDirty()).toBe(true);
+    // A different layer is untouched.
+    expect(after.layout!.layers[1].keys[0]).toEqual(s.layout!.layers[1].keys[0]);
+  });
+
+  it("swapKeys onto the same position is a no-op that just leaves swap mode", () => {
+    const s = useLayoutStore.getState();
+    s.beginSwap(2);
+    useLayoutStore.getState().swapKeys(2, 2);
+    const after = useLayoutStore.getState();
+    expect(after.swapSource).toBeNull();
+    expect(after.isDirty()).toBe(false);
+  });
+
+  it("changing layer clears an in-progress swap", () => {
+    const s = useLayoutStore.getState();
+    s.beginSwap(0);
+    s.selectLayer(1);
+    expect(useLayoutStore.getState().swapSource).toBeNull();
+  });
+
+  it("swapped keys round-trip through save/load", async () => {
+    const s = useLayoutStore.getState();
+    const k0 = s.layout!.layers[0].keys[0];
+    const k5 = s.layout!.layers[0].keys[5];
+    s.swapKeys(0, 5);
+    await useLayoutStore.getState().save();
+    await useLayoutStore.getState().load();
+    const after = useLayoutStore.getState();
+    expect(after.layout!.layers[0].keys[0]).toEqual(k5);
+    expect(after.layout!.layers[0].keys[5]).toEqual(k0);
+  });
+});
+
+describe("layoutStore swap layers (mock IPC)", () => {
+  beforeEach(async () => {
+    resetMockStore();
+    useLayoutStore.setState({
+      layout: null,
+      savedJson: null,
+      layouts: [],
+      activeId: null,
+      selectedLayer: 0,
+      selectedKey: null,
+      swapSource: null,
+      error: null,
+    });
+    await useLayoutStore.getState().load();
+  });
+
+  it("swaps layer content, remaps combo references, and dirties", () => {
+    const s = useLayoutStore.getState();
+    // Fixture combos fire TG(5); swapping 2<->5 must retarget them to 2.
+    expect(
+      s.layout!.combos.every(
+        (c) => (c.action as { layer?: number }).layer === 5,
+      ),
+    ).toBe(true);
+    const l2Title = s.layout!.layers[2].title;
+    const l5Title = s.layout!.layers[5].title;
+
+    s.swapLayers(2, 5);
+
+    const after = useLayoutStore.getState();
+    expect(after.layout!.layers[2].title).toBe(l5Title);
+    expect(after.layout!.layers[5].title).toBe(l2Title);
+    expect(
+      after.layout!.combos.every(
+        (c) => (c.action as { layer?: number }).layer === 2,
+      ),
+    ).toBe(true);
+    expect(after.isDirty()).toBe(true);
+  });
+
+  it("keeps the currently viewed layer's content selected across the swap", () => {
+    const s = useLayoutStore.getState();
+    s.selectLayer(5);
+    useLayoutStore.getState().swapLayers(1, 5);
+    // The content that was at layer 5 rode to index 1; selection follows.
+    expect(useLayoutStore.getState().selectedLayer).toBe(1);
+    expect(useLayoutStore.getState().selectedKey).toBeNull();
+  });
+
+  it("is a no-op when swapping a layer with itself", () => {
+    const s = useLayoutStore.getState();
+    s.swapLayers(3, 3);
+    expect(useLayoutStore.getState().isDirty()).toBe(false);
+  });
+
+  it("swapped layers persist through save/load", async () => {
+    const s = useLayoutStore.getState();
+    const t1 = s.layout!.layers[1].title;
+    const t4 = s.layout!.layers[4].title;
+    s.swapLayers(1, 4);
+    await useLayoutStore.getState().save();
+    await useLayoutStore.getState().load();
+    const reloaded = useLayoutStore.getState().layout!;
+    expect(reloaded.layers[1].title).toBe(t4);
+    expect(reloaded.layers[4].title).toBe(t1);
+    expect(useLayoutStore.getState().isDirty()).toBe(false);
+  });
+});
+
 describe("layoutStore multi-layout (mock IPC)", () => {
   beforeEach(async () => {
     resetMockStore();
