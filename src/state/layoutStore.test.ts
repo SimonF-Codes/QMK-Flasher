@@ -261,6 +261,82 @@ describe("layoutStore swap layers (mock IPC)", () => {
   });
 });
 
+describe("layoutStore version history (mock IPC)", () => {
+  beforeEach(async () => {
+    resetMockStore();
+    useLayoutStore.setState({
+      layout: null,
+      savedJson: null,
+      layouts: [],
+      activeId: null,
+      versions: [],
+      selectedLayer: 0,
+      selectedKey: null,
+      swapSource: null,
+      error: null,
+    });
+    await useLayoutStore.getState().load();
+  });
+
+  it("starts with no versions", () => {
+    expect(useLayoutStore.getState().versions).toEqual([]);
+  });
+
+  it("saving records a 'save' version in the store", async () => {
+    const s = useLayoutStore.getState();
+    s.selectKey(0);
+    s.setKeyAction({ kind: "basic", code: "KC_F13" });
+    await useLayoutStore.getState().save();
+    const versions = useLayoutStore.getState().versions;
+    expect(versions.length).toBeGreaterThanOrEqual(1);
+    expect(versions[0].reason).toBe("save");
+  });
+
+  it("snapshotNow adds a manual version with a label", async () => {
+    await useLayoutStore.getState().snapshotNow("checkpoint");
+    const versions = useLayoutStore.getState().versions;
+    expect(versions).toHaveLength(1);
+    expect(versions[0]).toMatchObject({ reason: "manual", label: "checkpoint" });
+  });
+
+  it("restoreVersion restores content, clears dirty, and backs up the current first", async () => {
+    const s = useLayoutStore.getState();
+    const originalKey0 = s.layout!.layers[0].keys[0];
+
+    // Snapshot the pristine layout, then edit + save so current differs.
+    await useLayoutStore.getState().snapshotNow("pristine");
+    const pristine = useLayoutStore
+      .getState()
+      .versions.find((v) => v.label === "pristine")!;
+    s.selectKey(0);
+    s.setKeyAction({ kind: "basic", code: "KC_F13" });
+    await useLayoutStore.getState().save();
+    expect(useLayoutStore.getState().layout!.layers[0].keys[0]).toEqual({
+      kind: "basic",
+      code: "KC_F13",
+    });
+
+    // Revert to the pristine snapshot.
+    await useLayoutStore.getState().restoreVersion(pristine.versionId);
+    const after = useLayoutStore.getState();
+    expect(after.error).toBeNull();
+    expect(after.layout!.layers[0].keys[0]).toEqual(originalKey0);
+    expect(after.isDirty()).toBe(false); // restored == the new saved state
+    expect(after.selectedKey).toBeNull();
+    // The pre-restore backup is now in the list, so the revert is undoable.
+    expect(after.versions.some((v) => v.reason === "preRestore")).toBe(true);
+  });
+
+  it("re-seeding records a preReseed backup", async () => {
+    const s = useLayoutStore.getState();
+    expect(s.layout?.meta.seededFrom.layoutId).toBe("rddD7");
+    await useLayoutStore.getState().seedActiveFromOryx();
+    expect(
+      useLayoutStore.getState().versions.some((v) => v.reason === "preReseed"),
+    ).toBe(true);
+  });
+});
+
 describe("layoutStore multi-layout (mock IPC)", () => {
   beforeEach(async () => {
     resetMockStore();

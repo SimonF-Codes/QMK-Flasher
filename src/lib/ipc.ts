@@ -24,6 +24,7 @@ import {
   KeyboardInfoSchema,
   LayoutFileSchema,
   LayoutSummarySchema,
+  LayoutVersionSummarySchema,
   PipelineStateSchema,
   type AppConfig,
   type AppError,
@@ -35,8 +36,10 @@ import {
   type KeyboardInfo,
   type LayoutFile,
   type LayoutSummary,
+  type LayoutVersionSummary,
   type PipelinePhase,
   type PipelineState,
+  type VersionReason,
 } from "./types";
 
 export const MOCK: boolean = import.meta.env.VITE_MOCK === "1";
@@ -54,6 +57,14 @@ export interface Ipc {
   duplicateLayout(id: string, newName: string): Promise<LayoutSummary>;
   renameLayout(id: string, name: string): Promise<LayoutSummary>;
   deleteLayout(id: string): Promise<void>;
+  // Version history (per layout id).
+  listLayoutVersions(layoutId: string): Promise<LayoutVersionSummary[]>;
+  restoreLayoutVersion(layoutId: string, versionId: string): Promise<LayoutFile>;
+  snapshotLayout(
+    layoutId: string,
+    reason: VersionReason,
+    label?: string,
+  ): Promise<LayoutVersionSummary>;
   listKeyboards(): Promise<KeyboardInfo[]>;
   getKeyboardGeometry(keyboardId: string): Promise<GeometryFile>;
   getGeometry(): Promise<GeometryFile>;
@@ -122,6 +133,18 @@ const realIpc: Ipc = {
       LayoutSummarySchema.parse(r),
     ),
   deleteLayout: (id) => invoke("delete_layout", { id }),
+  listLayoutVersions: (layoutId) =>
+    invoke("list_layout_versions", { layoutId }).then((r) =>
+      z.array(LayoutVersionSummarySchema).parse(r),
+    ),
+  restoreLayoutVersion: (layoutId, versionId) =>
+    invoke("restore_layout_version", { layoutId, versionId }).then((r) =>
+      LayoutFileSchema.parse(r),
+    ),
+  snapshotLayout: (layoutId, reason, label) =>
+    invoke("snapshot_layout", { layoutId, reason, label }).then((r) =>
+      LayoutVersionSummarySchema.parse(r),
+    ),
   listKeyboards: () =>
     invoke("list_keyboards").then((r) => z.array(KeyboardInfoSchema).parse(r)),
   getKeyboardGeometry: (keyboardId) =>
@@ -255,9 +278,18 @@ function mockBlankLayout(name: string, kb: KeyboardInfo): LayoutFile {
  * seeded from the fixture as the default active layout, matching the real
  * store's `DEFAULT_LAYOUT_ID` ("arrows-together").
  */
+interface MockVersion {
+  versionId: string;
+  createdAt: string;
+  reason: VersionReason;
+  label?: string;
+  layout: LayoutFile;
+}
 interface MockStore {
   layouts: Map<string, LayoutFile>;
   activeId: string;
+  /** Per-layout version history, oldest first (sorted on read). */
+  versions: Map<string, MockVersion[]>;
 }
 let mock: MockStore | null = null;
 
@@ -265,9 +297,58 @@ function mockStore(): MockStore {
   if (!mock) {
     const fixture = mockLoad();
     const id = slug(fixture.meta.name); // "arrows-together"
-    mock = { layouts: new Map([[id, fixture]]), activeId: id };
+    mock = {
+      layouts: new Map([[id, fixture]]),
+      activeId: id,
+      versions: new Map(),
+    };
   }
   return mock;
+}
+
+/** Sortable version id `YYYYMMDD-HHMMSS-mmm`, `-N` on same-ms collision. */
+function mockVersionId(existing: MockVersion[]): string {
+  const d = new Date();
+  const p = (n: number, w = 2) => String(n).padStart(w, "0");
+  const base =
+    `${d.getFullYear()}${p(d.getMonth() + 1)}${p(d.getDate())}` +
+    `-${p(d.getHours())}${p(d.getMinutes())}${p(d.getSeconds())}` +
+    `-${p(d.getMilliseconds(), 3)}`;
+  if (!existing.some((v) => v.versionId === base)) return base;
+  for (let n = 2; ; n++) {
+    const cand = `${base}-${n}`;
+    if (!existing.some((v) => v.versionId === cand)) return cand;
+  }
+}
+
+/** Append a version snapshot of `layout` under `id` and return it. */
+function mockPushVersion(
+  store: MockStore,
+  id: string,
+  reason: VersionReason,
+  label: string | undefined,
+  layout: LayoutFile,
+): MockVersion {
+  const arr = store.versions.get(id) ?? [];
+  const v: MockVersion = {
+    versionId: mockVersionId(arr),
+    createdAt: new Date().toISOString(),
+    reason,
+    ...(label ? { label } : {}),
+    layout: structuredClone(layout),
+  };
+  arr.push(v);
+  store.versions.set(id, arr);
+  return v;
+}
+
+function mockVersionSummary(v: MockVersion): LayoutVersionSummary {
+  return {
+    versionId: v.versionId,
+    createdAt: v.createdAt,
+    reason: v.reason,
+    ...(v.label ? { label: v.label } : {}),
+  };
 }
 
 /** A fresh unique id from a name — mirrors `store::new_id` (Rust). */
@@ -390,11 +471,21 @@ const mockIpc: Ipc = {
     console.log("[mock] save_layout", layout.meta.name);
     const s = mockStore();
     s.layouts.set(s.activeId, structuredClone(layout));
+    // Auto-snapshot reason "save", deduped against the newest version.
+    const arr = s.versions.get(s.activeId) ?? [];
+    const newest = arr[arr.length - 1];
+    if (!newest || JSON.stringify(newest.layout) !== JSON.stringify(layout)) {
+      mockPushVersion(s, s.activeId, "save", undefined, layout);
+    }
   },
   seedFromOryx: async (layoutId) => {
     console.log("[mock] seed_from_oryx", layoutId);
-    // Re-seeds the ACTIVE layout, per the baseline semantics.
+    // Re-seeds the ACTIVE layout, per the baseline semantics. Snapshot the
+    // current layout reason "preReseed" before the overwrite (matches the
+    // backend, which snapshots only after fetch/cross-check succeed).
     const s = mockStore();
+    const current = s.layouts.get(s.activeId);
+    if (current) mockPushVersion(s, s.activeId, "preReseed", undefined, current);
     const fixture = mockLoad();
     s.layouts.set(s.activeId, fixture);
     return structuredClone(fixture);
@@ -447,6 +538,47 @@ const mockIpc: Ipc = {
     }
     if (!s.layouts.has(id)) throw invalidLayout(`no layout with id ${JSON.stringify(id)}`);
     s.layouts.delete(id);
+  },
+  listLayoutVersions: async (layoutId) => {
+    const s = mockStore();
+    const arr = s.versions.get(layoutId) ?? [];
+    // Newest first (descending version id).
+    return [...arr]
+      .sort((a, b) =>
+        a.versionId < b.versionId ? 1 : a.versionId > b.versionId ? -1 : 0,
+      )
+      .map(mockVersionSummary);
+  },
+  restoreLayoutVersion: async (layoutId, versionId) => {
+    console.log("[mock] restore_layout_version", layoutId, versionId);
+    const s = mockStore();
+    const arr = s.versions.get(layoutId) ?? [];
+    const target = arr.find((v) => v.versionId === versionId);
+    if (!target) {
+      throw invalidLayout(
+        `no version ${JSON.stringify(versionId)} for layout ${JSON.stringify(layoutId)}`,
+      );
+    }
+    // Snapshot the current reason "preRestore" first so a revert is undoable.
+    const current = s.layouts.get(layoutId);
+    if (current) mockPushVersion(s, layoutId, "preRestore", undefined, current);
+    const restored = structuredClone(target.layout);
+    s.layouts.set(layoutId, restored);
+    return structuredClone(restored);
+  },
+  snapshotLayout: async (layoutId, reason, label) => {
+    console.log("[mock] snapshot_layout", layoutId, reason, label);
+    const s = mockStore();
+    if (reason !== "manual") {
+      throw invalidLayout(
+        `snapshot_layout reason must be "manual", got ${JSON.stringify(reason)}`,
+      );
+    }
+    const current = s.layouts.get(layoutId);
+    if (!current) throw invalidLayout(`no layout with id ${JSON.stringify(layoutId)}`);
+    return mockVersionSummary(
+      mockPushVersion(s, layoutId, "manual", label, current),
+    );
   },
   listKeyboards: async () => mockKeyboards.map((k) => ({ ...k })),
   getKeyboardGeometry: async (keyboardId) => {

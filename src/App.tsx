@@ -5,6 +5,7 @@ import Keyboard from "./components/Keyboard";
 import KeyPicker from "./components/KeyPicker";
 import LayerTabs from "./components/LayerTabs";
 import LayoutMenu from "./components/LayoutMenu";
+import VersionHistoryPanel from "./components/VersionHistoryPanel";
 import { MOCK } from "./lib/ipc";
 import { useLayoutStore } from "./state/layoutStore";
 
@@ -58,6 +59,7 @@ export default function App() {
           </span>
         )}
         <div className="ml-auto flex items-center gap-2">
+          <VersionHistoryPanel />
           <DisplayModeToggle />
           {dirty && (
             <span className="text-xs text-amber-400" title="Unsaved changes">

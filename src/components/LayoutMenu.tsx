@@ -286,40 +286,53 @@ export default function LayoutMenu() {
               >
                 + New layout…
               </MenuAction>
-              {confirmSeed ? (
-                <div className="px-3 py-1.5 text-xs text-zinc-400">
-                  Re-seed <span className="font-medium">{layout.meta.name}</span>{" "}
-                  from Oryx? This overwrites its keys.
-                  <div className="mt-1 flex gap-1">
-                    <button
-                      onClick={() => void doSeed()}
-                      className="rounded bg-amber-800 px-1.5 py-0.5 text-amber-100 hover:bg-amber-700"
-                    >
-                      Re-seed
-                    </button>
-                    <button
-                      onClick={() => setConfirmSeed(false)}
-                      className="rounded bg-zinc-700 px-1.5 py-0.5 text-zinc-200 hover:bg-zinc-600"
-                    >
-                      Cancel
-                    </button>
-                  </div>
-                </div>
-              ) : (
-                <MenuAction
-                  onClick={() => setConfirmSeed(true)}
-                  disabled={!canSeed}
-                  title={
-                    canSeed
-                      ? `Re-seed from Oryx ${oryxSource}`
-                      : "This layout wasn't seeded from Oryx"
-                  }
-                >
-                  ↻ Seed active from Oryx…
-                </MenuAction>
-              )}
+              <MenuAction
+                onClick={() => setConfirmSeed(true)}
+                disabled={!canSeed}
+                title={
+                  canSeed
+                    ? `Re-seed from Oryx ${oryxSource}`
+                    : "This layout wasn't seeded from Oryx"
+                }
+              >
+                ↻ Seed active from Oryx…
+              </MenuAction>
             </>
           )}
+        </div>
+      )}
+
+      {confirmSeed && (
+        <div className="fixed inset-0 z-30 flex items-center justify-center bg-black/50">
+          <div className="w-96 rounded-lg border border-amber-700/60 bg-zinc-900 p-4 shadow-2xl">
+            <h2 className="text-sm font-semibold text-amber-300">
+              Re-seed “{layout.meta.name}” from Oryx?
+            </h2>
+            <p className="mt-2 text-sm text-zinc-300">
+              This replaces the whole layout with the current Oryx version.
+              Any changes to this layout may be overwritten.
+            </p>
+            <p className="mt-2 text-xs text-zinc-400">
+              A backup version is saved first, so you can revert from{" "}
+              <span className="font-medium text-zinc-300">History</span>{" "}
+              afterward.
+            </p>
+            <div className="mt-4 flex justify-end gap-2">
+              <button
+                autoFocus
+                onClick={() => setConfirmSeed(false)}
+                className="rounded bg-sky-700 px-3 py-1.5 text-sm text-sky-50 hover:bg-sky-600"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => void doSeed()}
+                className="rounded bg-amber-800 px-3 py-1.5 text-sm text-amber-100 hover:bg-amber-700"
+              >
+                Re-seed
+              </button>
+            </div>
+          </div>
         </div>
       )}
 

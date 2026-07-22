@@ -15,6 +15,7 @@ import type {
   Layer,
   LayoutFile,
   LayoutSummary,
+  LayoutVersionSummary,
 } from "../lib/types";
 
 /** True iff any key across all layers is a tap-dance action. */
@@ -49,6 +50,8 @@ interface LayoutState {
   layouts: LayoutSummary[];
   /** Id of the active layout (the one `layout` holds). */
   activeId: string | null;
+  /** Version history for the active layout (newest first). */
+  versions: LayoutVersionSummary[];
   selectedLayer: number;
   selectedKey: number | null;
   /**
@@ -63,6 +66,12 @@ interface LayoutState {
   load(): Promise<void>;
   save(): Promise<void>;
   refreshLayouts(): Promise<void>;
+  /** Reload the active layout's version history into `versions`. */
+  refreshVersions(): Promise<void>;
+  /** Restore a prior version (backend snapshots the current first). */
+  restoreVersion(versionId: string): Promise<void>;
+  /** Take an explicit manual snapshot of the active layout. */
+  snapshotNow(label?: string): Promise<void>;
   /**
    * Switch the active layout. Returns false without switching if the current
    * layout has unsaved edits and no `resolution` is given (the caller should
@@ -102,6 +111,7 @@ export const useLayoutStore = create<LayoutState>()((set, get) => ({
   savedJson: null,
   layouts: [],
   activeId: null,
+  versions: [],
   selectedLayer: 0,
   selectedKey: null,
   swapSource: null,
@@ -126,6 +136,7 @@ export const useLayoutStore = create<LayoutState>()((set, get) => ({
         swapSource: null,
         loading: false,
       });
+      await get().refreshVersions();
     } catch (e) {
       set({ error: toAppError(e), loading: false });
     }
@@ -139,6 +150,7 @@ export const useLayoutStore = create<LayoutState>()((set, get) => ({
       await ipc.saveLayout(layout);
       set({ savedJson: JSON.stringify(layout), saving: false });
       await get().refreshLayouts(); // modifiedAt / name may have moved
+      await get().refreshVersions(); // save auto-snapshots a version
     } catch (e) {
       set({ error: toAppError(e), saving: false });
     }
@@ -147,6 +159,51 @@ export const useLayoutStore = create<LayoutState>()((set, get) => ({
   async refreshLayouts() {
     try {
       set({ layouts: await ipc.listLayouts() });
+    } catch (e) {
+      set({ error: toAppError(e) });
+    }
+  },
+
+  async refreshVersions() {
+    const id = get().activeId;
+    if (!id) {
+      set({ versions: [] });
+      return;
+    }
+    try {
+      set({ versions: await ipc.listLayoutVersions(id) });
+    } catch (e) {
+      set({ error: toAppError(e) });
+    }
+  },
+
+  async restoreVersion(versionId) {
+    const id = get().activeId;
+    if (!id) return;
+    set({ error: null, loading: true });
+    try {
+      const layout = await ipc.restoreLayoutVersion(id, versionId);
+      set({
+        layout,
+        savedJson: JSON.stringify(layout), // restored == the new saved state
+        selectedLayer: 0,
+        selectedKey: null,
+        swapSource: null,
+        loading: false,
+      });
+      await get().refreshVersions(); // the pre-restore backup is now listed
+    } catch (e) {
+      set({ error: toAppError(e), loading: false });
+    }
+  },
+
+  async snapshotNow(label) {
+    const id = get().activeId;
+    if (!id) return;
+    set({ error: null });
+    try {
+      await ipc.snapshotLayout(id, "manual", label);
+      await get().refreshVersions();
     } catch (e) {
       set({ error: toAppError(e) });
     }
@@ -168,7 +225,9 @@ export const useLayoutStore = create<LayoutState>()((set, get) => ({
         selectedLayer: 0,
         selectedKey: null,
         swapSource: null,
+        versions: [],
       });
+      await get().refreshVersions();
       return true;
     } catch (e) {
       set({ error: toAppError(e) });
@@ -261,6 +320,7 @@ export const useLayoutStore = create<LayoutState>()((set, get) => ({
         loading: false,
       });
       await get().refreshLayouts();
+      await get().refreshVersions(); // reseed auto-snapshots a preReseed backup
     } catch (e) {
       set({ error: toAppError(e), loading: false });
     }
