@@ -301,6 +301,24 @@ mod tests {
         assert_eq!(err.code(), "CodegenUnsupportedKey");
     }
 
+    /// The OS-mode keys are plain `special` actions: they must pass catalog
+    /// validation and reach keymap.c verbatim, with no rules.mk change —
+    /// MAGIC_ENABLE defaults to yes (qmk builddefs/generic_features.mk:17).
+    #[test]
+    fn generate_emits_os_mode_keycodes() {
+        for code in ["CG_TOGG", "CG_SWAP", "CG_NORM"] {
+            let mut layout = fixture();
+            layout.layers[0].keys[0] =
+                KeyAction::Special { code: code.into(), glow: None };
+            let out = generate(&layout).expect("OS-mode keycode must generate");
+            assert!(out.keymap_c.contains(code), "{code} missing from keymap.c");
+            assert!(
+                !out.rules_mk.contains("MAGIC_ENABLE"),
+                "{code} should not need a MAGIC_ENABLE line"
+            );
+        }
+    }
+
     #[test]
     fn keymap_dir_strips_the_versioned_leaf() {
         let cfg = crate::appcfg::get();

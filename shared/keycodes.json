@@ -2217,5 +2217,38 @@
     "category": "rgb",
     "tappable": false,
     "modsApplicable": false
+  },
+  {
+    "qmk": "CG_NORM",
+    "aliases": [
+      "MAGIC_UNSWAP_CTL_GUI"
+    ],
+    "label": "Win",
+    "longLabel": "Windows mode (Ctrl/Cmd as authored)",
+    "category": "osmode",
+    "tappable": false,
+    "modsApplicable": false
+  },
+  {
+    "qmk": "CG_TOGG",
+    "aliases": [
+      "MAGIC_TOGGLE_CTL_GUI"
+    ],
+    "label": "OS ⇄",
+    "longLabel": "Toggle Mac/Windows (swap Ctrl↔Cmd)",
+    "category": "osmode",
+    "tappable": false,
+    "modsApplicable": false
+  },
+  {
+    "qmk": "CG_SWAP",
+    "aliases": [
+      "MAGIC_SWAP_CTL_GUI"
+    ],
+    "label": "Mac",
+    "longLabel": "Mac mode (Ctrl↔Cmd swapped)",
+    "category": "osmode",
+    "tappable": false,
+    "modsApplicable": false
   }
 ]

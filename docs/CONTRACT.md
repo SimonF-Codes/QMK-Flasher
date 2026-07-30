@@ -90,6 +90,28 @@ mirrors in `types.ts`.
 argument order**; the seeder applies the Oryx→LAYOUT permutation exactly once
 at seed time (full table in the plan's Discovery findings).
 
+### OS mode / Ctrl↔Cmd swap (added 2026-07-30, additive)
+
+**No schema or command changes** — the feature is three catalog entries plus
+frontend logic. `CG_NORM` / `CG_TOGG` / `CG_SWAP` (category `osmode` in
+`keycodes.json`) are ordinary `special` KeyActions; codegen emits them
+verbatim and `rules.mk` is unchanged because QMK defaults `MAGIC_ENABLE ?=
+yes` (`builddefs/generic_features.mk:17`). They set the board's Ctrl↔GUI swap
+— `CG_TOGG` negates it, `CG_SWAP`/`CG_NORM` set it absolutely
+(`process_magic.c:155/92/138`) — and it persists in EEPROM (`:190`).
+
+`src/lib/osSwap.ts` mirrors QMK's `mod_config()` (`keycode_config.c:126`),
+including its XOR guard, so the UI can preview post-swap behavior. It
+deliberately does **not** swap `dualFunc` / `macro` / `tapDance`: those
+compile to `register_code16()` / `SEND_STRING()` inside `process_record_user`,
+which bypass `mod_config()`. `HOME_OS` in that file is the single place the
+"which swap state is Mac" assumption lives.
+
+The swap is **board-global**, not per-layer. `QK_LOCK` cannot participate in a
+tap dance (`QK_LOCK = 0x7C59`; `register_code16` only handles basic keycodes
+and never reaches `process_key_lock`), so OS-mode keys must occupy their own
+key positions.
+
 ### Layout version history (added 2026-07-21, additive)
 
 Additive — **no existing signature changes**, `SCHEMA_VERSION` unchanged
@@ -189,7 +211,7 @@ DfuNotFound, DfuAccessDenied, DfuVerifyFailed` (per plan) + `InvalidLayout`
   layers 0–1 of 7 hand-derived (see its `_note`); Worker A regenerates the
   full file and removes the note. Glow positions in it were cross-checked
   through the permutation table.
-- **`keycodes.json`** — 212 entries `{qmk, aliases, label, longLabel,
+- **`keycodes.json`** — 218 entries `{qmk, aliases, label, longLabel,
   category, tappable, modsApplicable}`; single source of truth for UI labels
   ↔ QMK codes; Rust validates emitted codes against it (Worker A). Covers
   every keycode in `reference_keymap.c`. Worker C owns/expands it post-fork.

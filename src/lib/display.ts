@@ -12,6 +12,7 @@
  */
 import { entryFor } from "./keycodes";
 import { holdLabel, tapLabel } from "./labels";
+import { applySwap } from "./osSwap";
 import type { KeyAction, TapSpec } from "./types";
 
 export type DisplayMode = "advanced" | "mac" | "windows";
@@ -105,6 +106,16 @@ function advancedTap(a: KeyAction): string {
   }
 }
 
+/** Extra context for label resolution. */
+export interface KeycapOptions {
+  /**
+   * Label the key as the board behaves with Ctrl↔Cmd swapped (an OS-switch
+   * key having been pressed). Unlike `mode`, this reflects what the key
+   * actually EMITS, not just what it is called — see lib/osSwap.ts.
+   */
+  swapped?: boolean;
+}
+
 /**
  * Resolve the tap/hold keycap labels for a KeyAction in a given display mode.
  * `layerNames` supplies friendly layer titles for layer actions (index = layer).
@@ -113,7 +124,9 @@ export function keycapLabels(
   a: KeyAction,
   mode: DisplayMode,
   layerNames: readonly string[] = [],
+  opts: KeycapOptions = {},
 ): KeycapLabels {
+  if (opts.swapped) a = applySwap(a);
   // Non-typing / read-only kinds look the same in every mode (badge + raw-ish).
   switch (a.kind) {
     case "none":
