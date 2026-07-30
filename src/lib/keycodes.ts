@@ -28,6 +28,7 @@ export const CATEGORY_ORDER: { id: string; title: string }[] = [
   { id: "mouse", title: "Mouse" },
   { id: "system", title: "System" },
   { id: "special", title: "System (QMK)" },
+  { id: "osmode", title: "OS mode" },
   { id: "rgb", title: "RGB" },
 ];
 

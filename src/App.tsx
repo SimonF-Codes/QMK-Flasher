@@ -5,6 +5,7 @@ import Keyboard from "./components/Keyboard";
 import KeyPicker from "./components/KeyPicker";
 import LayerTabs from "./components/LayerTabs";
 import LayoutMenu from "./components/LayoutMenu";
+import OsSwapToggle from "./components/OsSwapToggle";
 import VersionHistoryPanel from "./components/VersionHistoryPanel";
 import { MOCK } from "./lib/ipc";
 import { useLayoutStore } from "./state/layoutStore";
@@ -61,6 +62,9 @@ export default function App() {
         <div className="ml-auto flex items-center gap-2">
           <VersionHistoryPanel />
           <DisplayModeToggle />
+          {/* Divider: what keys are CALLED (left) vs what they EMIT (right). */}
+          <span className="h-4 w-px bg-zinc-700" aria-hidden />
+          <OsSwapToggle />
           {dirty && (
             <span className="text-xs text-amber-400" title="Unsaved changes">
               ● unsaved

@@ -12,6 +12,11 @@ interface KeyProps {
   /** A swap is in progress (this key is a candidate target). */
   swapTargeting?: boolean;
   mode: DisplayMode;
+  /**
+   * Label this key as the board behaves with Ctrl↔Cmd swapped (OS mode).
+   * Unrelated to swapSource/swapTargeting above, which are key-POSITION swaps.
+   */
+  osSwapped?: boolean;
   layerNames: readonly string[];
   onSelect(): void;
 }
@@ -28,11 +33,14 @@ export default function Key({
   swapSource = false,
   swapTargeting = false,
   mode,
+  osSwapped = false,
   layerNames,
   onSelect,
 }: KeyProps) {
   const r = keyRect(geo);
-  const { tap, hold } = keycapLabels(action, mode, layerNames);
+  const { tap, hold } = keycapLabels(action, mode, layerNames, {
+    swapped: osSwapped,
+  });
   const b = badge(action);
   const transparent = action.kind === "transparent" || action.kind === "none";
 

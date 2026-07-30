@@ -109,3 +109,65 @@ describe("keycap display modes", () => {
     }
   });
 });
+
+// The `swapped` option is the FUNCTIONAL axis: it changes what the label says
+// the key EMITS, whereas `mode` only changes what it is CALLED. See osSwap.ts.
+describe("keycap labels with the OS swap on", () => {
+  it("relabels a GUI-modified basic as Ctrl", () => {
+    const a: KeyAction = { kind: "basic", code: "KC_C", mods: ["MOD_LGUI"] };
+    expect(keycapLabels(a, "windows", [], { swapped: false }).tap).toBe(
+      "Win+C",
+    );
+    expect(keycapLabels(a, "windows", [], { swapped: true }).tap).toBe("Ctrl+C");
+    expect(keycapLabels(a, "mac", [], { swapped: true }).tap).toBe("⌃C");
+  });
+
+  it("relabels a Ctrl mod-tap's hold as Cmd", () => {
+    const a: KeyAction = {
+      kind: "modTap",
+      mods: ["MOD_LCTL"],
+      tap: "KC_GRAVE",
+    };
+    expect(keycapLabels(a, "mac", [], { swapped: false }).hold).toBe("⌃");
+    expect(keycapLabels(a, "mac", [], { swapped: true }).hold).toBe("⌘");
+  });
+
+  it("relabels a bare GUI key, including in advanced mode", () => {
+    const a: KeyAction = { kind: "basic", code: "KC_LEFT_GUI" };
+    expect(keycapLabels(a, "advanced", [], { swapped: true }).tap).toBe(
+      "KC_LEFT_CTRL",
+    );
+  });
+
+  it("leaves dualFunc alone — the firmware does not swap it", () => {
+    const a: KeyAction = {
+      kind: "dualFunc",
+      tap: { code: "KC_C", mods: ["MOD_LGUI"] },
+      hold: { code: "KC_V", mods: ["MOD_LGUI"] },
+    };
+    expect(keycapLabels(a, "windows", [], { swapped: true })).toEqual(
+      keycapLabels(a, "windows", [], { swapped: false }),
+    );
+  });
+
+  it("defaults to unswapped when the option is omitted", () => {
+    const a: KeyAction = { kind: "basic", code: "KC_C", mods: ["MOD_LGUI"] };
+    expect(keycapLabels(a, "windows")).toEqual(
+      keycapLabels(a, "windows", [], { swapped: false }),
+    );
+  });
+
+  it("renders the full fixture swapped without throwing", () => {
+    const layout = LayoutFileSchema.parse(fixture);
+    const names = layout.layers.map((l) => l.title);
+    for (const mode of ["advanced", "mac", "windows"] as const) {
+      for (const layer of layout.layers) {
+        for (const key of layer.keys) {
+          expect(() =>
+            keycapLabels(key, mode, names, { swapped: true }),
+          ).not.toThrow();
+        }
+      }
+    }
+  });
+});

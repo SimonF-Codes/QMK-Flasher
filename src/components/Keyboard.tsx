@@ -1,4 +1,5 @@
 import { GEOMETRY, viewBox } from "../lib/geometry";
+import { hasOsSwitchKey } from "../lib/osSwap";
 import { useDisplayStore } from "../state/displayStore";
 import { useLayoutStore } from "../state/layoutStore";
 import Key from "./Key";
@@ -14,12 +15,16 @@ export default function Keyboard() {
   const swapKeys = useLayoutStore((s) => s.swapKeys);
   const cancelSwap = useLayoutStore((s) => s.cancelSwap);
   const mode = useDisplayStore((s) => s.mode);
+  const osSwapPreview = useDisplayStore((s) => s.osSwapPreview);
 
   const layer = layout?.layers[selectedLayer];
   if (!layer) return null;
 
   const layerNames = layout!.layers.map((l) => l.title);
   const swapping = swapSource !== null;
+  // Only honour the preview if the board can actually reach the swapped
+  // state — otherwise the keycaps would show behavior you can't produce.
+  const osSwapped = osSwapPreview && hasOsSwitchKey(layout);
 
   // In swap mode a click picks the target (or cancels if it's the anchor);
   // otherwise it toggles the selection as usual.
@@ -48,6 +53,7 @@ export default function Keyboard() {
           swapSource={swapping && swapSource === i}
           swapTargeting={swapping && swapSource !== i}
           mode={mode}
+          osSwapped={osSwapped}
           layerNames={layerNames}
           onSelect={() => onKey(i)}
         />
