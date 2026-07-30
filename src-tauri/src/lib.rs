@@ -15,6 +15,15 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .setup(|app| {
+            // Dev builds carry a labeled title so a hot-reloading `tauri dev`
+            // instance is never mistaken for the installed app in the taskbar.
+            #[cfg(debug_assertions)]
+            {
+                use tauri::Manager;
+                if let Some(win) = app.get_webview_window("main") {
+                    let _ = win.set_title("qmk-flasher — DEV");
+                }
+            }
             // App-lifetime USB watcher: presence edges of the DFU
             // bootloader (0483:df11) become `dfu-device` events.
             let handle = app.handle().clone();
