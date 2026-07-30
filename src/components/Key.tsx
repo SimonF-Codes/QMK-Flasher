@@ -11,6 +11,10 @@ interface KeyProps {
   swapSource?: boolean;
   /** A swap is in progress (this key is a candidate target). */
   swapTargeting?: boolean;
+  /** Live view: this position is held down right now. */
+  pressed?: boolean;
+  /** Live view: released a moment ago, still glowing so fast taps register. */
+  recent?: boolean;
   mode: DisplayMode;
   layerNames: readonly string[];
   onSelect(): void;
@@ -27,6 +31,8 @@ export default function Key({
   selected,
   swapSource = false,
   swapTargeting = false,
+  pressed = false,
+  recent = false,
   mode,
   layerNames,
   onSelect,
@@ -36,14 +42,19 @@ export default function Key({
   const b = badge(action);
   const transparent = action.kind === "transparent" || action.kind === "none";
 
-  // Swap mode: the anchor gets an amber ring; other keys glow as targets.
+  // Swap mode wins (it's a modal interaction), then live press state, then the
+  // edit selection — so a key you're holding stays visible while editing.
   const rectClass = swapSource
     ? "fill-amber-900 stroke-amber-400"
     : swapTargeting
       ? "fill-zinc-800 stroke-amber-500/60 hover:fill-amber-900/40"
-      : selected
-        ? "fill-sky-900 stroke-sky-400"
-        : "fill-zinc-800 stroke-zinc-700 hover:fill-zinc-700";
+      : pressed
+        ? "fill-green-600 stroke-green-300"
+        : recent
+          ? "fill-green-900 stroke-green-500/70"
+          : selected
+            ? "fill-sky-900 stroke-sky-400"
+            : "fill-zinc-800 stroke-zinc-700 hover:fill-zinc-700";
 
   return (
     <g
@@ -59,7 +70,7 @@ export default function Key({
         height={r.h}
         rx={6}
         className={rectClass}
-        strokeWidth={selected || swapSource ? 2 : 1}
+        strokeWidth={selected || swapSource || pressed ? 2 : 1}
       />
       {action.glow && (
         <rect
