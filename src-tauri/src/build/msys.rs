@@ -1,6 +1,6 @@
 //! The QMK MSYS build: exactly
 //! `MSYSTEM=MINGW64 <msys>\usr\bin\bash.exe -lc "cd <qmk> && make
-//! zsa/moonlander/reva:<keymap>"`, streaming stdout+stderr lines through the
+//! SKIP_VERSION=yes zsa/moonlander/reva:<keymap>"`, streaming stdout+stderr lines through the
 //! caller's `FnMut` (the command layer forwards them as `build-log` events).
 //! Never `qmk compile`. On success the .bin is copied to
 //! `%APPDATA%\qmk-flasher\builds\<timestamp>.bin`.
@@ -61,8 +61,14 @@ pub fn build(
             bash.display()
         )));
     }
+    // SKIP_VERSION=yes drops QMK's git-derived version.h step, which costs
+    // ~50s of git invocations per build on Windows and only changes the
+    // version string the firmware reports (bin size unaffected: 69416 both
+    // ways). Measured: 239s -> 187s full rebuild, 83s -> 33s no-op. `-j` is
+    // deliberately absent — QMK's recursive submake ignores it (238s at -j16
+    // vs 239s serial, and MAKEFLAGS=-j16 makes no difference either).
     let script = format!(
-        "cd {} && make {}",
+        "cd {} && make SKIP_VERSION=yes {}",
         to_msys_path(&cfg.qmk_firmware_path),
         make_target(kb, &cfg.keymap_name)
     );

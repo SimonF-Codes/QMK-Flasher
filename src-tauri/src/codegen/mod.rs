@@ -133,6 +133,20 @@ fn keymap_dir(cfg: &AppConfig, kb: &crate::keyboards::KeyboardInfo) -> PathBuf {
     dir.join("keymaps").join(&cfg.keymap_name)
 }
 
+/// Write `contents` to `path` only if that is not already exactly what is
+/// there. make keys off mtime, so an identical rewrite still invalidates
+/// every object built from the file: rewriting config.h or rules.mk forces a
+/// full rebuild of the tree (~240s) where a keymap.c-only change costs ~30s.
+/// Most edits touch keymap.c alone, and keymap.json never changes at all.
+fn write_if_changed(path: PathBuf, contents: &str) -> std::io::Result<()> {
+    if let Ok(existing) = std::fs::read_to_string(&path) {
+        if existing == contents {
+            return Ok(());
+        }
+    }
+    std::fs::write(path, contents)
+}
+
 /// Generate and write the sources into the keyboard's keymap dir.
 /// Returns the keymap directory.
 pub fn write_sources(layout: &LayoutFile, cfg: &AppConfig) -> Result<PathBuf, AppError> {
@@ -146,10 +160,10 @@ pub fn write_sources(layout: &LayoutFile, cfg: &AppConfig) -> Result<PathBuf, Ap
     let dir = keymap_dir(cfg, keyboard);
     let io = |e: std::io::Error| AppError::BuildFailed(format!("writing sources: {e}"));
     std::fs::create_dir_all(&dir).map_err(io)?;
-    std::fs::write(dir.join("keymap.c"), &sources.keymap_c).map_err(io)?;
-    std::fs::write(dir.join("rules.mk"), &sources.rules_mk).map_err(io)?;
-    std::fs::write(dir.join("config.h"), &sources.config_h).map_err(io)?;
-    std::fs::write(dir.join("keymap.json"), KEYMAP_JSON).map_err(io)?;
+    write_if_changed(dir.join("keymap.c"), &sources.keymap_c).map_err(io)?;
+    write_if_changed(dir.join("rules.mk"), &sources.rules_mk).map_err(io)?;
+    write_if_changed(dir.join("config.h"), &sources.config_h).map_err(io)?;
+    write_if_changed(dir.join("keymap.json"), KEYMAP_JSON).map_err(io)?;
     Ok(dir)
 }
 
@@ -336,5 +350,37 @@ mod tests {
         let mut cfg = crate::appcfg::get();
         cfg.keymap_name = "arrows_together".into();
         assert!(write_sources(&fixture(), &cfg).is_err());
+    }
+
+    /// Build speed depends on this: make keys off mtime, so re-writing a
+    /// byte-identical config.h/rules.mk would force a full rebuild of the
+    /// tree (~240s) instead of the ~30s a keymap.c-only change costs.
+    #[test]
+    fn write_if_changed_leaves_identical_files_untouched() {
+        let dir = std::env::temp_dir().join("qmk-flasher-write-if-changed-test");
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("config.h");
+        write_if_changed(path.clone(), "#define A 1\n").unwrap();
+        let first = std::fs::metadata(&path).unwrap().modified().unwrap();
+
+        // Coarse filesystem timestamps: sleep past the resolution so a real
+        // rewrite is guaranteed to be observable.
+        std::thread::sleep(std::time::Duration::from_millis(50));
+        write_if_changed(path.clone(), "#define A 1\n").unwrap();
+        assert_eq!(
+            std::fs::metadata(&path).unwrap().modified().unwrap(),
+            first,
+            "identical content must not touch the file"
+        );
+
+        std::thread::sleep(std::time::Duration::from_millis(50));
+        write_if_changed(path.clone(), "#define A 2\n").unwrap();
+        assert_ne!(
+            std::fs::metadata(&path).unwrap().modified().unwrap(),
+            first,
+            "changed content must be written"
+        );
+        assert_eq!(std::fs::read_to_string(&path).unwrap(), "#define A 2\n");
+        let _ = std::fs::remove_dir_all(&dir);
     }
 }
