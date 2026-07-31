@@ -223,8 +223,15 @@ DfuNotFound, DfuAccessDenied, DfuVerifyFailed` (per plan) + `InvalidLayout`
 ## Build/infra notes
 
 - `.cargo/config.toml` pins `target-dir` to
-  `C:/Users/fridl/.cargo-targets/qmk-flasher` (repo is under OneDrive; keeps
-  target/ out of sync). `node_modules` is gitignored as usual.
+  `C:/Users/fridl/.cargo-targets/qmk-flasher`, shared by the repo and every
+  worktree so a fresh worktree reuses the cache. (Originally a OneDrive
+  workaround; the repo moved to `C:\dev` on 2026-07-30 and the shared target
+  dir was kept deliberately.) `node_modules` is gitignored as usual.
+- The firmware build runs `make SKIP_VERSION=yes <target>` and codegen writes
+  keymap sources only when their content actually changed. Both are build-time
+  measures, not correctness ones: on this machine a full rebuild is ~240s, and
+  a keymap.c-only change with SKIP_VERSION is ~33s. QMK's recursive submake
+  ignores `-j`, so parallelism is not available.
 - The `arrows_together` keymap dir in qmk_firmware is never written to — it
   is the known-good recovery reference. Codegen emits into
   `keymaps/qmk_flasher/` (see `AppConfig.keymapName`; `arrows_together` is

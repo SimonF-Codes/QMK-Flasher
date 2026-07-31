@@ -1,4 +1,6 @@
-# Repo lives under OneDrive — keep the (huge, churny) cargo target dir out of
-# sync. Applies to all worktrees of this repo.
+# One shared target dir for the repo and all its worktrees, so a fresh
+# worktree reuses the cache instead of recompiling every dependency.
+# (Originally a workaround for the repo living under OneDrive; the repo moved
+# to C:\dev on 2026-07-30 and this was kept deliberately.)
 [build]
 target-dir = "C:/Users/fridl/.cargo-targets/qmk-flasher"
