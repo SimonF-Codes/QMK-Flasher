@@ -9,12 +9,12 @@ import { fileURLToPath } from "node:url";
 
 const KEYBOARD_JSON =
   process.argv[2] ??
-  "C:/Users/fridl/qmk_firmware/keyboards/zsa/moonlander/reva/keyboard.json";
+  "C:/Users/fridl/qmk_firmware/keyboards/zsa/moonlander/revb/keyboard.json";
 const LAYOUT_NAME = "LAYOUT_moonlander";
 
 const kb = JSON.parse(readFileSync(KEYBOARD_JSON, "utf8"));
 
-// LAYOUT_moonlander is an alias (layout_aliases) for LAYOUT in reva.
+// LAYOUT_moonlander is an alias (layout_aliases) for LAYOUT in revb.
 const resolved = kb.layout_aliases?.[LAYOUT_NAME] ?? LAYOUT_NAME;
 const layout = kb.layouts?.[resolved]?.layout;
 if (!layout) {
@@ -44,7 +44,7 @@ const keys = layout.map((k, i) => {
 });
 
 const out = {
-  keyboard: "zsa/moonlander/reva",
+  keyboard: "zsa/moonlander/revb",
   layoutMacro: LAYOUT_NAME,
   keyCount: keys.length,
   keys,

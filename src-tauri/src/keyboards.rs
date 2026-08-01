@@ -26,7 +26,7 @@ pub struct KeyboardInfo {
     pub id: String,
     /// Display name for the UI, e.g. "ZSA Moonlander".
     pub name: String,
-    /// QMK keyboard path as used in the make target, e.g. "zsa/moonlander/reva".
+    /// QMK keyboard path as used in the make target, e.g. "zsa/moonlander/revb".
     pub qmk_keyboard: String,
     /// Geometry string for the Oryx GraphQL query.
     pub oryx_geometry: String,
@@ -76,7 +76,7 @@ mod tests {
     fn registry_parses_and_contains_supported_moonlander() {
         let kb = get("moonlander").unwrap();
         assert!(kb.supported);
-        assert_eq!(kb.qmk_keyboard, "zsa/moonlander/reva");
+        assert_eq!(kb.qmk_keyboard, "zsa/moonlander/revb");
         assert_eq!(kb.layout_macro, "LAYOUT_moonlander");
         assert_eq!(kb.key_count, 72);
         assert_eq!(kb.oryx_geometry, "moonlander");

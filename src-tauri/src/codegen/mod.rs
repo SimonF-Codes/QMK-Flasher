@@ -119,7 +119,7 @@ const KEYMAP_JSON: &str =
     "{\n    \"modules\": [\n        \"zsa/oryx\",\n        \"zsa/defaults\"\n    ]\n}\n";
 
 /// Where the generated keymap dir lives for a keyboard. Keymaps sit one
-/// level above a versioned leaf (`zsa/moonlander/reva` builds read
+/// level above a versioned leaf (`zsa/moonlander/revb` builds read
 /// `zsa/moonlander/keymaps/`) — QMK resolves keymap dirs up the folder
 /// hierarchy, so a trailing `revX` segment is stripped.
 fn keymap_dir(cfg: &AppConfig, kb: &crate::keyboards::KeyboardInfo) -> PathBuf {

@@ -15,7 +15,7 @@ pub const GEOMETRY_JSON: &str = include_str!(concat!(
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct GeometryFile {
-    /// e.g. "zsa/moonlander/reva"
+    /// e.g. "zsa/moonlander/revb"
     pub keyboard: String,
     pub layout_macro: String,
     pub key_count: u32,

@@ -208,7 +208,7 @@ mod tests {
         assert!(path.ends_with(".bin"));
         let built = std::fs::metadata(&path).expect("built bin exists").len() as f64;
         let reference = std::fs::metadata(
-            r"C:\Users\fridl\qmk_firmware\zsa_moonlander_reva_arrows_together.bin",
+            r"C:\Users\fridl\qmk_firmware\zsa_moonlander_revb_arrows_together.bin",
         )
         .expect("reference arrows_together bin exists")
         .len() as f64;
