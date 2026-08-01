@@ -5,10 +5,13 @@ import Keyboard from "./components/Keyboard";
 import KeyPicker from "./components/KeyPicker";
 import LayerTabs from "./components/LayerTabs";
 import LayoutMenu from "./components/LayoutMenu";
+import LivePanel from "./components/LivePanel";
+import LiveToggle from "./components/LiveToggle";
 import OsSwapToggle from "./components/OsSwapToggle";
 import VersionHistoryPanel from "./components/VersionHistoryPanel";
 import { MOCK } from "./lib/ipc";
 import { useLayoutStore } from "./state/layoutStore";
+import { useLiveStore } from "./state/liveStore";
 
 export default function App() {
   const layout = useLayoutStore((s) => s.layout);
@@ -19,10 +22,53 @@ export default function App() {
   const save = useLayoutStore((s) => s.save);
   const selectedKey = useLayoutStore((s) => s.selectedKey);
   const dirty = useLayoutStore((s) => s.isDirty)();
+  const liveEnabled = useLiveStore((s) => s.enabled);
 
   useEffect(() => {
     void load();
   }, [load]);
+
+  // Live view: feed real key events to liveStore so the board lights up.
+  // Only active while live mode is on, so normal editing is untouched.
+  useEffect(() => {
+    if (!liveEnabled) return;
+
+    /** Where the event landed: the scratchpad, another editable field, or the page. */
+    const targetKind = (t: EventTarget | null): "scratchpad" | "field" | "page" => {
+      if (!(t instanceof HTMLElement)) return "page";
+      if (t.hasAttribute("data-live-scratchpad")) return "scratchpad";
+      if (t.isContentEditable) return "field";
+      const tag = t.tagName;
+      if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return "field";
+      return "page";
+    };
+
+    const onDown = (e: KeyboardEvent) => {
+      const where = targetKind(e.target);
+      // Never interfere with the keycode search box or the rename inputs.
+      if (where === "field") return;
+      useLiveStore.getState().keyDown(e);
+      // Swallow test keystrokes so they don't trip app shortcuts — but let the
+      // scratchpad receive characters, and let Ctrl/Cmd combos through so
+      // Ctrl+S still saves.
+      if (where !== "scratchpad" && !e.ctrlKey && !e.metaKey) e.preventDefault();
+    };
+    const onUp = (e: KeyboardEvent) => {
+      if (targetKind(e.target) === "field") return;
+      useLiveStore.getState().keyUp(e);
+    };
+    // Alt-tabbing while holding a key would otherwise leave it stuck lit.
+    const onBlur = () => useLiveStore.getState().releaseAll();
+
+    window.addEventListener("keydown", onDown);
+    window.addEventListener("keyup", onUp);
+    window.addEventListener("blur", onBlur);
+    return () => {
+      window.removeEventListener("keydown", onDown);
+      window.removeEventListener("keyup", onUp);
+      window.removeEventListener("blur", onBlur);
+    };
+  }, [liveEnabled]);
 
   // Ctrl+S saves; warn before closing with unsaved edits.
   useEffect(() => {
@@ -61,6 +107,7 @@ export default function App() {
         )}
         <div className="ml-auto flex items-center gap-2">
           <VersionHistoryPanel />
+          <LiveToggle />
           <DisplayModeToggle />
           {/* Divider: what keys are CALLED (left) vs what they EMIT (right). */}
           <span className="h-4 w-px bg-zinc-700" aria-hidden />
@@ -99,11 +146,12 @@ export default function App() {
             <p className="text-sm text-zinc-500">No layout.</p>
           )}
           <Keyboard />
-          {layout && selectedKey === null && (
+          {layout && selectedKey === null && !liveEnabled && (
             <p className="mt-2 text-center text-xs text-zinc-600">
               Click a key to edit it.
             </p>
           )}
+          <LivePanel />
         </section>
         <KeyPicker />
       </main>

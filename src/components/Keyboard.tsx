@@ -2,6 +2,7 @@ import { GEOMETRY, viewBox } from "../lib/geometry";
 import { hasOsSwitchKey } from "../lib/osSwap";
 import { useDisplayStore } from "../state/displayStore";
 import { useLayoutStore } from "../state/layoutStore";
+import { useLiveStore } from "../state/liveStore";
 import Key from "./Key";
 
 const VIEW_BOX = viewBox();
@@ -16,6 +17,9 @@ export default function Keyboard() {
   const cancelSwap = useLayoutStore((s) => s.cancelSwap);
   const mode = useDisplayStore((s) => s.mode);
   const osSwapPreview = useDisplayStore((s) => s.osSwapPreview);
+  const live = useLiveStore((s) => s.enabled);
+  const pressed = useLiveStore((s) => s.pressed);
+  const recent = useLiveStore((s) => s.recent);
 
   const layer = layout?.layers[selectedLayer];
   if (!layer) return null;
@@ -52,6 +56,8 @@ export default function Keyboard() {
           selected={selectedKey === i}
           swapSource={swapping && swapSource === i}
           swapTargeting={swapping && swapSource !== i}
+          pressed={live && pressed.has(i)}
+          recent={live && recent.has(i)}
           mode={mode}
           osSwapped={osSwapped}
           layerNames={layerNames}

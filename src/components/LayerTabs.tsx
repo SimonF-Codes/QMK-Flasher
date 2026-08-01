@@ -1,10 +1,13 @@
 import { useState } from "react";
 import { useLayoutStore } from "../state/layoutStore";
+import { useLiveStore } from "../state/liveStore";
 
 export default function LayerTabs() {
   const layout = useLayoutStore((s) => s.layout);
   const selectedLayer = useLayoutStore((s) => s.selectedLayer);
   const selectLayer = useLayoutStore((s) => s.selectLayer);
+  const liveEnabled = useLiveStore((s) => s.enabled);
+  const pinLayer = useLiveStore((s) => s.pinLayer);
   const renameLayer = useLayoutStore((s) => s.renameLayer);
   const swapLayers = useLayoutStore((s) => s.swapLayers);
   const [editing, setEditing] = useState<number | null>(null);
@@ -23,6 +26,15 @@ export default function LayerTabs() {
 
   const layerLabel = (i: number) => `${i} · ${layout.layers[i].title}`;
 
+  // Picking a layer by hand while live view is on pins it, pausing auto-follow.
+  // Layer keys (MO/TO/TG/TT) are handled inside the firmware and never reach
+  // the OS, so inference can't see them — this is the manual override that
+  // lets you force the view to match what the board is actually doing.
+  const onLayerClick = (i: number) => {
+    selectLayer(i);
+    if (liveEnabled) pinLayer(i);
+  };
+
   const openSwap = () => {
     setSwapA(selectedLayer);
     setSwapB(selectedLayer === 0 ? 1 : 0);
@@ -39,7 +51,7 @@ export default function LayerTabs() {
       {layout.layers.map((layer, i) => (
         <button
           key={i}
-          onClick={() => selectLayer(i)}
+          onClick={() => onLayerClick(i)}
           onDoubleClick={() => {
             setEditing(i);
             setDraft(layer.title);
