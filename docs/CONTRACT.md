@@ -328,6 +328,16 @@ DfuNotFound, DfuAccessDenied, DfuVerifyFailed` (per plan) + `InvalidLayout`
   measures, not correctness ones: on this machine a full rebuild is ~240s, and
   a keymap.c-only change with SKIP_VERSION is ~33s. QMK's recursive submake
   ignores `-j`, so parallelism is not available.
+- `make` is **skipped entirely** when nothing changed. `build/stamp.rs` records
+  `%APPDATA%\qmk-flasher\builds\last-build.json` after each successful build —
+  SHA-256 of the four generated sources, the QMK keyboard target, the keymap
+  name and the `.bin` — and `build_firmware` reuses that `.bin` when the stamp
+  matches and the file is still there (measured: 25.5s → 3.4ms). The stamp is
+  blind to the `qmk_firmware` checkout itself, so a QMK update or an edit under
+  the keyboard's own directory will not be noticed; `QMK_FLASHER_FORCE_REBUILD=1`
+  (or deleting the stamp file) forces a build. `build_firmware`'s frozen
+  `() -> String` signature is unchanged. A reuse is always announced on
+  `build-log`, so "built" and "reused" are distinguishable in the UI.
 - The `arrows_together` keymap dir in qmk_firmware is never written to — it
   is the known-good recovery reference. Codegen emits into
   `keymaps/qmk_flasher/` (see `AppConfig.keymapName`; `arrows_together` is
