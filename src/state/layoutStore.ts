@@ -11,6 +11,10 @@ import {
   setLayerColor as setLayerColorInLayout,
 } from "../lib/led";
 import {
+  addLayer as addLayerToLayout,
+  deleteLayer as deleteLayerFromLayout,
+  findLayerReferences,
+  referenceCount,
   swapKeysInLayer,
   swapLayers as swapLayersInLayout,
   transposeIndex,
@@ -94,6 +98,18 @@ interface LayoutState {
   selectKey(index: number | null): void;
   setKeyAction(action: KeyAction): void;
   renameLayer(index: number, title: string): void;
+  /** Append a transparent layer and select it. */
+  addLayer(title?: string): void;
+  /**
+   * How many keys/combos would be cleared by deleting `index` — drives the
+   * confirmation, since the delete edits keys the user did not touch.
+   */
+  layerReferenceCount(index: number): number;
+  /**
+   * Delete a layer, clearing references to it and shifting the ones above down.
+   * No-op on the last remaining layer (the schema requires at least one).
+   */
+  deleteLayer(index: number): void;
   /** Enter "swap with…" mode, anchored on the given key in the selected layer. */
   beginSwap(source: number): void;
   /** Leave "swap with…" mode without swapping. */
@@ -383,6 +399,54 @@ export const useLayoutStore = create<LayoutState>()((set, get) => ({
       li === index ? { ...layer, title } : layer,
     );
     set({ layout: { ...layout, layers } });
+  },
+
+  addLayer(title) {
+    const { layout } = get();
+    if (!layout) return;
+    const next = addLayerToLayout(layout, title);
+    // Jump to the new layer — you added it to put something in it.
+    set({
+      layout: next,
+      selectedLayer: next.layers.length - 1,
+      selectedKey: null,
+      swapSource: null,
+    });
+  },
+
+  layerReferenceCount(index) {
+    const { layout } = get();
+    if (!layout) return 0;
+    return referenceCount(findLayerReferences(layout, index));
+  },
+
+  deleteLayer(index) {
+    const { layout, selectedLayer } = get();
+    if (!layout || layout.layers.length <= 1) return;
+    if (index < 0 || index >= layout.layers.length) return;
+
+    const next = deleteLayerFromLayout(layout, index);
+    // Deleting can drop the last tap-dance key, and leaving the flag true
+    // enables TAP_DANCE_ENABLE without emitting tap_dance_actions[], which
+    // breaks the build — same reasoning as setKeyAction.
+    const tapDance = layersUseTapDance(next.layers);
+    const settings =
+      tapDance === next.settings.tapDance
+        ? next.settings
+        : { ...next.settings, tapDance };
+
+    // Keep a valid selection: deleting at or before the viewed layer shifts it.
+    const selected =
+      selectedLayer > index
+        ? selectedLayer - 1
+        : Math.min(selectedLayer, next.layers.length - 1);
+
+    set({
+      layout: { ...next, settings },
+      selectedLayer: selected,
+      selectedKey: null,
+      swapSource: null,
+    });
   },
 
   beginSwap(source) {
