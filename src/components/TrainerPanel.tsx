@@ -1,13 +1,10 @@
 /**
- * Trainer mode UI: the prompt, the running score, and the honest small print
- * about what the trainer cannot see.
+ * Trainer mode UI: the prompt, the running score, and the practice history.
  *
  * All of the decisions live in `lib/trainer.ts` and `state/trainerStore.ts`;
  * this file only renders them. The one thing it does compute is the idle
  * preview of the target pool, so the scope buttons can say up front how many
- * keys they would drill and how many they have to skip — that number is the
- * whole reason the exclusion rules exist, and hiding it until you press Start
- * would defeat the point.
+ * keys they would drill.
  */
 import { useMemo } from "react";
 import { tapLabel } from "../lib/labels";
@@ -15,10 +12,8 @@ import {
   buildTargets,
   summarize,
   DRILL_SCOPES,
-  EXCLUDE_REASON_TEXT,
   SCOPE_LABEL,
   weightFor,
-  type ExcludedPosition,
   type KeyStat,
   type StatsMap,
 } from "../lib/trainer";
@@ -39,13 +34,6 @@ function pct(x: number): string {
 
 function ms(x: number | null): string {
   return x === null ? "—" : `${Math.round(x)} ms`;
-}
-
-/** Counts by reason, so the UI names the limit instead of hiding the keys. */
-function groupReasons(excluded: ExcludedPosition[]): [string, number][] {
-  const counts = new Map<ExcludedPosition["reason"], number>();
-  for (const e of excluded) counts.set(e.reason, (counts.get(e.reason) ?? 0) + 1);
-  return [...counts].map(([reason, n]) => [EXCLUDE_REASON_TEXT[reason], n]);
 }
 
 /** The keys the weighting will favour next, worst first. */
@@ -84,7 +72,6 @@ export default function TrainerPanel() {
   const answers = useTrainerStore((s) => s.answers);
   const last = useTrainerStore((s) => s.last);
   const summary = useTrainerStore((s) => s.summary);
-  const sessionExcluded = useTrainerStore((s) => s.excluded);
   const byLayout = useTrainerStore((s) => s.byLayout);
   const layoutKey = useTrainerStore((s) => s.layoutKey);
   const start = useTrainerStore((s) => s.start);
@@ -94,12 +81,11 @@ export default function TrainerPanel() {
 
   // Idle preview only — once a session starts the store owns the frozen pool.
   const preview = useMemo(
-    () => (layout ? buildTargets(layout, scope, selectedLayer) : null),
+    () => (layout ? buildTargets(layout, scope, selectedLayer) : []),
     [layout, scope, selectedLayer],
   );
   const live = running ? summarize(answers) : null;
   const stats = statsFor({ byLayout, layoutKey });
-  const excluded = running ? sessionExcluded : (preview?.excluded ?? []);
 
   if (!layout) {
     return <p className="text-xs text-zinc-600">Load a layout to train.</p>;
@@ -120,16 +106,10 @@ export default function TrainerPanel() {
                     {prompt.note}
                   </p>
                 )}
-                {target?.ambiguous && (
-                  <p className="mt-0.5 text-[10px] text-amber-400/80">
-                    Another key emits the same code — either one will be scored
-                    correct.
-                  </p>
-                )}
               </>
             ) : (
               <p className="text-sm text-amber-300">
-                Nothing in this scope can be observed. Pick another scope.
+                This scope has no keys assigned. Pick another scope.
               </p>
             )}
           </div>
@@ -145,7 +125,9 @@ export default function TrainerPanel() {
                   last.correct ? "text-green-400" : "text-red-400"
                 }`}
               >
-                {last.correct ? "✓" : `✗ got ${last.got ?? "—"}`}{" "}
+                {last.correct
+                  ? "✓"
+                  : `✗ got ${keyName(layout, last.layer, last.got)}`}{" "}
                 <span className="text-zinc-600">{Math.round(last.ms)} ms</span>
               </span>
             )}
@@ -192,7 +174,7 @@ export default function TrainerPanel() {
             </button>
           ))}
           <span className="text-[10px] text-zinc-600">
-            {preview?.targets.length ?? 0} keys
+            {preview.length} keys
           </span>
         </div>
       )}
@@ -218,7 +200,7 @@ export default function TrainerPanel() {
         ) : (
           <button
             onClick={start}
-            disabled={(preview?.targets.length ?? 0) === 0}
+            disabled={preview.length === 0}
             className="rounded bg-fuchsia-800 px-2.5 py-1 text-xs font-medium text-fuchsia-50 enabled:hover:bg-fuchsia-700 disabled:opacity-40"
           >
             {summary && summary.attempts > 0 ? "Train again" : "Start"}
@@ -259,16 +241,6 @@ export default function TrainerPanel() {
               return keyName(layout, layer, position);
             })
             .join(", ")}
-        </p>
-      )}
-
-      {excluded.length > 0 && (
-        <p className="text-[10px] text-amber-500/70">
-          {excluded.length} key{excluded.length === 1 ? "" : "s"} left out —{" "}
-          {groupReasons(excluded)
-            .map(([text, n]) => `${n}: ${text}`)
-            .join("; ")}
-          .
         </p>
       )}
     </div>

@@ -1,37 +1,37 @@
 /**
- * Trainer mode: choosing what to ask for, deciding whether the answer is even
- * observable, scoring it, and weighting the next question toward weak keys.
+ * Trainer mode: choosing what to ask for, scoring the answer, and weighting the
+ * next question toward weak keys.
  *
  * Pure — no store, no React, no clock and no randomness of its own (callers
  * pass `now` / `rng`), so every decision here is testable.
  *
- * The load-bearing constraint is the one liveKeys.ts opens with: we observe the
- * board through `KeyboardEvent`, i.e. AFTER QMK has finished with the press. A
- * key the firmware consumes (MO/TG/TO/TT, QK_LOCK, RGB_*, macros) emits nothing
- * to the OS, so "did you press it?" is a question this trainer physically
- * cannot answer. Marking such a key wrong because we cannot see it would be a
- * lie, so every position is classified up front into one of three buckets:
+ * This used to be built around a constraint that no longer exists. Answers were
+ * read through `KeyboardEvent`, i.e. AFTER QMK had finished with the press, so
+ * every key the firmware consumes (MO/TG/TO/TT, QK_LOCK, RGB_*, macros) was
+ * invisible; the trainer classified positions into `direct` / `witness` /
+ * `excluded` so it could refuse to grade what it could not see rather than lie
+ * about it. The firmware now reports every switch by matrix position and
+ * reports the active layer, so the blind spots those buckets described are
+ * gone. A target is a **position on a layer**, an answer is the switch the
+ * board says you closed, and QK_LOCK is as gradable as the letter A.
  *
- *   direct   — the key emits a code; press it, we see it.
- *   witness  — a MOMENTARY layer key (MO / TT / LT). We cannot see the switch,
- *              but we can see its consequence: hold it and press a key that
- *              emits something different on the layer it activates. That second
- *              press is the proof the switch happened.
- *   excluded — everything else, carrying a reason the UI shows verbatim.
+ * The intent behind that machinery outlives the machinery, because one honest
+ * limit remains: a prompt names a position on a layer, and reaching that layer
+ * takes presses of its own. Those presses are **navigation, not answers** — a
+ * report that arrives while the board is on some other layer is not scored
+ * either way, and the UI says so. Grading it would punish the user for the
+ * route rather than the destination; ignoring it silently would leave them
+ * wondering why a press did nothing.
  *
- * TG/TO are excluded on purpose even though they are layer keys: they LATCH.
- * Scoring one would leave the board parked on another layer with no event to
- * tell us it came back, so every later prompt in the session would be graded
- * against the wrong reality.
- *
- * What we still cannot rule out, in either mode: two positions that emit the
- * same code are indistinguishable to us. Those targets are flagged `ambiguous`
- * and the UI says so rather than pretending the answer was unique.
+ * What is no longer needed, and why: ambiguity (two positions emitting the same
+ * code were indistinguishable — positions never are), witnesses (a layer key's
+ * consequence had to stand in for the key; now the key itself is reported), and
+ * the latching refusal for TG/TO (a latched board used to be unobservable; the
+ * board now says which layer it is on).
  */
 import { tapLabel } from "./labels";
 import { targetLayer } from "./led";
-import { canonicalCode, emittedTapCode } from "./liveKeys";
-import type { Layer, LayoutFile } from "./types";
+import type { LayoutFile } from "./types";
 
 /** What the user chose to drill. */
 export type DrillScope = "currentLayer" | "allLayers" | "layerKeys";
@@ -48,61 +48,15 @@ export const SCOPE_LABEL: Readonly<Record<DrillScope, string>> = {
   layerKeys: "Layer keys",
 };
 
-/**
- * The layer that is active when nothing is held. Witness selection compares
- * against it because that is the state the user answers a prompt from — if a
- * witness press produces the same code with and without the layer key held,
- * the press proves nothing.
- */
+/** The layer that is active when nothing is held. */
 export const BASE_LAYER = 0;
-
-/** How the trainer will observe the answer. */
-export type TargetMode = "direct" | "witness";
-
-/** Why a position cannot be drilled at all. */
-export type ExcludeReason = "empty" | "silent" | "latching" | "noWitness";
-
-export const EXCLUDE_REASON_TEXT: Readonly<Record<ExcludeReason, string>> = {
-  empty: "nothing assigned",
-  silent: "the firmware consumes it — nothing reaches the OS",
-  latching: "TG/TO latch the board onto another layer, which we can't see undone",
-  noWitness: "no key on the target layer emits anything the base layer can't",
-};
-
-export interface Witness {
-  /** Layer the witness key lives on — the one the target key activates. */
-  layer: number;
-  position: number;
-  /** The code that position emits while `layer` is active. */
-  code: string;
-}
 
 export interface TrainerTarget {
   /** Layer the prompted key lives on. */
   layer: number;
   /** Position in LAYOUT-arg order. */
   position: number;
-  mode: TargetMode;
-  /** The QMK code that counts as a correct answer. */
-  expect: string;
-  /** Set for `witness` mode: the key to press while holding the target. */
-  witness: Witness | null;
-  /**
-   * Some other position in the layout also emits `expect`, so a correct-looking
-   * answer might have come from the wrong key. We cannot tell them apart.
-   */
-  ambiguous: boolean;
 }
-
-export interface ExcludedPosition {
-  layer: number;
-  position: number;
-  reason: ExcludeReason;
-}
-
-export type Classified =
-  | { ok: true; target: TrainerTarget }
-  | { ok: false; excluded: ExcludedPosition };
 
 /** Stats are keyed by layer+position within one layout. */
 export function statKey(layer: number, position: number): string {
@@ -118,163 +72,51 @@ export function sameTarget(
 }
 
 // ---------------------------------------------------------------------------
-// Classification
+// Target selection
 // ---------------------------------------------------------------------------
 
-/** How many positions on `layer` emit `code` on a plain tap. */
-function layerEmitCount(layer: Layer | undefined, code: string): number {
-  if (!layer) return 0;
-  return layer.keys.reduce(
-    (n, action) => (emittedTapCode(action) === code ? n + 1 : n),
-    0,
-  );
-}
-
-/** Every position across the whole layout that emits `code` on a plain tap. */
-function emitterCount(layout: LayoutFile, code: string): number {
-  return layout.layers.reduce((n, l) => n + layerEmitCount(l, code), 0);
-}
-
 /**
- * A key on `layer` whose press proves `layer` was active.
+ * Can this position be asked for at all?
  *
- * Preference order matters. The strong witness emits something no key on the
- * base layer emits at all, so the code cannot be produced any other way. The
- * weak witness only differs from what the SAME position emits on the base
- * layer — it still catches the user who presses the right position without
- * holding the layer key, which is the mistake worth drilling, but a user
- * pressing a different key that happens to emit the same code would slip
- * through. Weak witnesses are reported so the caller can flag them.
+ * The only thing left that cannot is a position with nothing to name. `none`
+ * has no key, and `transparent` is the layer below wearing this layer's hat —
+ * prompting for it would be prompting for a different key at a different
+ * address. Everything else is a switch the board reports, so it is fair game:
+ * layer keys, QK_LOCK and RGB keys included.
  */
-export function findWitness(
-  layout: LayoutFile,
-  layerIndex: number,
-): { witness: Witness; strong: boolean } | null {
-  const layer = layout.layers[layerIndex];
-  if (!layer || layerIndex === BASE_LAYER) return null;
-  const base = layout.layers[BASE_LAYER];
-
-  let weak: Witness | null = null;
-  for (let i = 0; i < layer.keys.length; i++) {
-    // `transparent` and the silent kinds both come back null here — neither can
-    // prove anything, the first because it emits whatever the lower layer would
-    // have emitted anyway.
-    const code = emittedTapCode(layer.keys[i]);
-    if (code === null) continue;
-    if (base && emittedTapCode(base.keys[i]) === code) continue;
-    const witness: Witness = { layer: layerIndex, position: i, code };
-    if (layerEmitCount(base, code) === 0) return { witness, strong: true };
-    weak ??= witness;
-  }
-  return weak ? { witness: weak, strong: false } : null;
-}
-
-/**
- * Decide whether a position can be drilled, and how.
- *
- * `asLayerKey` forces a layer key to be drilled as a layer key: an LT() is
- * directly observable by its tap, but when the session is drilling layer
- * navigation the thing being tested is the hold, not the tap.
- */
-export function classifyPosition(
+export function isDrillable(
   layout: LayoutFile,
   layer: number,
   position: number,
-  asLayerKey = false,
-): Classified {
+): boolean {
   const action = layout.layers[layer]?.keys[position];
-  const excluded = (reason: ExcludeReason): Classified => ({
-    ok: false,
-    excluded: { layer, position, reason },
-  });
-  if (!action) return excluded("empty");
-  if (action.kind === "none" || action.kind === "transparent") {
-    return excluded("empty");
-  }
-
-  const emitted = emittedTapCode(action);
-  const goesTo = targetLayer(action);
-  const wantsWitness = goesTo !== null && (asLayerKey || emitted === null);
-
-  if (wantsWitness) {
-    if (
-      action.kind === "layerSwitch" &&
-      (action.action === "TG" || action.action === "TO")
-    ) {
-      return excluded("latching");
-    }
-    const found = findWitness(layout, goesTo);
-    if (!found) return excluded("noWitness");
-    return {
-      ok: true,
-      target: {
-        layer,
-        position,
-        mode: "witness",
-        expect: found.witness.code,
-        witness: found.witness,
-        ambiguous: !found.strong,
-      },
-    };
-  }
-
-  if (emitted === null) return excluded("silent");
-  return {
-    ok: true,
-    target: {
-      layer,
-      position,
-      mode: "direct",
-      expect: emitted,
-      witness: null,
-      ambiguous: emitterCount(layout, emitted) > 1,
-    },
-  };
+  if (!action) return false;
+  return action.kind !== "none" && action.kind !== "transparent";
 }
 
-export interface TargetPool {
-  targets: TrainerTarget[];
-  excluded: ExcludedPosition[];
-}
-
-/**
- * Everything the chosen scope wants to drill, split into what we can observe
- * and what we cannot. Both halves are returned — the excluded list is the
- * honest half of the UI, not debris.
- */
+/** Everything the chosen scope wants to drill. */
 export function buildTargets(
   layout: LayoutFile,
   scope: DrillScope,
   currentLayer: number,
-): TargetPool {
+): TrainerTarget[] {
   const targets: TrainerTarget[] = [];
-  const excluded: ExcludedPosition[] = [];
-  const take = (layer: number, position: number, asLayerKey: boolean) => {
-    const c = classifyPosition(layout, layer, position, asLayerKey);
-    // An empty position is not a limitation worth reporting — a layer full of
-    // KC_NO would otherwise drown the "here's what we can't see" list.
-    if (c.ok) targets.push(c.target);
-    else if (c.excluded.reason !== "empty") excluded.push(c.excluded);
+  const take = (layer: number, position: number) => {
+    if (isDrillable(layout, layer, position)) targets.push({ layer, position });
   };
 
   if (scope === "currentLayer") {
     const layer = layout.layers[currentLayer];
-    if (layer) {
-      layer.keys.forEach((_, i) => take(currentLayer, i, false));
-    }
-    return { targets, excluded };
+    if (layer) layer.keys.forEach((_, i) => take(currentLayer, i));
+    return targets;
   }
 
   layout.layers.forEach((layer, li) => {
     layer.keys.forEach((action, i) => {
-      if (scope === "layerKeys") {
-        if (targetLayer(action) !== null) take(li, i, true);
-      } else {
-        take(li, i, false);
-      }
+      if (scope !== "layerKeys" || targetLayer(action) !== null) take(li, i);
     });
   });
-  return { targets, excluded };
+  return targets;
 }
 
 // ---------------------------------------------------------------------------
@@ -412,16 +254,21 @@ export interface Answer {
   layer: number;
   position: number;
   correct: boolean;
-  /** Milliseconds from the prompt appearing to the key resolving. */
+  /** Milliseconds from the prompt appearing to the key report arriving. */
   ms: number;
-  expected: string;
-  /** The code we actually saw, or null when the press resolved to nothing. */
-  got: string | null;
+  /** The position the board says was pressed. */
+  got: number;
 }
 
-/** Did `got` answer `target`? Aliases are collapsed before comparing. */
-export function grade(target: TrainerTarget, got: string | null): boolean {
-  return got !== null && canonicalCode(got) === target.expect;
+/**
+ * Did pressing `position` answer `target`?
+ *
+ * Position only — the caller has already established that the board was on the
+ * target's layer, and a switch is a switch. There is nothing to canonicalize
+ * and nothing to be ambiguous about.
+ */
+export function grade(target: TrainerTarget, position: number): boolean {
+  return position === target.position;
 }
 
 export interface SessionSummary {
@@ -541,7 +388,7 @@ export interface Prompt {
   /** "layer 2 · Symbols" — where it lives. */
   where: string;
   instruction: string;
-  /** How the answer is observed, when that isn't obvious. Null for direct. */
+  /** The one thing about scoring that isn't obvious. Null when there isn't one. */
   note: string | null;
 }
 
@@ -556,24 +403,16 @@ export function promptFor(layout: LayoutFile, target: TrainerTarget): Prompt {
   const label = action ? tapLabel(action) || "(blank)" : "(missing)";
   const where = layerName(layout, target.layer);
 
-  if (target.mode === "witness" && target.witness) {
-    const w = target.witness;
-    const wAction = layout.layers[w.layer]?.keys[w.position];
-    const wLabel = wAction ? tapLabel(wAction) || "(blank)" : "(missing)";
-    return {
-      label,
-      where,
-      instruction: `Hold ${label} on ${where}, then press ${wLabel}`,
-      note:
-        `Layer keys never reach the OS, so this is scored by its consequence: ` +
-        `${wLabel} arriving as ${layerName(layout, w.layer)}'s key.`,
-    };
-  }
-
   return {
     label,
     where,
     instruction: `Press ${label} on ${where}`,
-    note: null,
+    // Getting to a layer costs presses of its own, and those are not answers.
+    // Saying so beats letting the user wonder why they did nothing.
+    note:
+      target.layer === BASE_LAYER
+        ? null
+        : `Reach ${where} first — presses made on another layer count as ` +
+          `navigation and aren't scored.`,
   };
 }

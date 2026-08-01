@@ -18,11 +18,6 @@ interface KeyProps {
   /** Trainer: the key currently being asked for. */
   target?: boolean;
   /**
-   * Trainer: the key to press while holding the target, for a layer key we
-   * cannot observe directly (see lib/trainer.ts).
-   */
-  witness?: boolean;
-  /**
    * The color the firmware lights this LED with on the current layer — the
    * key's own glow if it has one, else the layer's base color. Drawn faded
    * when inherited, so an explicit per-key override still reads as deliberate.
@@ -52,7 +47,6 @@ export default function Key({
   pressed = false,
   recent = false,
   target = false,
-  witness = false,
   ledColor,
   mode,
   osSwapped = false,
@@ -86,11 +80,9 @@ export default function Key({
           ? "fill-green-900 stroke-green-500/70"
           : target
             ? "fill-fuchsia-800 stroke-fuchsia-300"
-            : witness
-              ? "fill-zinc-800 stroke-fuchsia-400/70"
-              : selected
-                ? "fill-sky-900 stroke-sky-400"
-                : "fill-zinc-800 stroke-zinc-700 hover:fill-zinc-700";
+            : selected
+              ? "fill-sky-900 stroke-sky-400"
+              : "fill-zinc-800 stroke-zinc-700 hover:fill-zinc-700";
 
   return (
     <g

@@ -28,7 +28,6 @@ import {
   summarize,
   type Answer,
   type DrillScope,
-  type ExcludedPosition,
   type Prompt,
   type SessionSummary,
   type StatsByLayout,
@@ -110,8 +109,6 @@ interface TrainerState {
    * mid-drill cannot silently change what a prompt means.
    */
   targets: TrainerTarget[];
-  /** Positions this session cannot ask about, and why. Surfaced in the UI. */
-  excluded: ExcludedPosition[];
   target: TrainerTarget | null;
   prompt: Prompt | null;
   /** When the current prompt appeared (epoch ms) — the reaction-time origin. */
@@ -131,10 +128,10 @@ interface TrainerState {
   /** Wipe the active layout's history. Difficulty weighting starts over. */
   resetStats(): void;
   /**
-   * Score a resolved keypress. Called by liveStore, which has already turned
-   * the browser event into a QMK code.
+   * Score a switch the board reported. Called by liveStore on key DOWN, with
+   * the layer the board was on and the position it resolved to.
    */
-  answer(qmk: string | null, now?: number): void;
+  answer(layer: number, position: number, now?: number): void;
 }
 
 /** Shared empty bucket — a fresh `{}` per call would thrash zustand selectors. */
@@ -155,7 +152,6 @@ export const useTrainerStore = create<TrainerState>()((set, get) => ({
   byLayout: loadStats(),
   layoutKey: null,
   targets: [],
-  excluded: [],
   target: null,
   prompt: null,
   promptedAt: 0,
@@ -179,7 +175,7 @@ export const useTrainerStore = create<TrainerState>()((set, get) => ({
     const { layout, selectedLayer } = useLayoutStore.getState();
     if (!layout) return;
     const layoutKey = activeLayoutKey();
-    const { targets, excluded } = buildTargets(layout, get().scope, selectedLayer);
+    const targets = buildTargets(layout, get().scope, selectedLayer);
 
     const stats = statsFor({ byLayout: get().byLayout, layoutKey });
     const target = pickTarget(targets, stats);
@@ -187,7 +183,6 @@ export const useTrainerStore = create<TrainerState>()((set, get) => ({
       running: true,
       layoutKey,
       targets,
-      excluded,
       target,
       prompt: target ? promptFor(layout, target) : null,
       promptedAt: Date.now(),
@@ -223,14 +218,15 @@ export const useTrainerStore = create<TrainerState>()((set, get) => ({
     set({ byLayout: rest, layoutKey });
   },
 
-  answer(qmk, now = Date.now()) {
+  answer(layer, position, now = Date.now()) {
     const { running, target, promptedAt, layoutKey } = get();
     if (!running || !target) return;
-    // A code we can't resolve tells us nothing about whether the right key was
-    // pressed — the same blind spot as the log's "no match". Don't score it.
-    if (qmk === null) return;
+    // Presses made on another layer are how you GET to the target's layer, not
+    // attempts at it. Scoring them would grade the route instead of the
+    // destination; the prompt says as much (see promptFor's note).
+    if (layer !== target.layer) return;
 
-    const correct = grade(target, qmk);
+    const correct = grade(target, position);
     const key = statKey(target.layer, target.position);
     const record: Answer = {
       key,
@@ -238,8 +234,7 @@ export const useTrainerStore = create<TrainerState>()((set, get) => ({
       position: target.position,
       correct,
       ms: Math.max(0, now - promptedAt),
-      expected: target.expect,
-      got: qmk,
+      got: position,
     };
 
     const bucket = statsFor({ byLayout: get().byLayout, layoutKey });

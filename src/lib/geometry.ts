@@ -1,11 +1,32 @@
 /**
  * Moonlander physical geometry, parsed once from the shared JSON, plus the
- * viewBox math for rendering it as SVG (thumb clusters are rotated).
+ * viewBox math for rendering it as SVG (thumb clusters are rotated), and the
+ * matrix → LAYOUT-arg index lookup live key reports resolve through.
  */
 import geometryJson from "../../shared/moonlander_geometry.json";
 import { GeometryFileSchema, type GeometryKey } from "./types";
 
 export const GEOMETRY = GeometryFileSchema.parse(geometryJson);
+
+/**
+ * `"row,col"` → LAYOUT-arg index, built once from the geometry.
+ *
+ * Every geometry key carries its `matrix: [row, col]`, so a firmware key report
+ * resolves to a board position by lookup — no inference from what the key
+ * emits, and no ambiguity when two positions emit the same code.
+ */
+const MATRIX_INDEX: ReadonlyMap<string, number> = new Map(
+  GEOMETRY.keys.map((k, i) => [`${k.matrix[0]},${k.matrix[1]}`, i]),
+);
+
+/**
+ * The board position a matrix coordinate belongs to, or null if the geometry
+ * has no such switch. Null is not an error — the firmware reports the whole
+ * matrix and a keyboard can have holes in it.
+ */
+export function positionForMatrix(row: number, col: number): number | null {
+  return MATRIX_INDEX.get(`${row},${col}`) ?? null;
+}
 
 /** SVG units per key unit. */
 export const U = 56;

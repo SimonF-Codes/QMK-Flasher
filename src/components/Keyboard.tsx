@@ -34,8 +34,6 @@ export default function Keyboard() {
   // text still names the key, you just have to remember where it is.
   const shown = drilling && reveal ? trainerTarget : null;
   const targetPos = shown?.layer === selectedLayer ? shown.position : null;
-  const witness = shown?.witness;
-  const witnessPos = witness?.layer === selectedLayer ? witness.position : null;
 
   const layerNames = layout!.layers.map((l) => l.title);
   const swapping = swapSource !== null;
@@ -74,7 +72,6 @@ export default function Keyboard() {
           pressed={live && pressed.has(i)}
           recent={live && recent.has(i)}
           target={targetPos === i}
-          witness={witnessPos === i}
           ledColor={leds[i]}
           mode={mode}
           osSwapped={osSwapped}

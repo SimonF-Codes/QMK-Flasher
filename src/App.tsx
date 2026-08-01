@@ -9,7 +9,7 @@ import LivePanel from "./components/LivePanel";
 import LiveToggle from "./components/LiveToggle";
 import OsSwapToggle from "./components/OsSwapToggle";
 import VersionHistoryPanel from "./components/VersionHistoryPanel";
-import { MOCK } from "./lib/ipc";
+import { ipc, MOCK } from "./lib/ipc";
 import { useClipboardStore } from "./state/clipboardStore";
 import { useLayoutStore } from "./state/layoutStore";
 import { useLiveStore } from "./state/liveStore";
@@ -43,8 +43,27 @@ export default function App() {
     void load();
   }, [load]);
 
-  // Live view: feed real key events to liveStore so the board lights up.
-  // Only active while live mode is on, so normal editing is untouched.
+  // Live view: the board itself reports every switch and its active layer over
+  // raw HID. The pairing is held only while live view is on — it sets the same
+  // flag ZSA Keymapp and Oryx use, so keeping it open would contend with them.
+  useEffect(() => {
+    if (!liveEnabled) return;
+    const live = useLiveStore.getState();
+    const unKey = ipc.onKeyReport((r) => useLiveStore.getState().keyReport(r));
+    const unLayer = ipc.onLayerReport((r) =>
+      useLiveStore.getState().layerReport(r),
+    );
+    void live.connect();
+    return () => {
+      unKey();
+      unLayer();
+      void useLiveStore.getState().disconnect();
+    };
+  }, [liveEnabled]);
+
+  // The browser is read for the one thing the firmware cannot answer: what
+  // character the OS actually received. It annotates the report that caused it
+  // — it never drives the highlight, and there is no fallback to it.
   useEffect(() => {
     if (!liveEnabled) return;
 
@@ -52,27 +71,15 @@ export default function App() {
       const where = targetKind(e.target);
       // Never interfere with the keycode search box or the rename inputs.
       if (where === "field") return;
-      useLiveStore.getState().keyDown(e);
+      useLiveStore.getState().emitted(e);
       // Swallow test keystrokes so they don't trip app shortcuts — but let the
       // scratchpad receive characters, and let Ctrl/Cmd combos through so
       // Ctrl+S still saves.
       if (where !== "scratchpad" && !e.ctrlKey && !e.metaKey) e.preventDefault();
     };
-    const onUp = (e: KeyboardEvent) => {
-      if (targetKind(e.target) === "field") return;
-      useLiveStore.getState().keyUp(e);
-    };
-    // Alt-tabbing while holding a key would otherwise leave it stuck lit.
-    const onBlur = () => useLiveStore.getState().releaseAll();
 
     window.addEventListener("keydown", onDown);
-    window.addEventListener("keyup", onUp);
-    window.addEventListener("blur", onBlur);
-    return () => {
-      window.removeEventListener("keydown", onDown);
-      window.removeEventListener("keyup", onUp);
-      window.removeEventListener("blur", onBlur);
-    };
+    return () => window.removeEventListener("keydown", onDown);
   }, [liveEnabled]);
 
   // Ctrl+S saves, Ctrl+C / Ctrl+V copy and paste the selected key; warn before

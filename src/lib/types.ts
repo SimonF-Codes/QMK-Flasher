@@ -273,6 +273,8 @@ export type GeneratedSources = z.infer<typeof GeneratedSourcesSchema>;
 export const EVENT_BUILD_LOG = "build-log";
 export const EVENT_PIPELINE_STATE = "pipeline-state";
 export const EVENT_DFU_DEVICE = "dfu-device";
+export const EVENT_KEY_REPORT = "key-report";
+export const EVENT_LAYER_REPORT = "layer-report";
 
 export const BuildLogSchema = z.object({ line: z.string() });
 
@@ -298,10 +300,28 @@ export const PipelineStateSchema = z.object({
 
 export const DfuDeviceSchema = z.object({ present: z.boolean() });
 
+/**
+ * Live key reports straight from the firmware (`src-tauri/src/keyreport`).
+ * Two events rather than one: a layer is a level that persists, a keypress is
+ * an edge, and the board reports them separately — the switch first, then the
+ * layer that switch caused.
+ */
+export const KeyReportSchema = z.object({
+  row: z.number().int().min(0).max(255),
+  col: z.number().int().min(0).max(255),
+  pressed: z.boolean(),
+});
+
+export const LayerReportSchema = z.object({
+  layer: z.number().int().min(0).max(255),
+});
+
 export type BuildLog = z.infer<typeof BuildLogSchema>;
 export type PipelinePhase = z.infer<typeof PipelinePhaseSchema>;
 export type PipelineState = z.infer<typeof PipelineStateSchema>;
 export type DfuDevice = z.infer<typeof DfuDeviceSchema>;
+export type KeyReport = z.infer<typeof KeyReportSchema>;
+export type LayerReport = z.infer<typeof LayerReportSchema>;
 
 // ---- DFU device listing (src-tauri/src/flash/mod.rs) ----
 
@@ -324,6 +344,7 @@ export const AppErrorCodeSchema = z.enum([
   "DfuAccessDenied",
   "DfuVerifyFailed",
   "InvalidLayout",
+  "KeyReportUnavailable",
 ]);
 
 export const AppErrorSchema = z.object({
