@@ -2,12 +2,11 @@ import { describe, expect, it } from "vitest";
 import {
   canonicalCode,
   emittedTapCode,
-  findLayerWithMatch,
   heldModifiers,
-  matchPositions,
   qmkForEventCode,
+  resolvedAction,
 } from "./liveKeys";
-import type { KeyAction, Layer } from "./types";
+import type { KeyAction, Layer, LayoutFile } from "./types";
 
 /** A layer of `none` keys with the given positions overridden. */
 function layerWith(
@@ -90,62 +89,55 @@ describe("emittedTapCode", () => {
   });
 });
 
-describe("matchPositions", () => {
-  it("finds every position emitting the code, not just the first", () => {
-    const layer = layerWith({
-      3: { kind: "basic", code: "KC_TAB" },
-      40: { kind: "basic", code: "KC_TAB" },
-      7: { kind: "basic", code: "KC_A" },
-    });
-    expect(matchPositions(layer, "KC_TAB")).toEqual([3, 40]);
-    expect(matchPositions(layer, "KC_A")).toEqual([7]);
+describe("resolvedAction", () => {
+  function makeLayout(layers: Layer[]): LayoutFile {
+    return {
+      schemaVersion: 2,
+      meta: {
+        name: "test",
+        geometry: "moonlander",
+        seededFrom: {
+          layoutId: "x",
+          revisionHash: "y",
+          qmkVersion: "z",
+          seededAt: "2026-01-01T00:00:00Z",
+        },
+      },
+      layers,
+      combos: [],
+      settings: {
+        autoShift: false,
+        capsWord: false,
+        tapDance: false,
+        combos: false,
+        keyLock: true,
+        oryx: false,
+        rgbMatrixCustom: false,
+        layerState8bit: false,
+        serialNumber: "",
+        rgbStartupSpeed: 0,
+      },
+    };
+  }
+
+  const layout = makeLayout([
+    layerWith({ 0: { kind: "basic", code: "KC_A" }, 1: { kind: "qkLock" } }, "base"),
+    layerWith({ 0: { kind: "transparent" }, 1: { kind: "basic", code: "KC_Z" } }, "up"),
+  ]);
+
+  it("takes the key on the reported layer when it has one", () => {
+    expect(resolvedAction(layout, 1, 1)).toEqual({ kind: "basic", code: "KC_Z" });
   });
 
-  it("matches through aliases", () => {
-    const layer = layerWith({ 5: { kind: "basic", code: "KC_BSPC" } });
-    expect(matchPositions(layer, "KC_BACKSPACE")).toEqual([5]);
+  it("follows transparent down, the way the board does", () => {
+    // The switch is on layer 1 but behaves as layer 0's A — the log has to say
+    // what the key does, not what its own cell contains.
+    expect(resolvedAction(layout, 1, 0)).toEqual({ kind: "basic", code: "KC_A" });
   });
 
-  it("returns empty when nothing emits it", () => {
-    expect(matchPositions(layerWith({}), "KC_A")).toEqual([]);
-  });
-});
-
-describe("findLayerWithMatch", () => {
-  const layers = [
-    layerWith({ 1: { kind: "basic", code: "KC_A" } }, "base"),
-    layerWith({ 2: { kind: "basic", code: "KC_B" } }, "one"),
-    layerWith({ 3: { kind: "basic", code: "KC_A" } }, "two"),
-  ];
-
-  it("prefers the layer already on screen when it matches", () => {
-    // KC_A exists on layers 0 and 2 — viewing 2 must not yank us to 0.
-    expect(findLayerWithMatch(layers, "KC_A", 2)).toEqual({
-      layer: 2,
-      positions: [3],
-    });
-    expect(findLayerWithMatch(layers, "KC_A", 0)).toEqual({
-      layer: 0,
-      positions: [1],
-    });
-  });
-
-  it("falls back to the first other layer that matches", () => {
-    expect(findLayerWithMatch(layers, "KC_B", 0)).toEqual({
-      layer: 1,
-      positions: [2],
-    });
-  });
-
-  it("returns null when no layer emits the code", () => {
-    expect(findLayerWithMatch(layers, "KC_Z", 0)).toBeNull();
-  });
-
-  it("tolerates an out-of-range preferred layer", () => {
-    expect(findLayerWithMatch(layers, "KC_B", 99)).toEqual({
-      layer: 1,
-      positions: [2],
-    });
+  it("is null when nothing is assigned all the way down", () => {
+    expect(resolvedAction(layout, 1, 40)).toEqual({ kind: "none" });
+    expect(resolvedAction(layout, 99, 0)).toBeNull();
   });
 });
 

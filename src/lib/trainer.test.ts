@@ -1,10 +1,9 @@
 import { describe, expect, it } from "vitest";
 import {
   buildTargets,
-  classifyPosition,
   emptyStat,
-  findWitness,
   grade,
+  isDrillable,
   median,
   parseStats,
   pickTarget,
@@ -86,161 +85,63 @@ const LAYOUT = makeLayout([
   ),
 ]);
 
-function targetAt(
-  layout: LayoutFile,
-  layer: number,
-  position: number,
-  asLayerKey = false,
-): TrainerTarget {
-  const c = classifyPosition(layout, layer, position, asLayerKey);
-  if (!c.ok) throw new Error(`expected a target, got ${c.excluded.reason}`);
-  return c.target;
-}
-
-describe("classifyPosition", () => {
-  it("reads a plain key as directly observable", () => {
-    const t = targetAt(LAYOUT, 0, 0);
-    expect(t.mode).toBe("direct");
-    expect(t.expect).toBe("KC_A");
-    expect(t.ambiguous).toBe(false);
-  });
-
-  it("skips positions with nothing on them", () => {
-    const c = classifyPosition(LAYOUT, 0, 71);
-    expect(c).toEqual({
-      ok: false,
-      excluded: { layer: 0, position: 71, reason: "empty" },
-    });
-  });
-
-  it("excludes keys the firmware consumes, naming the reason", () => {
-    // QK_LOCK never reaches the OS — the same blind spot liveKeys.ts documents.
-    const c = classifyPosition(LAYOUT, 0, 7);
-    expect(c.ok).toBe(false);
-    if (!c.ok) expect(c.excluded.reason).toBe("silent");
-  });
-
-  it("excludes TG/TO because they latch the board onto another layer", () => {
-    const c = classifyPosition(LAYOUT, 0, 6);
-    expect(c.ok).toBe(false);
-    if (!c.ok) expect(c.excluded.reason).toBe("latching");
-  });
-
-  it("drills MO through a witness key on the layer it activates", () => {
-    const t = targetAt(LAYOUT, 0, 5);
-    expect(t.mode).toBe("witness");
-    // KC_Z is the first key on layer 1 the base layer cannot produce.
-    expect(t.witness).toEqual({ layer: 1, position: 10, code: "KC_Z" });
-    expect(t.expect).toBe("KC_Z");
-    expect(t.ambiguous).toBe(false);
-  });
-
-  it("drills LT by its tap normally, and by its hold when drilling layer keys", () => {
-    expect(targetAt(LAYOUT, 0, 8)).toMatchObject({
-      mode: "direct",
-      expect: "KC_SPACE",
-    });
-    expect(targetAt(LAYOUT, 0, 8, true)).toMatchObject({
-      mode: "witness",
-      expect: "KC_Z",
-    });
-  });
-
-  it("flags a target another position can also answer", () => {
-    const dup = makeLayout([
-      layerWith({ 0: { kind: "basic", code: "KC_A" }, 3: { kind: "basic", code: "KC_A" } }),
-    ]);
-    expect(targetAt(dup, 0, 0).ambiguous).toBe(true);
-  });
-
-  it("counts duplicates across layers — the other one is still pressable", () => {
-    const dup = makeLayout([
-      layerWith({ 0: { kind: "basic", code: "KC_A" } }, "base"),
-      layerWith({ 9: { kind: "basic", code: "KC_A" } }, "other"),
-    ]);
-    expect(targetAt(dup, 0, 0).ambiguous).toBe(true);
-    expect(targetAt(dup, 1, 9).ambiguous).toBe(true);
-  });
+const targetAt = (layer: number, position: number): TrainerTarget => ({
+  layer,
+  position,
 });
 
-describe("findWitness", () => {
-  it("prefers a key the base layer cannot produce at all", () => {
-    expect(findWitness(LAYOUT, 1)).toEqual({
-      witness: { layer: 1, position: 10, code: "KC_Z" },
-      strong: true,
-    });
+describe("isDrillable", () => {
+  it("takes any position with a key on it", () => {
+    expect(isDrillable(LAYOUT, 0, 0)).toBe(true); // a plain letter
+    expect(isDrillable(LAYOUT, 0, 8)).toBe(true); // LT()
   });
 
-  it("falls back to a weak witness and says it is weak", () => {
-    // Layer 1's only distinctive key is A at a different position: pressing it
-    // without holding the layer key gives B, so the drill still works — but the
-    // user could also have pressed the base layer's own A.
-    const weakish = makeLayout([
-      layerWith(
-        { 0: { kind: "basic", code: "KC_A" }, 1: { kind: "basic", code: "KC_B" } },
-        "base",
-      ),
-      layerWith({ 1: { kind: "basic", code: "KC_A" } }, "nav"),
-    ]);
-    expect(findWitness(weakish, 1)).toEqual({
-      witness: { layer: 1, position: 1, code: "KC_A" },
-      strong: false,
-    });
+  it("takes the keys the OS never sees — the firmware reports them", () => {
+    // QK_LOCK, MO and TG used to be unaskable because nothing reached the OS.
+    // The board reports the switch itself, so they are ordinary targets now.
+    expect(isDrillable(LAYOUT, 0, 7)).toBe(true); // QK_LOCK
+    expect(isDrillable(LAYOUT, 0, 5)).toBe(true); // MO(1)
+    expect(isDrillable(LAYOUT, 0, 6)).toBe(true); // TG(1), latching
   });
 
-  it("has no witness when the layer emits nothing the base layer doesn't", () => {
-    const useless = makeLayout([
-      layerWith({ 0: { kind: "basic", code: "KC_A" } }, "base"),
-      layerWith({ 0: { kind: "basic", code: "KC_A" } }, "same"),
-    ]);
-    expect(findWitness(useless, 1)).toBeNull();
-  });
-
-  it("ignores transparent keys, which emit the lower layer's code anyway", () => {
-    const seeThrough = makeLayout([
+  it("refuses positions with nothing to name", () => {
+    expect(isDrillable(LAYOUT, 0, 71)).toBe(false); // KC_NO
+    expect(isDrillable(LAYOUT, 99, 0)).toBe(false); // no such layer
+    const clear = makeLayout([
       layerWith({ 0: { kind: "basic", code: "KC_A" } }, "base"),
       layerWith({ 0: { kind: "transparent" } }, "clear"),
     ]);
-    expect(findWitness(seeThrough, 1)).toBeNull();
-  });
-
-  it("never witnesses the base layer against itself", () => {
-    expect(findWitness(LAYOUT, 0)).toBeNull();
+    // Transparent is the layer below wearing this layer's hat — asking for it
+    // would be asking for a different key at a different address.
+    expect(isDrillable(clear, 1, 0)).toBe(false);
   });
 });
 
 describe("buildTargets", () => {
   it("scopes to the visible layer", () => {
-    const { targets } = buildTargets(LAYOUT, "currentLayer", 1);
-    expect(targets.map((t) => t.position)).toEqual([10, 11]);
+    expect(buildTargets(LAYOUT, "currentLayer", 1).map((t) => t.position)).toEqual([
+      10, 11,
+    ]);
   });
 
   it("spans every layer when asked to", () => {
-    const { targets } = buildTargets(LAYOUT, "allLayers", 0);
+    const targets = buildTargets(LAYOUT, "allLayers", 0);
     expect(targets.filter((t) => t.layer === 1)).toHaveLength(2);
-    expect(targets.some((t) => t.layer === 0 && t.position === 0)).toBe(true);
+    expect(targets.filter((t) => t.layer === 0).map((t) => t.position)).toEqual([
+      0, 1, 5, 6, 7, 8,
+    ]);
   });
 
-  it("layerKeys drills only navigation keys, as holds", () => {
-    const { targets } = buildTargets(LAYOUT, "layerKeys", 0);
-    // MO(1) at 5 and LT(1) at 8 — TG(1) at 6 latches and is left out.
-    expect(targets.map((t) => t.position)).toEqual([5, 8]);
-    expect(targets.every((t) => t.mode === "witness")).toBe(true);
-  });
-
-  it("reports what it left out, but not bare empty positions", () => {
-    const { excluded } = buildTargets(LAYOUT, "allLayers", 0);
-    expect(excluded.some((e) => e.reason === "empty")).toBe(false);
-    expect(excluded).toEqual(
-      expect.arrayContaining([
-        { layer: 0, position: 6, reason: "latching" },
-        { layer: 0, position: 7, reason: "silent" },
-      ]),
-    );
+  it("layerKeys drills navigation keys, latching ones included", () => {
+    // MO(1) at 5, TG(1) at 6, LT(1) at 8. TG used to be left out because a
+    // latched board was unobservable; layer-report says where the board is.
+    expect(buildTargets(LAYOUT, "layerKeys", 0).map((t) => t.position)).toEqual([
+      5, 6, 8,
+    ]);
   });
 
   it("has nothing to drill on a layer that is out of range", () => {
-    expect(buildTargets(LAYOUT, "currentLayer", 99).targets).toEqual([]);
+    expect(buildTargets(LAYOUT, "currentLayer", 99)).toEqual([]);
   });
 });
 
@@ -284,15 +185,8 @@ describe("weightFor", () => {
 });
 
 describe("pickTarget", () => {
-  const a: TrainerTarget = {
-    layer: 0,
-    position: 1,
-    mode: "direct",
-    expect: "KC_A",
-    witness: null,
-    ambiguous: false,
-  };
-  const b: TrainerTarget = { ...a, position: 2, expect: "KC_B" };
+  const a: TrainerTarget = { layer: 0, position: 1 };
+  const b: TrainerTarget = { layer: 0, position: 2 };
 
   /** Deterministic: rng returns exactly this fraction of the weight total. */
   const at = (fraction: number) => () => fraction;
@@ -373,25 +267,15 @@ describe("recordAnswer", () => {
 });
 
 describe("grade", () => {
-  const target = targetAt(LAYOUT, 0, 0);
-
-  it("accepts the expected code, through aliases", () => {
-    expect(grade(target, "KC_A")).toBe(true);
-    const bspc = targetAt(makeLayout([layerWith({ 0: { kind: "basic", code: "KC_BSPC" } })]), 0, 0);
-    expect(grade(bspc, "KC_BACKSPACE")).toBe(true);
+  it("accepts the switch the target names, and nothing else", () => {
+    const target = targetAt(0, 5);
+    expect(grade(target, 5)).toBe(true);
+    expect(grade(target, 6)).toBe(false);
   });
 
-  it("rejects anything else, including nothing at all", () => {
-    expect(grade(target, "KC_B")).toBe(false);
-    expect(grade(target, null)).toBe(false);
-  });
-
-  it("scores a layer key by its witness, not by the layer key itself", () => {
-    const mo = targetAt(LAYOUT, 0, 5);
-    expect(grade(mo, "KC_Z")).toBe(true);
-    // Pressing the same position without holding MO gives the base layer's
-    // key, which is exactly the mistake being drilled.
-    expect(grade(mo, "KC_A")).toBe(false);
+  it("scores a layer key like any other — the board reports the switch", () => {
+    // MO(1) emits nothing to the OS, which used to make this unscorable.
+    expect(grade(targetAt(0, 5), 5)).toBe(true);
   });
 });
 
@@ -402,8 +286,7 @@ describe("summarize", () => {
     position: 1,
     correct: true,
     ms: 500,
-    expected: "KC_A",
-    got: "KC_A",
+    got: 1,
     ...over,
   });
 
@@ -453,15 +336,21 @@ describe("median", () => {
 
 describe("promptFor", () => {
   it("names the key and its layer", () => {
-    const p = promptFor(LAYOUT, targetAt(LAYOUT, 0, 0));
+    const p = promptFor(LAYOUT, targetAt(0, 0));
     expect(p.instruction).toBe("Press A on layer 0 · base");
     expect(p.note).toBeNull();
   });
 
-  it("spells out the hold-and-press protocol, and why", () => {
-    const p = promptFor(LAYOUT, targetAt(LAYOUT, 0, 5));
-    expect(p.instruction).toBe("Hold MO 1 on layer 0 · base, then press Z");
-    expect(p.note).toContain("never reach the OS");
+  it("names a layer key by its own label, not by a stand-in", () => {
+    expect(promptFor(LAYOUT, targetAt(0, 5)).instruction).toBe(
+      "Press MO 1 on layer 0 · base",
+    );
+  });
+
+  it("warns that getting to another layer is navigation, not an answer", () => {
+    const p = promptFor(LAYOUT, targetAt(1, 10));
+    expect(p.instruction).toBe("Press Z on layer 1 · nav");
+    expect(p.note).toContain("aren't scored");
   });
 });
 

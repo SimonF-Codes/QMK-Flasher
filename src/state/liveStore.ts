@@ -1,30 +1,40 @@
 /**
- * Live view state (zustand): which positions are held down, a rolling log of
- * what the firmware emitted, the layer auto-follow policy, and which of the two
- * live modes is running.
+ * Live view state (zustand): which switches are held down, which layer the
+ * board is on, a rolling log of what happened, and which of the two live modes
+ * is running.
  *
- * Live view has two modes over the same key plumbing. `monitor` is the original
- * one: it watches and logs, and asks nothing. `trainer` feeds every resolved
- * press to trainerStore, which prompts and scores. The capture, resolution and
- * press/afterglow rendering are identical in both — the mode only decides
- * whether anything is listening.
+ * The source of truth is the firmware. `key-report` gives a matrix position for
+ * every switch — including the ones QMK consumes and never sends to the OS
+ * (MO/TO/TG/TT, QK_LOCK, RGB_*) — and `layer-report` gives the active layer as
+ * fact rather than inference. Positions come from `positionForMatrix`, an exact
+ * lookup, so nothing here guesses which key produced what.
+ *
+ * There is **no fallback to browser key events**. If reports are not arriving,
+ * the panel says so; silently degrading to a view that cannot see half the
+ * board would be worse than saying it is off. The browser is still read for the
+ * one thing the firmware cannot answer — the character the OS actually received
+ * — which `emitted()` attaches to the report that caused it.
  *
  * Like displayStore, this is app-wide UI state and NOT part of any layout —
  * nothing here mutates the layout or touches dirty tracking. `enabled`,
  * `followLayer` and `mode` persist to localStorage; press state and the log are
  * in-memory only.
  *
- * It reads layoutStore (and calls selectLayer) so the whole press→match→follow
+ * It reads layoutStore (and calls selectLayer) so the whole report→follow
  * decision is one testable action rather than logic stranded in a component.
  * layoutStore does not know about this store, so there is no import cycle;
  * trainerStore likewise never imports back.
  */
 import { create } from "zustand";
+import { positionForMatrix } from "../lib/geometry";
+import { ipc, toAppError } from "../lib/ipc";
 import {
-  findLayerWithMatch,
+  emittedTapCode,
   heldModifiers,
   qmkForEventCode,
+  resolvedAction,
 } from "../lib/liveKeys";
+import type { AppError, KeyReport, LayerReport } from "../lib/types";
 import { useLayoutStore } from "./layoutStore";
 import { useTrainerStore } from "./trainerStore";
 
@@ -35,10 +45,27 @@ const MODE_KEY = "qmk-flasher.liveMode";
 /** Watch and log (`monitor`) versus prompt and score (`trainer`). */
 export type LiveMode = "monitor" | "trainer";
 
+/**
+ * Where the capture stands. `waiting` means the channel opened but the board
+ * has not said anything yet — press a key and it becomes `live`.
+ */
+export type LiveStatus =
+  | "off"
+  | "connecting"
+  | "waiting"
+  | "live"
+  | "unavailable";
+
 /** Cap on the event log; oldest entries fall off the end. */
 export const LOG_LIMIT = 200;
 /** How long a released key keeps glowing, so fast taps stay visible (ms). */
 export const AFTERGLOW_MS = 220;
+/**
+ * How long after a key report a browser keystroke still counts as its output.
+ * The firmware reports the switch *before* QMK sends the HID usage, so the
+ * character always follows its report — within a frame or two, never before.
+ */
+export const EMIT_WINDOW_MS = 250;
 
 /** The subset of a KeyboardEvent we need — lets tests pass plain objects. */
 export interface LiveKeyInput {
@@ -55,17 +82,20 @@ export interface LiveEvent {
   id: number;
   at: number;
   type: "down" | "up";
-  /** Raw KeyboardEvent.code. */
-  code: string;
-  /** The character actually produced (KeyboardEvent.key). */
-  key: string;
-  /** Resolved QMK keycode, or null when we don't recognize the code. */
+  /** Matrix coordinates exactly as the firmware reported them. */
+  row: number;
+  col: number;
+  /** Board position, or null when the geometry has no switch there. */
+  position: number | null;
+  /** The board's active layer when the switch was reported. */
+  layer: number;
+  /** What the layout on screen says that switch does on that layer. */
   qmk: string | null;
+  /** QMK code the OS actually received, once the browser reports it. */
+  emitted: string | null;
+  /** The character produced (KeyboardEvent.key), or null if none arrived. */
+  char: string | null;
   mods: string[];
-  /** Board positions that emit this key on the matched layer. */
-  positions: number[];
-  /** Layer the match came from, or null when nothing matched. */
-  layer: number | null;
 }
 
 function loadBool(key: string, fallback: boolean): boolean {
@@ -100,14 +130,18 @@ interface LiveState {
   enabled: boolean;
   /** Which live mode is running. Trainer sessions only exist in `trainer`. */
   mode: LiveMode;
-  /** Auto-switch the visible layer to wherever a pressed key was found. */
+  status: LiveStatus;
+  /** Why the channel could not be opened. Set only with status `unavailable`. */
+  error: AppError | null;
+  /** Auto-switch the visible layer to the one the board reports. */
   followLayer: boolean;
   /**
    * Layer the user pinned by clicking a tab while live. Auto-follow is paused
-   * while set — the manual override that guarantees the view matches reality
-   * when inference guesses wrong.
+   * while set — useful for studying one layer while typing on another.
    */
   pinnedLayer: number | null;
+  /** The board's topmost active layer, as last reported. */
+  activeLayer: number;
   /** Positions currently held down. */
   pressed: ReadonlySet<number>;
   /** Recently released positions, still glowing. */
@@ -123,9 +157,17 @@ interface LiveState {
   pinLayer(layer: number): void;
   /** Drop the pin and resume auto-follow. */
   resumeFollow(): void;
-  keyDown(e: LiveKeyInput): void;
-  keyUp(e: LiveKeyInput): void;
-  /** Drop all press state — used on window blur so keys don't stick lit. */
+  /** Open the raw-HID channel. Sets `unavailable` + `error` if it can't. */
+  connect(): Promise<void>;
+  /** Release the channel back to Keymapp/Oryx and drop press state. */
+  disconnect(): Promise<void>;
+  /** A switch changed state, straight from the firmware. */
+  keyReport(r: KeyReport): void;
+  /** The board changed layer, straight from the firmware. */
+  layerReport(r: LayerReport): void;
+  /** Attach the character the OS received to the report that produced it. */
+  emitted(e: LiveKeyInput): void;
+  /** Drop all press state — used when the channel goes away mid-hold. */
   releaseAll(): void;
   clearLog(): void;
 }
@@ -141,8 +183,11 @@ function cancelGlowTimers(): void {
 export const useLiveStore = create<LiveState>()((set, get) => ({
   enabled: loadBool(ENABLED_KEY, false),
   mode: loadMode(),
+  status: "off",
+  error: null,
   followLayer: loadBool(FOLLOW_KEY, true),
   pinnedLayer: null,
+  activeLayer: 0,
   pressed: new Set<number>(),
   recent: new Set<number>(),
   events: [],
@@ -183,63 +228,83 @@ export const useLiveStore = create<LiveState>()((set, get) => ({
     set({ pinnedLayer: null });
   },
 
-  keyDown(e) {
-    const { layout, selectedLayer, selectLayer } = useLayoutStore.getState();
-    const qmk = qmkForEventCode(e.code);
-    const match =
-      layout && qmk
-        ? findLayerWithMatch(layout.layers, qmk, selectedLayer)
-        : null;
-
-    // Auto-follow: only move the view when the key isn't on the current layer,
-    // follow is on, and the user hasn't pinned a layer.
-    const { followLayer, pinnedLayer } = get();
-    if (
-      match &&
-      match.layer !== selectedLayer &&
-      followLayer &&
-      pinnedLayer === null
-    ) {
-      selectLayer(match.layer);
+  async connect() {
+    set({ status: "connecting", error: null });
+    try {
+      await ipc.startKeyReporting();
+      // Nothing has been heard from the board yet — say that rather than
+      // claiming a live view that has shown nothing.
+      set({ status: "waiting", error: null });
+    } catch (e) {
+      set({ status: "unavailable", error: toAppError(e) });
     }
+  },
 
-    const positions = match?.positions ?? [];
+  async disconnect() {
+    cancelGlowTimers();
+    set({
+      status: "off",
+      error: null,
+      pressed: new Set<number>(),
+      recent: new Set<number>(),
+    });
+    try {
+      await ipc.stopKeyReporting();
+    } catch {
+      /* stopping is best-effort — the listener exits on its own read tick */
+    }
+  },
+
+  keyReport({ row, col, pressed: down }) {
+    const position = positionForMatrix(row, col);
+    const layer = get().activeLayer;
+
     const pressed = new Set(get().pressed);
     const recent = new Set(get().recent);
-    for (const p of positions) {
-      pressed.add(p);
-      recent.delete(p);
-      const t = glowTimers.get(p);
-      if (t) {
-        clearTimeout(t);
-        glowTimers.delete(p);
+    if (position !== null) {
+      const prev = glowTimers.get(position);
+      if (prev) {
+        clearTimeout(prev);
+        glowTimers.delete(position);
+      }
+      if (down) {
+        pressed.add(position);
+        recent.delete(position);
+      } else {
+        pressed.delete(position);
+        recent.add(position);
+        glowTimers.set(
+          position,
+          setTimeout(() => {
+            glowTimers.delete(position);
+            const next = new Set(useLiveStore.getState().recent);
+            if (next.delete(position)) useLiveStore.setState({ recent: next });
+          }, AFTERGLOW_MS),
+        );
       }
     }
 
-    // Auto-repeat re-fires keydown; keep the highlight but don't flood the log.
-    if (e.repeat) {
-      set({ pressed, recent });
-      return;
-    }
+    const { layout } = useLayoutStore.getState();
+    const action =
+      layout && position !== null ? resolvedAction(layout, layer, position) : null;
 
     const id = get().nextId;
     const event: LiveEvent = {
       id,
       at: Date.now(),
-      type: "down",
-      code: e.code,
-      key: e.key,
-      qmk,
-      mods: heldModifiers({
-        ctrlKey: !!e.ctrlKey,
-        shiftKey: !!e.shiftKey,
-        altKey: !!e.altKey,
-        metaKey: !!e.metaKey,
-      }),
-      positions,
-      layer: match?.layer ?? null,
+      type: down ? "down" : "up",
+      row,
+      col,
+      position,
+      layer,
+      qmk: action ? emittedTapCode(action) : null,
+      emitted: null,
+      char: null,
+      mods: [],
     };
     set({
+      // The first report is the proof the channel really works.
+      status: "live",
       pressed,
       recent,
       nextId: id + 1,
@@ -248,59 +313,43 @@ export const useLiveStore = create<LiveState>()((set, get) => ({
 
     // Trainer mode grades on key DOWN, not up: the reaction time we care about
     // ends when you commit to a key, and waiting for the release would let a
-    // long hold look like slow recall. Repeats already returned above.
-    if (get().mode === "trainer") useTrainerStore.getState().answer(qmk);
+    // long hold look like slow recall.
+    if (down && position !== null && get().mode === "trainer") {
+      useTrainerStore.getState().answer(layer, position);
+    }
   },
 
-  keyUp(e) {
-    const { layout, selectedLayer } = useLayoutStore.getState();
-    const qmk = qmkForEventCode(e.code);
-    const match =
-      layout && qmk
-        ? findLayerWithMatch(layout.layers, qmk, selectedLayer)
-        : null;
-    const positions = match?.positions ?? [];
+  layerReport({ layer }) {
+    const { layout, selectedLayer, selectLayer } = useLayoutStore.getState();
+    set({ status: "live", activeLayer: layer });
 
-    const pressed = new Set(get().pressed);
-    const recent = new Set(get().recent);
-    for (const p of positions) {
-      pressed.delete(p);
-      recent.add(p);
-      const prev = glowTimers.get(p);
-      if (prev) clearTimeout(prev);
-      glowTimers.set(
-        p,
-        setTimeout(() => {
-          glowTimers.delete(p);
-          const next = new Set(useLiveStore.getState().recent);
-          if (next.delete(p)) useLiveStore.setState({ recent: next });
-        }, AFTERGLOW_MS),
-      );
+    // Auto-follow: the board says where it is, so this only has to obey.
+    const { followLayer, pinnedLayer } = get();
+    const exists = !!layout?.layers[layer];
+    if (exists && followLayer && pinnedLayer === null && layer !== selectedLayer) {
+      selectLayer(layer);
     }
+  },
 
-    const id = get().nextId;
-    const event: LiveEvent = {
-      id,
-      at: Date.now(),
-      type: "up",
-      code: e.code,
-      key: e.key,
-      qmk,
+  emitted(e) {
+    // Auto-repeat re-fires keydown with no new switch report behind it.
+    if (e.repeat) return;
+    const events = get().events;
+    const head = events[0];
+    if (!head || head.type !== "down" || head.char !== null) return;
+    if (Date.now() - head.at > EMIT_WINDOW_MS) return;
+    const annotated: LiveEvent = {
+      ...head,
+      emitted: qmkForEventCode(e.code),
+      char: e.key,
       mods: heldModifiers({
         ctrlKey: !!e.ctrlKey,
         shiftKey: !!e.shiftKey,
         altKey: !!e.altKey,
         metaKey: !!e.metaKey,
       }),
-      positions,
-      layer: match?.layer ?? null,
     };
-    set({
-      pressed,
-      recent,
-      nextId: id + 1,
-      events: [event, ...get().events].slice(0, LOG_LIMIT),
-    });
+    set({ events: [annotated, ...events.slice(1)] });
   },
 
   releaseAll() {

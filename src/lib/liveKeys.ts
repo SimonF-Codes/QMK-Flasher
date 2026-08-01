@@ -1,19 +1,22 @@
 /**
- * Live view: mapping a browser keyboard event back onto a board position.
+ * What the *browser* can tell us about a keypress: which HID usage arrived, and
+ * therefore what character the OS received.
  *
- * By the time the webview sees a keypress, QMK has already translated the
- * physical switch into a HID usage — so `event.code` tells us which key was
- * *emitted*, not which switch was pressed. To light up the diagram we invert
- * the layout: resolve `event.code` to a QMK keycode, then find the positions in
- * a layer that emit it.
+ * This used to be the whole live view, and it had to invert the layout to guess
+ * which switch produced a code. It no longer does: the firmware reports the
+ * switch and the active layer directly (`src-tauri/src/keyreport`, forwarded as
+ * `key-report`/`layer-report`), so position and layer are looked up exactly in
+ * `geometry.ts:positionForMatrix`. The inference — `findLayerWithMatch` and
+ * friends — is gone with it.
  *
- * Consequence worth remembering: keys QMK consumes internally (MO/TO/TG/TT,
- * QK_LOCK, RGB_*) never reach the OS at all, so they can never be matched here.
- * That is a property of where we tap the signal, not a bug — see
- * docs/CONTRACT.md and the live-view plan for the raw-HID alternative.
+ * What survives is the half the firmware cannot answer. The board says which
+ * switch closed; only the OS knows what came out the other end, which is what
+ * the scratchpad is for and what makes a layout-vs-board mismatch visible in
+ * the log.
  */
+import { fallthroughSource } from "./led";
 import { entryFor } from "./keycodes";
-import type { KeyAction, Layer } from "./types";
+import type { KeyAction, LayoutFile } from "./types";
 
 const letters = Object.fromEntries(
   Array.from({ length: 26 }, (_, i) => {
@@ -148,43 +151,22 @@ export function emittedTapCode(a: KeyAction): string | null {
   }
 }
 
-/** Every position in `layer` that emits `qmk` (a layout can repeat a key). */
-export function matchPositions(layer: Layer, qmk: string): number[] {
-  const want = canonicalCode(qmk);
-  const hits: number[] = [];
-  layer.keys.forEach((action, i) => {
-    if (emittedTapCode(action) === want) hits.push(i);
-  });
-  return hits;
-}
-
-export interface LayerMatch {
-  layer: number;
-  positions: number[];
-}
-
 /**
- * Find where `qmk` lives, preferring `preferred` (the layer on screen) so the
- * view only moves when the current layer genuinely can't produce the key.
- * Returns null when no layer emits it.
+ * The action a switch really performs when `layer` is on top, following
+ * `transparent` fall-through the way QMK does. Null when nothing is assigned
+ * anywhere below either.
+ *
+ * The board reports only its topmost layer, which is the same thing the LED
+ * map resolves against — hence the shared `fallthroughSource`.
  */
-export function findLayerWithMatch(
-  layers: readonly Layer[],
-  qmk: string,
-  preferred: number,
-): LayerMatch | null {
-  const inPreferred = layers[preferred]
-    ? matchPositions(layers[preferred], qmk)
-    : [];
-  if (inPreferred.length > 0) {
-    return { layer: preferred, positions: inPreferred };
-  }
-  for (let i = 0; i < layers.length; i++) {
-    if (i === preferred) continue;
-    const hits = matchPositions(layers[i], qmk);
-    if (hits.length > 0) return { layer: i, positions: hits };
-  }
-  return null;
+export function resolvedAction(
+  layout: LayoutFile,
+  layer: number,
+  position: number,
+): KeyAction | null {
+  const source = fallthroughSource(layout, layer, position);
+  if (source === null) return null;
+  return layout.layers[source]?.keys[position] ?? null;
 }
 
 /**

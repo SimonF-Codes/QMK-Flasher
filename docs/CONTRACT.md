@@ -150,40 +150,62 @@ tap dance (`QK_LOCK = 0x7C59`; `register_code16` only handles basic keycodes
 and never reaches `process_key_lock`), so OS-mode keys must occupy their own
 key positions.
 
+### Live key reports (added 2026-08-01)
+
+Live view and the trainer read the board through the firmware, not the webview.
+`src-tauri/src/keyreport` opens QMK's raw-HID channel (usage page 0xFF60 /
+usage 0x61, ZSA's Oryx protocol, already compiled in), pairs, and decodes; the
+command layer forwards it as `key-report` / `layer-report`. No firmware change
+and no reflash. `start_key_reporting` / `stop_key_reporting` bracket it, so the
+pairing flag is held only while live view is on and Keymapp/Oryx can have the
+channel the rest of the time.
+
+Why this matters: `pre_process_record_oryx` fires *before* the keycode is
+consumed, so keys QMK never sends to the OS — `MO`/`TO`/`TG`/`TT`, `QK_LOCK`,
+`RGB_*` — are reported too, and `layer_state_set_oryx` makes layer state ground
+truth instead of inference.
+
+Frontend consequences:
+
+- **Positions are looked up, not inferred.** `geometry.ts:positionForMatrix`
+  maps `matrix: [row, col]` → LAYOUT-arg index from
+  `shared/moonlander_geometry.json`. The old `findLayerWithMatch` /
+  `matchPositions` inversion of the layout is gone.
+- **The layer comes from the board.** `liveStore.activeLayer` follows
+  `layer-report`; auto-follow obeys it rather than guessing. The manual layer
+  pin is kept — it is now a preference, not a correction.
+- **No fallback.** If the channel cannot be opened, `liveStore.status` goes
+  `unavailable` with the `KeyReportUnavailable` error and the panel says so
+  (with a Retry). It never quietly reverts to browser key events; a source badge
+  shows `firmware` / `waiting` / `no reports`.
+- **`liveKeys.ts` keeps the browser half only.** The firmware answers "which
+  switch, which layer"; `KeyboardEvent` answers "what character came out", which
+  `liveStore.emitted()` attaches to the report that caused it (within
+  `EMIT_WINDOW_MS`) and the scratchpad shows directly.
+
 ### Trainer mode (added 2026-08-01, frontend-only)
 
-**No schema, command, event or Rust changes.** Live Key View now has two modes
-over the same capture path: `monitor` (the original — watch and log, ask
-nothing) and `trainer` (prompt for a key, score the answer, weight the next
-prompt toward weak keys). `liveStore.mode` picks between them; monitoring stays
-reachable at all times.
+**No schema or command changes.** Live Key View has two modes over the same
+capture path: `monitor` (watch and log, ask nothing) and `trainer` (prompt for a
+key, score the answer, weight the next prompt toward weak keys).
+`liveStore.mode` picks between them; monitoring stays reachable at all times.
 
-Pure logic is `src/lib/trainer.ts` (target classification, witness selection,
-weighting, scoring, summaries, stats (de)serialization); `src/state/
-trainerStore.ts` holds a session together and persists.
+Pure logic is `src/lib/trainer.ts` (target selection, weighting, scoring,
+summaries, stats (de)serialization); `src/state/trainerStore.ts` holds a session
+together and persists.
 
-**What the trainer cannot see, and what it does about it.** The constraint at
-the top of `liveKeys.ts` applies in full: we observe the board through
-`KeyboardEvent`, i.e. after QMK is done with the press, so keys the firmware
-consumes emit nothing. Every position is classified up front, and the UI names
-the count and reason for everything it left out rather than silently marking
-unseen keys wrong:
+**A target is a position on a layer, and an answer is a switch.** Grading is by
+position, exactly: `grade(target, position)`. The `direct` / `witness` /
+`excluded` classification that used to live here existed only because keys the
+firmware consumes were invisible through `KeyboardEvent` — with reports they are
+not, so `MO`/`TG`/`TO`/`TT` and `QK_LOCK` are ordinary targets, witnesses are
+gone, and `ambiguous` is gone (two positions can emit the same code; they are
+never the same switch).
 
-| bucket | which keys | how it is scored |
-|---|---|---|
-| `direct` | anything with an emitted tap code (`basic`, `modTap`, `layerTap` tap, `dualFunc` tap, `tapDance` tap, `special`) | the emitted code must match |
-| `witness` | **momentary** layer keys — `MO`, `TT`, and `LT` when drilling layer navigation | hold the key and press a *witness* on the layer it activates; the witness's code arriving is the proof |
-| excluded `silent` | `qkLock`, `rgb`, `rgbHsv`, `macro`, tap-dance without a tap | not scored — nothing reaches the OS |
-| excluded `latching` | `TG`, `TO` | not scored — they park the board on another layer with no observable return, which would corrupt every later prompt in the session |
-| excluded `noWitness` | a momentary layer key whose target layer emits nothing the base layer can't | not scored (e.g. the seeded layout's `LT(3)`: layer 3 is only macros and `TO` keys) |
-| excluded `empty` | `none`, `transparent` | nothing to ask for; not reported |
-
-A witness is **strong** when its code appears nowhere on the base layer (layer
-0, `BASE_LAYER`) and **weak** when it merely differs from what the same position
-emits there. Weak witnesses, and any direct target whose code is emitted by more
-than one position in the layout, are flagged `ambiguous` and the UI says the
-answer could have come from another key. Two positions emitting the same code
-are genuinely indistinguishable from where we tap the signal.
+The one limit that remains, and the UI says it in the prompt: **presses made
+while the board is on another layer are navigation, not answers**, and are not
+scored either way. The only positions that cannot be drilled at all are `none`
+and `transparent` — nothing to name.
 
 **Persisted shape** (localStorage only — nothing on disk, nothing over IPC):
 

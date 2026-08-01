@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { GEOMETRY } from "../lib/geometry";
 import { resetMockStore } from "../lib/ipc";
 import { serializeStats, statKey, type StatsMap } from "../lib/trainer";
 import type { KeyAction, Layer, LayoutFile } from "../lib/types";
@@ -47,13 +48,17 @@ function makeLayout(layers: Layer[]): LayoutFile {
 /** One drillable key, so the prompt is deterministic without stubbing rng. */
 const ONE_KEY = [layerWith({ 0: { kind: "basic", code: "KC_A" } }, "base")];
 
-/** Two drillable keys plus an MO(1) that can only be seen through a witness. */
+/**
+ * Two layers, with the keys the old trainer could not see: MO(1) emits nothing
+ * and QK_LOCK emits nothing, yet both are ordinary targets now.
+ */
 const TWO_LAYERS = [
   layerWith(
     {
       0: { kind: "basic", code: "KC_A" },
       1: { kind: "basic", code: "KC_B" },
       5: { kind: "layerSwitch", action: "MO", layer: 1 },
+      7: { kind: "qkLock" },
     },
     "base",
   ),
@@ -72,6 +77,12 @@ function installLayout(layers: Layer[] = ONE_KEY): LayoutFile {
     error: null,
   });
   return layout;
+}
+
+/** Report a switch by board position, through its real matrix coordinates. */
+function report(position: number, pressed = true): void {
+  const [row, col] = GEOMETRY.keys[position].matrix;
+  useLiveStore.getState().keyReport({ row, col, pressed });
 }
 
 /** Minimal localStorage so persistence can be exercised in the node env. */
@@ -98,7 +109,6 @@ beforeEach(() => {
     byLayout: {},
     layoutKey: null,
     targets: [],
-    excluded: [],
     target: null,
     prompt: null,
     promptedAt: 0,
@@ -106,7 +116,14 @@ beforeEach(() => {
     last: null,
     summary: null,
   });
-  useLiveStore.setState({ enabled: true, mode: "trainer" });
+  useLiveStore.setState({
+    enabled: true,
+    mode: "trainer",
+    status: "live",
+    activeLayer: 0,
+    events: [],
+    nextId: 1,
+  });
 });
 
 afterEach(() => {
@@ -127,7 +144,7 @@ describe("trainer session", () => {
 
     const { running, target, prompt } = useTrainerStore.getState();
     expect(running).toBe(true);
-    expect(target).toMatchObject({ layer: 0, position: 0, expect: "KC_A" });
+    expect(target).toEqual({ layer: 0, position: 0 });
     expect(prompt?.instruction).toBe("Press A on layer 0 · base");
   });
 
@@ -137,53 +154,90 @@ describe("trainer session", () => {
     useTrainerStore.getState().start();
     vi.advanceTimersByTime(420);
 
-    useLiveStore.getState().keyDown({ code: "KeyA", key: "a" });
+    report(0);
 
     const { answers, byLayout, layoutKey } = useTrainerStore.getState();
     expect(answers).toHaveLength(1);
-    expect(answers[0]).toMatchObject({ correct: true, ms: 420, got: "KC_A" });
+    expect(answers[0]).toMatchObject({ correct: true, ms: 420, got: 0 });
     const stats = byLayout[layoutKey!];
     expect(stats[statKey(0, 0)]).toMatchObject({ attempts: 1, hits: 1, times: [420] });
   });
 
-  it("scores a wrong key as a miss and says what arrived", () => {
+  it("scores a wrong key as a miss and says which switch arrived", () => {
     installLayout(TWO_LAYERS);
     useTrainerStore.getState().start();
-    // Force the prompt so the assertion doesn't depend on the weighted draw.
-    const target = useTrainerStore
-      .getState()
-      .targets.find((t) => t.position === 0)!;
-    useTrainerStore.setState({ target, promptedAt: Date.now() });
+    useTrainerStore.setState({
+      target: { layer: 0, position: 0 },
+      promptedAt: Date.now(),
+    });
 
-    useLiveStore.getState().keyDown({ code: "KeyB", key: "b" });
+    report(1);
 
-    const { last } = useTrainerStore.getState();
-    expect(last).toMatchObject({ correct: false, expected: "KC_A", got: "KC_B" });
+    expect(useTrainerStore.getState().last).toMatchObject({
+      correct: false,
+      position: 0,
+      got: 1,
+    });
   });
 
-  it("ignores a press it cannot resolve rather than calling it wrong", () => {
-    installLayout();
-    useTrainerStore.getState().start();
-
-    // "Fn" maps to no QMK code — the same blind spot the log reports as
-    // "no match". Scoring it would blame the user for our own limit.
-    useLiveStore.getState().keyDown({ code: "Fn", key: "Fn" });
-
-    expect(useTrainerStore.getState().answers).toEqual([]);
-  });
-
-  it("scores a layer key by its witness press", () => {
+  it("scores a layer key directly — the firmware reports the switch", () => {
+    // MO(1) sends nothing to the OS. The old trainer had to score it through a
+    // witness press on the layer it activated; the report is the switch itself.
     installLayout(TWO_LAYERS);
     useTrainerStore.setState({ scope: "layerKeys" });
     useTrainerStore.getState().start();
 
     const { target, prompt } = useTrainerStore.getState();
-    expect(target).toMatchObject({ layer: 0, position: 5, mode: "witness" });
-    expect(prompt?.note).toContain("never reach the OS");
+    expect(target).toEqual({ layer: 0, position: 5 });
+    expect(prompt?.instruction).toBe("Press MO 1 on layer 0 · base");
 
-    // Holding MO(1) emits nothing, so the only event is the witness press.
-    useLiveStore.getState().keyDown({ code: "KeyZ", key: "z" });
+    report(5);
+    expect(useTrainerStore.getState().answers[0]).toMatchObject({
+      correct: true,
+      got: 5,
+    });
+  });
+
+  it("scores QK_LOCK, which reaches the OS never and the trainer always", () => {
+    installLayout(TWO_LAYERS);
+    useTrainerStore.getState().start();
+    useTrainerStore.setState({
+      target: { layer: 0, position: 7 },
+      promptedAt: Date.now(),
+    });
+
+    report(7);
     expect(useTrainerStore.getState().answers[0].correct).toBe(true);
+  });
+
+  it("treats presses on another layer as navigation, not answers", () => {
+    // The prompt is on layer 1; reaching it costs a press on layer 0. Grading
+    // that press would score the route instead of the destination.
+    installLayout(TWO_LAYERS);
+    useTrainerStore.setState({ scope: "allLayers" });
+    useTrainerStore.getState().start();
+    useTrainerStore.setState({
+      target: { layer: 1, position: 10 },
+      promptedAt: Date.now(),
+    });
+
+    report(5); // the MO key, on layer 0
+    expect(useTrainerStore.getState().answers).toEqual([]);
+
+    useLiveStore.getState().layerReport({ layer: 1 });
+    report(10);
+    expect(useTrainerStore.getState().answers).toHaveLength(1);
+    expect(useTrainerStore.getState().answers[0].correct).toBe(true);
+  });
+
+  it("does not score the release, only the press", () => {
+    // Reaction time ends when you commit to a key; a long hold is not slow
+    // recall, and grading the up edge would double every answer.
+    installLayout();
+    useTrainerStore.getState().start();
+    report(0, true);
+    report(0, false);
+    expect(useTrainerStore.getState().answers).toHaveLength(1);
   });
 
   it("advances to a new prompt instead of asking twice in a row", () => {
@@ -191,7 +245,7 @@ describe("trainer session", () => {
     useTrainerStore.getState().start();
     const first = useTrainerStore.getState().target!;
 
-    useLiveStore.getState().keyDown({ code: "KeyA", key: "a" });
+    report(first.position);
 
     const second = useTrainerStore.getState().target!;
     expect(second.position).not.toBe(first.position);
@@ -210,20 +264,28 @@ describe("trainer session", () => {
 
   it("ignores presses before the session starts and after it stops", () => {
     installLayout();
-    useLiveStore.getState().keyDown({ code: "KeyA", key: "a" });
+    report(0);
     expect(useTrainerStore.getState().answers).toEqual([]);
 
     useTrainerStore.getState().start();
     useTrainerStore.getState().stop();
-    useLiveStore.getState().keyDown({ code: "KeyA", key: "a" });
+    report(0);
     expect(useTrainerStore.getState().answers).toEqual([]);
   });
 
   it("summarizes on stop", () => {
-    installLayout();
+    installLayout(TWO_LAYERS);
     useTrainerStore.getState().start();
-    useLiveStore.getState().keyDown({ code: "KeyA", key: "a" });
-    useLiveStore.getState().keyDown({ code: "KeyB", key: "b" });
+    useTrainerStore.setState({
+      target: { layer: 0, position: 0 },
+      promptedAt: Date.now(),
+    });
+    report(0); // correct
+    useTrainerStore.setState({
+      target: { layer: 0, position: 0 },
+      promptedAt: Date.now(),
+    });
+    report(1); // wrong
     useTrainerStore.getState().stop();
 
     expect(useTrainerStore.getState().summary).toMatchObject({
@@ -253,7 +315,7 @@ describe("trainer and live mode", () => {
     useTrainerStore.getState().start();
     useLiveStore.setState({ mode: "monitor" });
 
-    useLiveStore.getState().keyDown({ code: "KeyA", key: "a" });
+    report(0);
 
     expect(useTrainerStore.getState().answers).toEqual([]);
   });
@@ -279,11 +341,11 @@ describe("trainer and live mode", () => {
     installLayout();
     useLiveStore.setState({ events: [], nextId: 1 });
     useTrainerStore.getState().start();
-    useLiveStore.getState().keyDown({ code: "KeyA", key: "a" });
+    report(0);
 
     expect(useLiveStore.getState().events[0]).toMatchObject({
       qmk: "KC_A",
-      positions: [0],
+      position: 0,
     });
   });
 });
@@ -314,7 +376,7 @@ describe("trainer persistence", () => {
     vi.stubGlobal("localStorage", store);
     installLayout();
     useTrainerStore.getState().start();
-    useLiveStore.getState().keyDown({ code: "KeyA", key: "a" });
+    report(0);
 
     const raw = store.getItem("qmk-flasher.trainerStats");
     expect(raw).toBeTruthy();
@@ -360,9 +422,7 @@ describe("trainer persistence", () => {
     // just forgets afterwards.
     installLayout();
     useTrainerStore.getState().start();
-    expect(() =>
-      useLiveStore.getState().keyDown({ code: "KeyA", key: "a" }),
-    ).not.toThrow();
+    expect(() => report(0)).not.toThrow();
     expect(useTrainerStore.getState().answers).toHaveLength(1);
   });
 
@@ -403,9 +463,9 @@ describe("trainer never touches the layout", () => {
     useTrainerStore.getState().start();
     expect(useTrainerStore.getState().targets.length).toBeGreaterThan(0);
 
-    for (const code of ["KeyA", "KeyS", "KeyD", "Space", "Enter", "ArrowUp"]) {
-      useLiveStore.getState().keyDown({ code, key: code });
-      useLiveStore.getState().keyUp({ code, key: code });
+    for (const position of [0, 5, 12, 30, 55, 71]) {
+      report(position, true);
+      report(position, false);
     }
     useTrainerStore.getState().stop();
 
@@ -413,35 +473,30 @@ describe("trainer never touches the layout", () => {
     expect(useLayoutStore.getState().isDirty()).toBe(false);
   });
 
-  it("drills the real layout's layer keys through witnesses, and skips latchers", () => {
+  it("drills every layer key on the real layout, latching ones included", () => {
     useTrainerStore.setState({ scope: "layerKeys" });
     useTrainerStore.getState().start();
-    const { targets, excluded } = useTrainerStore.getState();
+    const { targets } = useTrainerStore.getState();
 
-    // The seeded layout's only momentary layer keys are its two LT()s, and its
-    // 18 TO/TG keys latch and are refused.
-    expect(excluded.filter((e) => e.reason === "latching")).toHaveLength(18);
-    // Only one LT is drillable: LT(3) at position 40 leads to a layer built
-    // entirely from macros and TO keys, none of which reach the OS, so there is
-    // nothing to press that would prove the layer was active.
-    expect(targets).toEqual([
-      expect.objectContaining({ layer: 0, position: 58, mode: "witness" }),
-    ]);
-    expect(excluded).toContainEqual({
-      layer: 0,
-      position: 40,
-      reason: "noWitness",
-    });
+    // The seeded layout has 18 TO/TG keys and 2 LT()s. All 20 used to be
+    // refused or reduced to one drillable witness target; every one is a plain
+    // target now.
+    expect(targets).toHaveLength(20);
+    expect(targets).toContainEqual({ layer: 0, position: 40 }); // LT(3)
+    expect(targets).toContainEqual({ layer: 0, position: 58 }); // LT(1)
   });
 
-  it("drills the real layout's ordinary keys and admits the silent ones", () => {
+  it("drills the real layout's silent keys too — nothing is left out for being invisible", () => {
     useTrainerStore.setState({ scope: "allLayers" });
     useTrainerStore.getState().start();
-    const { targets, excluded } = useTrainerStore.getState();
+    const { targets } = useTrainerStore.getState();
 
     expect(targets.length).toBeGreaterThan(200);
-    // QK_LOCK, the RGB keys and the macros are exactly what we cannot observe.
-    expect(excluded.filter((e) => e.reason === "silent").length).toBeGreaterThan(0);
-    expect(excluded.every((e) => e.reason !== "empty")).toBe(true);
+    // QK_LOCK is the key this whole app exists for, and it is now drillable.
+    const layout = useLayoutStore.getState().layout!;
+    const lock = layout.layers.flatMap((l, li) =>
+      l.keys.map((k, i) => (k.kind === "qkLock" ? { layer: li, position: i } : null)),
+    );
+    for (const at of lock) if (at) expect(targets).toContainEqual(at);
   });
 });

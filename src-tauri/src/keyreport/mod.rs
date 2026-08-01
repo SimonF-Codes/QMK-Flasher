@@ -297,6 +297,27 @@ mod tests {
         assert!(l.stopped());
     }
 
+    /// Manual hardware check: opens the real channel and dumps what the board
+    /// reports for 20 seconds. Run with the board plugged in and Keymapp/Oryx
+    /// closed, then press keys:
+    /// `cargo test -p qmk-flasher --lib keyreport -- --ignored --nocapture`
+    #[test]
+    #[ignore = "needs the board plugged in and a human pressing keys"]
+    fn dump_live_reports_from_the_board() {
+        let (tx, rx) = std::sync::mpsc::channel();
+        start(move |r| {
+            let _ = tx.send(r);
+        })
+        .expect("raw-HID channel opens");
+        let until = std::time::Instant::now() + Duration::from_secs(20);
+        while std::time::Instant::now() < until {
+            if let Ok(r) = rx.recv_timeout(Duration::from_millis(200)) {
+                println!("{r:?}");
+            }
+        }
+        stop();
+    }
+
     /// `start` needs hardware, so only the half that doesn't is asserted here:
     /// stopping when nothing runs must be a no-op, not a panic or a stale flag.
     /// The real path is verified on the board — see the commit message.
