@@ -2,7 +2,7 @@
   {
     "id": "moonlander",
     "name": "ZSA Moonlander",
-    "qmkKeyboard": "zsa/moonlander/reva",
+    "qmkKeyboard": "zsa/moonlander/revb",
     "oryxGeometry": "moonlander",
     "layoutMacro": "LAYOUT_moonlander",
     "keyCount": 72,

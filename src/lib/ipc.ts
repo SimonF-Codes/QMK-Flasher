@@ -379,14 +379,14 @@ export function resetMockStore(): void {
 
 const MOCK_BUILD_LOG = [
   "QMK Firmware 25.0",
-  "Making zsa/moonlander/reva with keymap qmk_flasher",
+  "Making zsa/moonlander/revb with keymap qmk_flasher",
   "avr-gcc … compiling keymap.c",
   "Compiling: keyboards/zsa/moonlander/moonlander.c   [OK]",
   "Compiling: quantum/quantum.c                       [OK]",
   "Compiling: quantum/process_keycode/process_key_lock.c [OK]",
-  "Linking: .build/zsa_moonlander_reva_qmk_flasher.elf [OK]",
-  "Creating binary load file for flashing: .build/zsa_moonlander_reva_qmk_flasher.bin [OK]",
-  "Checking file size of zsa_moonlander_reva_qmk_flasher.bin  [OK]",
+  "Linking: .build/zsa_moonlander_revb_qmk_flasher.elf [OK]",
+  "Creating binary load file for flashing: .build/zsa_moonlander_revb_qmk_flasher.bin [OK]",
+  "Checking file size of zsa_moonlander_revb_qmk_flasher.bin  [OK]",
   " * The firmware size is fine - 213348/262144 (81%, 48796 bytes free)",
 ];
 

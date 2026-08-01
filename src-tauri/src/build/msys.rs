@@ -1,6 +1,6 @@
 //! The QMK MSYS build: exactly
 //! `MSYSTEM=MINGW64 <msys>\usr\bin\bash.exe -lc "cd <qmk> && make
-//! SKIP_VERSION=yes zsa/moonlander/reva:<keymap>"`, streaming stdout+stderr lines through the
+//! SKIP_VERSION=yes zsa/moonlander/revb:<keymap>"`, streaming stdout+stderr lines through the
 //! caller's `FnMut` (the command layer forwards them as `build-log` events).
 //! Never `qmk compile`. On success the .bin is copied to
 //! `%APPDATA%\qmk-flasher\builds\<timestamp>.bin`.
@@ -139,7 +139,7 @@ pub fn build(
 }
 
 /// Known-harmless noise in QMK's Makefile parse phase: `qmk list-layouts
-/// --keyboard zsa/moonlander/reva` (community-layout discovery) trips over
+/// --keyboard zsa/moonlander/revb` (community-layout discovery) trips over
 /// the parent folder `zsa/moonlander` not being a keyboard itself and prints
 /// a one-line `ValueError` to stderr while make proceeds normally. A real
 /// bad target still fails `make` itself (exit code + its own error lines),
@@ -181,11 +181,11 @@ mod tests {
     fn make_target_and_bin_name_derive_from_the_registry() {
         assert_eq!(
             make_target(moonlander(), "qmk_flasher"),
-            "zsa/moonlander/reva:qmk_flasher"
+            "zsa/moonlander/revb:qmk_flasher"
         );
         let cfg = crate::appcfg::get();
         assert!(built_bin_path(&cfg, moonlander())
-            .ends_with("zsa_moonlander_reva_qmk_flasher.bin"));
+            .ends_with("zsa_moonlander_revb_qmk_flasher.bin"));
     }
 
     #[test]

@@ -234,7 +234,7 @@ export const KeyboardInfoSchema = z.object({
   id: z.string().min(1),
   /** Display name, e.g. "ZSA Moonlander". */
   name: z.string().min(1),
-  /** QMK keyboard path in the make target, e.g. "zsa/moonlander/reva". */
+  /** QMK keyboard path in the make target, e.g. "zsa/moonlander/revb". */
   qmkKeyboard: z.string().min(1),
   /** Geometry string for the Oryx GraphQL query. */
   oryxGeometry: z.string().min(1),
