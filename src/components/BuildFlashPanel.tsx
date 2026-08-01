@@ -1,5 +1,14 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import {
+  initialBootloaderState,
+  reduceDfuDevice,
+  strandedInBootloader,
+  visibleNotice,
+  waitingBannerText,
+} from "../lib/bootloader";
+import { targetKind } from "../lib/focus";
 import { ipc, MOCK, mockControls, toAppError } from "../lib/ipc";
+import { escCancels, primaryAction } from "../lib/pipelineControl";
 import { useLayoutStore } from "../state/layoutStore";
 import type { AppError, PipelineState } from "../lib/types";
 
@@ -23,6 +32,8 @@ export default function BuildFlashPanel() {
   const layout = useLayoutStore((s) => s.layout);
   const [state, setState] = useState<PipelineState>({ phase: "idle" });
   const [running, setRunning] = useState(false);
+  const [cancelRequested, setCancelRequested] = useState(false);
+  const [dfu, setDfu] = useState(initialBootloaderState);
   const [error, setError] = useState<AppError | null>(null);
   const [log, setLog] = useState<string[]>([]);
   const [logOpen, setLogOpen] = useState(false);
@@ -37,6 +48,12 @@ export default function BuildFlashPanel() {
     const un2 = ipc.onBuildLog((l) => {
       logBufRef.current.push(l.line);
     });
+    // The app-lifetime USB watcher has always emitted these; until now nothing
+    // listened, so bootloader detection was discarded and the waiting banner
+    // looked the same whether the board had been seen or not.
+    const un3 = ipc.onDfuDevice((d) =>
+      setDfu((prev) => reduceDfuDevice(prev, d.present)),
+    );
     const flush = setInterval(() => {
       if (logBufRef.current.length === 0) return;
       const chunk = logBufRef.current;
@@ -46,6 +63,7 @@ export default function BuildFlashPanel() {
     return () => {
       un1();
       un2();
+      un3();
       clearInterval(flush);
     };
   }, []);
@@ -57,6 +75,7 @@ export default function BuildFlashPanel() {
   const start = async () => {
     if (!layout) return;
     setError(null);
+    setCancelRequested(false);
     logBufRef.current = [];
     setLog([]);
     setLogOpen(true);
@@ -71,9 +90,10 @@ export default function BuildFlashPanel() {
     }
   };
 
-  const cancel = () => {
+  const cancel = useCallback(() => {
+    setCancelRequested(true);
     void ipc.cancelPipeline();
-  };
+  }, []);
 
   // "error"/"idle" map to no step; keep the failed step highlighted on error.
   const lastStepRef = useRef(0);
@@ -87,15 +107,62 @@ export default function BuildFlashPanel() {
     state.progress !== undefined &&
     (state.phase === "erasing" || state.phase === "flashing");
 
+  const action = primaryAction({
+    running,
+    phase: state.phase,
+    hasLayout: layout !== null,
+    cancelRequested,
+  });
+  const escAborts = escCancels(action);
+
+  // Esc is the second escape hatch, for when the pointer isn't already on the
+  // button. Only bound while a cancel is actually on offer, so it never fires
+  // `cancel_pipeline` at rest, and never in a text field — `targetKind` is the
+  // same guard Ctrl+S and Ctrl+C/V use. Capture phase for the same reason they
+  // use it: live view's bubble-phase listener may preventDefault first.
+  useEffect(() => {
+    if (!escAborts) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== "Escape") return;
+      if (targetKind(e.target) !== "page") return;
+      e.preventDefault();
+      cancel();
+    };
+    window.addEventListener("keydown", onKey, true);
+    return () => window.removeEventListener("keydown", onKey, true);
+  }, [escAborts, cancel]);
+
+  // Red for a cancel that stops the run now, amber for one that only takes
+  // effect after the build — both unmistakably not the green start state.
+  const primaryTone =
+    action.kind === "start"
+      ? "bg-emerald-600 enabled:hover:bg-emerald-500"
+      : action.kind === "busy"
+        ? "bg-zinc-700"
+        : action.deferred
+          ? "bg-amber-600 hover:bg-amber-500"
+          : "bg-red-600 hover:bg-red-500";
+
+  const notice = visibleNotice(dfu, state.phase, running);
+  const cancelledRun =
+    !running && state.phase === "idle" && state.detail === "cancelled";
+
   return (
     <footer className="border-t border-zinc-800 bg-zinc-900 px-4 py-3">
       <div className="flex items-center gap-4">
         <button
-          onClick={start}
-          disabled={running || !layout}
-          className="rounded-md bg-emerald-600 px-4 py-2 text-sm font-semibold text-white enabled:hover:bg-emerald-500 disabled:opacity-40"
+          onClick={() => {
+            if (action.kind === "start") void start();
+            else if (action.kind === "cancel") cancel();
+          }}
+          disabled={
+            action.kind === "busy" ||
+            (action.kind === "start" && action.disabled)
+          }
+          title={action.title}
+          className={`rounded-md px-4 py-2 text-sm font-semibold text-white disabled:opacity-40 ${primaryTone}`}
         >
-          {running ? "Running…" : "Build & Flash"}
+          {action.label}
         </button>
 
         <ol className="flex flex-1 items-center gap-1 text-xs">
@@ -145,16 +212,40 @@ export default function BuildFlashPanel() {
         </button>
       </div>
 
+      {/* Keyed on the transition counter so each real presence edge mounts a
+          fresh element — the notice appears rather than quietly recolouring. */}
+      {notice && (
+        <p
+          key={dfu.seq}
+          role="status"
+          className={`mt-2 rounded-md border px-3 py-1.5 text-sm ${
+            notice.tone === "good"
+              ? "border-emerald-800 bg-emerald-950/40 text-emerald-200"
+              : "border-amber-800 bg-amber-950/40 text-amber-200"
+          }`}
+        >
+          {notice.text}
+        </p>
+      )}
+
       {waiting && (
-        <div className="mt-2 flex items-center gap-3 rounded-md border border-sky-800 bg-sky-950/40 px-3 py-2 text-sm text-sky-200">
-          <span className="animate-pulse">●</span>
-          Waiting for bootloader — press the reset key, or paperclip the reset
-          button next to the left thumb cluster.
+        <div
+          className={`mt-2 flex items-center gap-3 rounded-md border px-3 py-2 text-sm ${
+            dfu.status === "present"
+              ? "border-emerald-800 bg-emerald-950/40 text-emerald-200"
+              : "border-sky-800 bg-sky-950/40 text-sky-200"
+          }`}
+        >
+          <span className={dfu.status === "present" ? "" : "animate-pulse"}>
+            ●
+          </span>
+          {waitingBannerText(dfu.status)}
           <button
             onClick={cancel}
-            className="ml-auto rounded bg-zinc-800 px-3 py-1 text-xs text-zinc-200 hover:bg-zinc-700"
+            disabled={cancelRequested}
+            className="ml-auto rounded bg-zinc-800 px-3 py-1 text-xs text-zinc-200 enabled:hover:bg-zinc-700 disabled:opacity-40"
           >
-            Cancel
+            {cancelRequested ? "Cancelling…" : "Cancel"}
           </button>
         </div>
       )}
@@ -186,6 +277,18 @@ export default function BuildFlashPanel() {
             Retry
           </button>
         </div>
+      )}
+
+      {cancelledRun && (
+        <p className="mt-2 text-sm text-zinc-400">
+          Cancelled.
+          {/* Only said when a real `dfu-device` event says the bootloader is on
+              the bus right now — otherwise the board's state is unknown to us
+              and guessing would be worse than saying nothing. */}
+          {strandedInBootloader(dfu) &&
+            " The board is still in the bootloader — press reset to return to" +
+              " your firmware, or run Build & Flash again to finish flashing."}
+        </p>
       )}
 
       {state.phase === "done" && !running && (

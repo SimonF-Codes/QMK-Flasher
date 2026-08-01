@@ -25,6 +25,7 @@
  * never enters DFU stays in — and that has to remain visible, not be papered
  * over.
  */
+import type { PipelinePhase } from "./types";
 
 export type BootloaderStatus =
   /** No `dfu-device` event with `present: true` has ever arrived. */
@@ -90,6 +91,30 @@ export function bootloaderNotice(
     case "unknown":
       return null;
   }
+}
+
+/**
+ * The notice actually worth showing, given what the pipeline is doing.
+ *
+ * Presence is always worth surfacing — a board sitting in DFU is useful to know
+ * about even before a run starts. Departure is only surfaced when it is
+ * *diagnostic*: the board dropping off the bus mid-run is information the user
+ * needs, but the same event during `leaving`/`done` is just the board rebooting
+ * into the firmware that was successfully written, and flagging that as a
+ * warning would turn a successful flash into a false alarm.
+ */
+export function visibleNotice(
+  state: BootloaderState,
+  phase: PipelinePhase,
+  running: boolean,
+): BootloaderNotice | null {
+  const notice = bootloaderNotice(state);
+  if (notice === null) return null;
+  if (state.status === "gone") {
+    const expectedReboot = phase === "leaving" || phase === "done";
+    if (!running || expectedReboot) return null;
+  }
+  return notice;
 }
 
 /**

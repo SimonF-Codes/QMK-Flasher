@@ -4,6 +4,7 @@ import {
   initialBootloaderState,
   reduceDfuDevice,
   strandedInBootloader,
+  visibleNotice,
   waitingBannerText,
   type BootloaderState,
 } from "./bootloader";
@@ -75,6 +76,37 @@ describe("waitingBannerText", () => {
     expect(unknown).toMatch(/press the reset key/i);
     expect(present).toMatch(/detected/i);
     expect(gone).toMatch(/left the bus/i);
+  });
+});
+
+describe("visibleNotice", () => {
+  const present = fold(true);
+  const gone = fold(true, false);
+
+  it("always surfaces a detected bootloader, run or no run", () => {
+    expect(visibleNotice(present, "waitingForBootloader", true)?.tone).toBe("good");
+    expect(visibleNotice(present, "idle", false)?.tone).toBe("good");
+  });
+
+  it("surfaces a mid-run disappearance as diagnostic", () => {
+    expect(visibleNotice(gone, "flashing", true)?.tone).toBe("warn");
+    expect(visibleNotice(gone, "waitingForBootloader", true)?.tone).toBe("warn");
+  });
+
+  it("does not cry wolf when the board reboots after a good flash", () => {
+    // `leaving`/`done` departure IS the success path — the board is restarting
+    // into the firmware just written.
+    expect(visibleNotice(gone, "leaving", true)).toBeNull();
+    expect(visibleNotice(gone, "done", true)).toBeNull();
+    expect(visibleNotice(gone, "done", false)).toBeNull();
+  });
+
+  it("drops a stale departure notice once the run is over", () => {
+    expect(visibleNotice(gone, "idle", false)).toBeNull();
+  });
+
+  it("stays silent when nothing has been observed", () => {
+    expect(visibleNotice(initialBootloaderState, "waitingForBootloader", true)).toBeNull();
   });
 });
 
