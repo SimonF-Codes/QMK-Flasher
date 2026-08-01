@@ -15,6 +15,13 @@ interface KeyProps {
   pressed?: boolean;
   /** Live view: released a moment ago, still glowing so fast taps register. */
   recent?: boolean;
+  /** Trainer: the key currently being asked for. */
+  target?: boolean;
+  /**
+   * Trainer: the key to press while holding the target, for a layer key we
+   * cannot observe directly (see lib/trainer.ts).
+   */
+  witness?: boolean;
   /**
    * The color the firmware lights this LED with on the current layer — the
    * key's own glow if it has one, else the layer's base color. Drawn faded
@@ -44,6 +51,8 @@ export default function Key({
   swapTargeting = false,
   pressed = false,
   recent = false,
+  target = false,
+  witness = false,
   ledColor,
   mode,
   osSwapped = false,
@@ -61,7 +70,12 @@ export default function Key({
   const led = ledColor ?? action.glow;
 
   // Swap mode wins (it's a modal interaction), then live press state, then the
-  // edit selection — so a key you're holding stays visible while editing.
+  // trainer's prompt, then the edit selection — so a key you're holding stays
+  // visible while editing, and your answer is never hidden by the question.
+  //
+  // Fuchsia for the trainer is a deliberate choice: green already means "you
+  // pressed this" and sky means "you're editing this", so a target has to be
+  // neither. It stays dark enough for the LED preview strip to read on top.
   const rectClass = swapSource
     ? "fill-amber-900 stroke-amber-400"
     : swapTargeting
@@ -70,9 +84,13 @@ export default function Key({
         ? "fill-green-600 stroke-green-300"
         : recent
           ? "fill-green-900 stroke-green-500/70"
-          : selected
-            ? "fill-sky-900 stroke-sky-400"
-            : "fill-zinc-800 stroke-zinc-700 hover:fill-zinc-700";
+          : target
+            ? "fill-fuchsia-800 stroke-fuchsia-300"
+            : witness
+              ? "fill-zinc-800 stroke-fuchsia-400/70"
+              : selected
+                ? "fill-sky-900 stroke-sky-400"
+                : "fill-zinc-800 stroke-zinc-700 hover:fill-zinc-700";
 
   return (
     <g
@@ -88,7 +106,7 @@ export default function Key({
         height={r.h}
         rx={6}
         className={rectClass}
-        strokeWidth={selected || swapSource || pressed ? 2 : 1}
+        strokeWidth={selected || swapSource || pressed || target ? 2 : 1}
       />
       {led && (
         <rect

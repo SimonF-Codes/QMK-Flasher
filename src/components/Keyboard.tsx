@@ -4,6 +4,7 @@ import { hasOsSwitchKey } from "../lib/osSwap";
 import { useDisplayStore } from "../state/displayStore";
 import { useLayoutStore } from "../state/layoutStore";
 import { useLiveStore } from "../state/liveStore";
+import { useTrainerStore } from "../state/trainerStore";
 import Key from "./Key";
 
 const VIEW_BOX = viewBox();
@@ -21,9 +22,20 @@ export default function Keyboard() {
   const live = useLiveStore((s) => s.enabled);
   const pressed = useLiveStore((s) => s.pressed);
   const recent = useLiveStore((s) => s.recent);
+  const drilling = useTrainerStore((s) => s.running);
+  const reveal = useTrainerStore((s) => s.reveal);
+  const trainerTarget = useTrainerStore((s) => s.target);
 
   const layer = layout?.layers[selectedLayer];
   if (!layer) return null;
+
+  // The prompt is per-layer, so it only shows while you're looking at the layer
+  // it lives on. With `reveal` off nothing is highlighted at all — the prompt
+  // text still names the key, you just have to remember where it is.
+  const shown = drilling && reveal ? trainerTarget : null;
+  const targetPos = shown?.layer === selectedLayer ? shown.position : null;
+  const witness = shown?.witness;
+  const witnessPos = witness?.layer === selectedLayer ? witness.position : null;
 
   const layerNames = layout!.layers.map((l) => l.title);
   const swapping = swapSource !== null;
@@ -61,6 +73,8 @@ export default function Keyboard() {
           swapTargeting={swapping && swapSource !== i}
           pressed={live && pressed.has(i)}
           recent={live && recent.has(i)}
+          target={targetPos === i}
+          witness={witnessPos === i}
           ledColor={leds[i]}
           mode={mode}
           osSwapped={osSwapped}
