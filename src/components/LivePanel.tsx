@@ -254,9 +254,6 @@ export default function LivePanel() {
           {events.length === 0 ? (
             <li className="px-2 py-2 text-[11px] text-zinc-600">
               {STATUS_TEXT[status]}
-              {status === "live" || status === "waiting"
-                ? " Layer switches, Key Lock and RGB keys are reported too — the firmware sees them even though the OS never does."
-                : ""}
             </li>
           ) : (
             events.map((e) => <LogRow key={e.id} e={e} />)
