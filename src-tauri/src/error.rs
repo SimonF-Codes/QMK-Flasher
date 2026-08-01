@@ -14,7 +14,7 @@ pub enum AppError {
     CodegenUnsupportedKey(String),
     #[error("firmware build failed: {0}")]
     BuildFailed(String),
-    #[error("no DFU device (0483:df11) found")]
+    #[error("no DFU device (0483:df11 or 3297:2003) found")]
     DfuNotFound,
     #[error("DFU device found but access was denied")]
     DfuAccessDenied,

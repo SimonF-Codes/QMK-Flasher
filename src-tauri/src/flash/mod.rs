@@ -1,10 +1,12 @@
 //! USB watching + DFU flashing — owned by Worker B. See `docs/CONTRACT.md`.
 //!
-//! - `watcher`: polls `nusb::list_devices()` (1 s) for the bootloader
-//!   (0483:df11); the command layer forwards presence edges as `dfu-device`
-//!   events. A ~500 ms debounce gates the start of flashing.
+//! - `watcher`: polls `nusb::list_devices()` (1 s) for any known bootloader
+//!   id (0483:df11 or 3297:2003 — see `watcher::KNOWN_BOOTLOADERS`); the
+//!   command layer forwards presence edges as `dfu-device` events. A
+//!   ~500 ms debounce gates the start of flashing.
 //! - `dfu`: the `Flasher` trait; DfuSe erase + download at 0x08000000 with
-//!   progress, then manifest/leave (board re-enumerates as 3297:1969).
+//!   progress, then manifest/leave (board re-enumerates as the keyboard,
+//!   3297:1969 or 3297:1972 depending on firmware).
 //!   Primary backend dfu-core + dfu-nusb, feature-flagged dfu-util.exe
 //!   fallback. `wally-cli` is the behavioral reference.
 //! - `pipeline`: save → generate → build → waitingForBootloader →
@@ -32,13 +34,14 @@ pub struct DfuDeviceInfo {
     pub serial: Option<String>,
 }
 
-/// Enumerate DFU-mode boards (0483:df11) currently on the bus.
+/// Enumerate DFU-mode boards (any of `watcher::KNOWN_BOOTLOADERS`)
+/// currently on the bus.
 pub fn list_dfu_devices() -> Result<Vec<DfuDeviceInfo>, AppError> {
     let devices = nusb::list_devices()
         .wait()
         .map_err(|e| AppError::DfuVerifyFailed(format!("USB enumeration failed: {e}")))?;
     Ok(devices
-        .filter(|d| d.vendor_id() == watcher::DFU_VID && d.product_id() == watcher::DFU_PID)
+        .filter(|d| watcher::is_known_bootloader(d.vendor_id(), d.product_id()))
         .map(|d| DfuDeviceInfo {
             vid: d.vendor_id(),
             pid: d.product_id(),
@@ -68,10 +71,15 @@ mod tests {
     #[test]
     fn list_dfu_devices_returns_only_bootloader_ids() {
         // No hardware assumptions: whatever is on the bus, every returned
-        // entry must be the ST bootloader id pair.
+        // entry must be one of the known bootloader id pairs.
         let devices = list_dfu_devices().expect("enumeration works without hardware");
         for d in devices {
-            assert_eq!((d.vid, d.pid), (watcher::DFU_VID, watcher::DFU_PID));
+            assert!(
+                watcher::is_known_bootloader(d.vid, d.pid),
+                "{:04x}:{:04x} is not a known bootloader",
+                d.vid,
+                d.pid
+            );
         }
     }
 
