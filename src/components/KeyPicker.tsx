@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { keycapLabels } from "../lib/display";
 import {
   CATEGORY_ORDER,
   KEYCODES,
@@ -11,6 +12,8 @@ import {
   qmkToken,
   withGlow,
 } from "../lib/labels";
+import { useClipboardStore } from "../state/clipboardStore";
+import { useDisplayStore } from "../state/displayStore";
 import { useLayoutStore } from "../state/layoutStore";
 import type { KeyAction, KeycodeEntry, LayerSwitchAction } from "../lib/types";
 import DualFunctionEditor from "./DualFunctionEditor";
@@ -59,6 +62,10 @@ export default function KeyPicker() {
   const setKeyAction = useLayoutStore((s) => s.setKeyAction);
   const beginSwap = useLayoutStore((s) => s.beginSwap);
   const cancelSwap = useLayoutStore((s) => s.cancelSwap);
+  const clipboard = useClipboardStore((s) => s.action);
+  const copyKey = useClipboardStore((s) => s.copySelectedKey);
+  const pasteKey = useClipboardStore((s) => s.pasteToSelectedKey);
+  const mode = useDisplayStore((s) => s.mode);
 
   const [query, setQuery] = useState("");
   const [openCategory, setOpenCategory] = useState<string | null>("letter");
@@ -83,6 +90,18 @@ export default function KeyPicker() {
   if (!layout || selectedKey === null || !current) return null;
 
   const pick = (e: KeycodeEntry) => setKeyAction(actionForEntry(e, current));
+
+  // Describe the clipboard with the same labeller the keycaps use, so what the
+  // chip says matches what you'll see on the board after pasting.
+  const clipLabel = (() => {
+    if (!clipboard) return null;
+    const { tap, hold } = keycapLabels(
+      clipboard,
+      mode,
+      layout.layers.map((l) => l.title),
+    );
+    return [tap || "∅", hold].filter(Boolean).join(" / ");
+  })();
 
   const modsEditable = current.kind === "basic";
 
@@ -124,6 +143,44 @@ export default function KeyPicker() {
           >
             ⇄ Swap with…
           </button>
+
+          {/* Copy/paste sits with Swap: all three move an action around the
+              board. Unlike Swap, the clipboard outlives the layer you copied
+              from, so the chip below says what it is holding. */}
+          <section className="space-y-1">
+            <div className="flex gap-2">
+              <button
+                onClick={() => copyKey()}
+                className="flex-1 rounded bg-zinc-800 py-1.5 text-sm text-zinc-200 hover:bg-zinc-700"
+                title="Copy this key's action (Ctrl+C)"
+              >
+                ⧉ Copy
+              </button>
+              <button
+                onClick={() => pasteKey()}
+                disabled={!clipboard}
+                className="flex-1 rounded bg-zinc-800 py-1.5 text-sm text-zinc-200 enabled:hover:bg-zinc-700 disabled:opacity-40"
+                title={
+                  clipLabel
+                    ? `Paste ${clipLabel} onto this key (Ctrl+V)`
+                    : "Nothing copied yet (Ctrl+V)"
+                }
+              >
+                ⎗ Paste
+              </button>
+            </div>
+            {clipLabel ? (
+              <p className="text-xs text-zinc-500">
+                Clipboard:{" "}
+                <span className="rounded bg-zinc-900 px-1.5 py-0.5 font-mono text-zinc-200">
+                  {clipLabel}
+                </span>{" "}
+                — pastes onto any key, on any layer.
+              </p>
+            ) : (
+              <p className="text-xs text-zinc-600">Clipboard empty.</p>
+            )}
+          </section>
 
           <KeyGlowEditor />
 

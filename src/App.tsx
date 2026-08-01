@@ -10,8 +10,23 @@ import LiveToggle from "./components/LiveToggle";
 import OsSwapToggle from "./components/OsSwapToggle";
 import VersionHistoryPanel from "./components/VersionHistoryPanel";
 import { MOCK } from "./lib/ipc";
+import { useClipboardStore } from "./state/clipboardStore";
 import { useLayoutStore } from "./state/layoutStore";
 import { useLiveStore } from "./state/liveStore";
+
+/**
+ * Where a key event landed: the live scratchpad, another editable field, or the
+ * page. Shared by both keyboard listeners below — live capture must not swallow
+ * what you type into a field, and the app shortcuts must not fire there either.
+ */
+function targetKind(t: EventTarget | null): "scratchpad" | "field" | "page" {
+  if (!(t instanceof HTMLElement)) return "page";
+  if (t.hasAttribute("data-live-scratchpad")) return "scratchpad";
+  if (t.isContentEditable) return "field";
+  const tag = t.tagName;
+  if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return "field";
+  return "page";
+}
 
 export default function App() {
   const layout = useLayoutStore((s) => s.layout);
@@ -32,16 +47,6 @@ export default function App() {
   // Only active while live mode is on, so normal editing is untouched.
   useEffect(() => {
     if (!liveEnabled) return;
-
-    /** Where the event landed: the scratchpad, another editable field, or the page. */
-    const targetKind = (t: EventTarget | null): "scratchpad" | "field" | "page" => {
-      if (!(t instanceof HTMLElement)) return "page";
-      if (t.hasAttribute("data-live-scratchpad")) return "scratchpad";
-      if (t.isContentEditable) return "field";
-      const tag = t.tagName;
-      if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return "field";
-      return "page";
-    };
 
     const onDown = (e: KeyboardEvent) => {
       const where = targetKind(e.target);
@@ -70,21 +75,40 @@ export default function App() {
     };
   }, [liveEnabled]);
 
-  // Ctrl+S saves; warn before closing with unsaved edits.
+  // Ctrl+S saves, Ctrl+C / Ctrl+V copy and paste the selected key; warn before
+  // closing with unsaved edits.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "s") {
+      if (!(e.ctrlKey || e.metaKey)) return;
+      const key = e.key.toLowerCase();
+      if (key === "s") {
         e.preventDefault();
         void save();
+        return;
       }
+      if (key !== "c" && key !== "v") return;
+      // Never steal copy/paste from the keycode search box, the rename inputs
+      // or the live scratchpad — there Ctrl+C/V mean text, not keys.
+      if (targetKind(e.target) !== "page") return;
+      const clip = useClipboardStore.getState();
+      const acted =
+        key === "c" ? clip.copySelectedKey() : clip.pasteToSelectedKey();
+      // Only swallow the event when we actually did something, so with no key
+      // selected (or an empty clipboard) the browser's own copy still works.
+      if (acted) e.preventDefault();
     };
     const onBeforeUnload = (e: BeforeUnloadEvent) => {
       if (useLayoutStore.getState().isDirty()) e.preventDefault();
     };
-    window.addEventListener("keydown", onKey);
+    // Capture phase: live view's keydown listener runs on bubble and may
+    // auto-follow to another layer (which clears selectedKey). Copying on
+    // capture means the shortcut acts on the key you were actually looking at.
+    // Live already lets Ctrl/Cmd combos through without preventDefault, so the
+    // two listeners don't otherwise fight.
+    window.addEventListener("keydown", onKey, true);
     window.addEventListener("beforeunload", onBeforeUnload);
     return () => {
-      window.removeEventListener("keydown", onKey);
+      window.removeEventListener("keydown", onKey, true);
       window.removeEventListener("beforeunload", onBeforeUnload);
     };
   }, [save]);
