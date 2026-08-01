@@ -9,24 +9,11 @@ import LivePanel from "./components/LivePanel";
 import LiveToggle from "./components/LiveToggle";
 import OsSwapToggle from "./components/OsSwapToggle";
 import VersionHistoryPanel from "./components/VersionHistoryPanel";
+import { targetKind } from "./lib/focus";
 import { ipc, MOCK } from "./lib/ipc";
 import { useClipboardStore } from "./state/clipboardStore";
 import { useLayoutStore } from "./state/layoutStore";
 import { useLiveStore } from "./state/liveStore";
-
-/**
- * Where a key event landed: the live scratchpad, another editable field, or the
- * page. Shared by both keyboard listeners below — live capture must not swallow
- * what you type into a field, and the app shortcuts must not fire there either.
- */
-function targetKind(t: EventTarget | null): "scratchpad" | "field" | "page" {
-  if (!(t instanceof HTMLElement)) return "page";
-  if (t.hasAttribute("data-live-scratchpad")) return "scratchpad";
-  if (t.isContentEditable) return "field";
-  const tag = t.tagName;
-  if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return "field";
-  return "page";
-}
 
 export default function App() {
   const layout = useLayoutStore((s) => s.layout);
