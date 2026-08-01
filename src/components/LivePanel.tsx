@@ -1,14 +1,29 @@
 /**
- * Live view output: a scratchpad you can type into and a rolling log of what
- * the firmware actually emitted.
+ * Live view output: the left pane depends on the mode — a scratchpad you can
+ * type into (monitor) or the drill (trainer) — beside a rolling log of what the
+ * firmware actually emitted, which both modes share.
  *
  * The scratchpad is deliberately a real textarea — seeing the characters your
  * layout produces is the point, especially for symbols and dual-function keys.
  * App.tsx recognizes it by `data-live-scratchpad` and lets keystrokes through
  * instead of swallowing them.
  */
-import { useLiveStore, type LiveEvent } from "../state/liveStore";
+import { useLiveStore, type LiveEvent, type LiveMode } from "../state/liveStore";
 import { useLayoutStore } from "../state/layoutStore";
+import TrainerPanel from "./TrainerPanel";
+
+const MODES: { id: LiveMode; label: string; title: string }[] = [
+  {
+    id: "monitor",
+    label: "Monitor",
+    title: "Watch and log what the firmware emits — asks nothing, scores nothing",
+  },
+  {
+    id: "trainer",
+    label: "Trainer",
+    title: "Prompt for a key, score the answer, and drill the ones you get wrong",
+  },
+];
 
 function clockTime(at: number): string {
   const d = new Date(at);
@@ -53,6 +68,8 @@ function LogRow({ e }: { e: LiveEvent }) {
 
 export default function LivePanel() {
   const enabled = useLiveStore((s) => s.enabled);
+  const mode = useLiveStore((s) => s.mode);
+  const setMode = useLiveStore((s) => s.setMode);
   const events = useLiveStore((s) => s.events);
   const clearLog = useLiveStore((s) => s.clearLog);
   const followLayer = useLiveStore((s) => s.followLayer);
@@ -68,22 +85,50 @@ export default function LivePanel() {
 
   return (
     <section
-      className="mt-3 flex h-52 shrink-0 gap-3 rounded-lg border border-zinc-800 bg-zinc-950/60 p-2"
+      className={`mt-3 flex shrink-0 gap-3 rounded-lg border border-zinc-800 bg-zinc-950/60 p-2 ${
+        // The trainer stacks prompt + score + controls where the scratchpad is
+        // one box, so it needs the extra rows.
+        mode === "trainer" ? "h-64" : "h-52"
+      }`}
       aria-label="Live view output"
     >
       <div className="flex min-w-0 flex-1 flex-col">
         <div className="mb-1 flex items-center gap-2">
-          <h2 className="text-xs font-semibold text-zinc-300">Scratchpad</h2>
+          <div className="flex overflow-hidden rounded border border-zinc-700">
+            {MODES.map((m) => (
+              <button
+                key={m.id}
+                onClick={() => setMode(m.id)}
+                aria-pressed={mode === m.id}
+                title={m.title}
+                className={`px-2 py-0.5 text-[11px] font-medium ${
+                  mode === m.id
+                    ? m.id === "trainer"
+                      ? "bg-fuchsia-900/60 text-fuchsia-100"
+                      : "bg-green-900/50 text-green-100"
+                    : "bg-zinc-900 text-zinc-500 hover:bg-zinc-800"
+                }`}
+              >
+                {m.label}
+              </button>
+            ))}
+          </div>
           <span className="text-[10px] text-zinc-600">
-            type here to see what your layout produces
+            {mode === "trainer"
+              ? "it prompts, you answer, it scores"
+              : "type here to see what your layout produces"}
           </span>
         </div>
-        <textarea
-          data-live-scratchpad
-          spellCheck={false}
-          placeholder="Type to test the layout…"
-          className="min-h-0 flex-1 resize-none rounded border border-zinc-800 bg-zinc-950 p-2 font-mono text-xs text-zinc-100 outline-none focus:border-green-700"
-        />
+        {mode === "trainer" ? (
+          <TrainerPanel />
+        ) : (
+          <textarea
+            data-live-scratchpad
+            spellCheck={false}
+            placeholder="Type to test the layout…"
+            className="min-h-0 flex-1 resize-none rounded border border-zinc-800 bg-zinc-950 p-2 font-mono text-xs text-zinc-100 outline-none focus:border-green-700"
+          />
+        )}
       </div>
 
       <div className="flex min-w-0 flex-1 flex-col">

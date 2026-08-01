@@ -1,15 +1,23 @@
 /**
  * Live view state (zustand): which positions are held down, a rolling log of
- * what the firmware emitted, and the layer auto-follow policy.
+ * what the firmware emitted, the layer auto-follow policy, and which of the two
+ * live modes is running.
+ *
+ * Live view has two modes over the same key plumbing. `monitor` is the original
+ * one: it watches and logs, and asks nothing. `trainer` feeds every resolved
+ * press to trainerStore, which prompts and scores. The capture, resolution and
+ * press/afterglow rendering are identical in both — the mode only decides
+ * whether anything is listening.
  *
  * Like displayStore, this is app-wide UI state and NOT part of any layout —
- * nothing here mutates the layout or touches dirty tracking. `enabled` and
- * `followLayer` persist to localStorage; press state and the log are in-memory
- * only.
+ * nothing here mutates the layout or touches dirty tracking. `enabled`,
+ * `followLayer` and `mode` persist to localStorage; press state and the log are
+ * in-memory only.
  *
  * It reads layoutStore (and calls selectLayer) so the whole press→match→follow
  * decision is one testable action rather than logic stranded in a component.
- * layoutStore does not know about this store, so there is no import cycle.
+ * layoutStore does not know about this store, so there is no import cycle;
+ * trainerStore likewise never imports back.
  */
 import { create } from "zustand";
 import {
@@ -18,9 +26,14 @@ import {
   qmkForEventCode,
 } from "../lib/liveKeys";
 import { useLayoutStore } from "./layoutStore";
+import { useTrainerStore } from "./trainerStore";
 
 const ENABLED_KEY = "qmk-flasher.liveEnabled";
 const FOLLOW_KEY = "qmk-flasher.liveFollowLayer";
+const MODE_KEY = "qmk-flasher.liveMode";
+
+/** Watch and log (`monitor`) versus prompt and score (`trainer`). */
+export type LiveMode = "monitor" | "trainer";
 
 /** Cap on the event log; oldest entries fall off the end. */
 export const LOG_LIMIT = 200;
@@ -66,7 +79,16 @@ function loadBool(key: string, fallback: boolean): boolean {
   return fallback;
 }
 
-function persist(key: string, value: boolean): void {
+function loadMode(): LiveMode {
+  try {
+    if (localStorage.getItem(MODE_KEY) === "trainer") return "trainer";
+  } catch {
+    /* localStorage unavailable (SSR / tests) — fall through to default */
+  }
+  return "monitor";
+}
+
+function persist(key: string, value: string | boolean): void {
   try {
     localStorage.setItem(key, String(value));
   } catch {
@@ -76,6 +98,8 @@ function persist(key: string, value: boolean): void {
 
 interface LiveState {
   enabled: boolean;
+  /** Which live mode is running. Trainer sessions only exist in `trainer`. */
+  mode: LiveMode;
   /** Auto-switch the visible layer to wherever a pressed key was found. */
   followLayer: boolean;
   /**
@@ -92,6 +116,8 @@ interface LiveState {
   nextId: number;
 
   setEnabled(enabled: boolean): void;
+  /** Switch live modes. Leaving `trainer` ends any running session. */
+  setMode(mode: LiveMode): void;
   setFollowLayer(follow: boolean): void;
   /** Pin the visible layer (pauses auto-follow). */
   pinLayer(layer: number): void;
@@ -114,6 +140,7 @@ function cancelGlowTimers(): void {
 
 export const useLiveStore = create<LiveState>()((set, get) => ({
   enabled: loadBool(ENABLED_KEY, false),
+  mode: loadMode(),
   followLayer: loadBool(FOLLOW_KEY, true),
   pinnedLayer: null,
   pressed: new Set<number>(),
@@ -124,6 +151,9 @@ export const useLiveStore = create<LiveState>()((set, get) => ({
   setEnabled(enabled) {
     persist(ENABLED_KEY, enabled);
     cancelGlowTimers();
+    // Turning live view off stops key capture, so a trainer session would sit
+    // there with a prompt nobody can answer — end it and keep the summary.
+    if (!enabled) useTrainerStore.getState().stop();
     // Leaving live view drops transient state but keeps the log, so you can
     // still read what happened after toggling off.
     set({
@@ -132,6 +162,12 @@ export const useLiveStore = create<LiveState>()((set, get) => ({
       recent: new Set<number>(),
       pinnedLayer: null,
     });
+  },
+
+  setMode(mode) {
+    persist(MODE_KEY, mode);
+    if (mode !== "trainer") useTrainerStore.getState().stop();
+    set({ mode });
   },
 
   setFollowLayer(follow) {
@@ -209,6 +245,11 @@ export const useLiveStore = create<LiveState>()((set, get) => ({
       nextId: id + 1,
       events: [event, ...get().events].slice(0, LOG_LIMIT),
     });
+
+    // Trainer mode grades on key DOWN, not up: the reaction time we care about
+    // ends when you commit to a key, and waiting for the release would let a
+    // long hold look like slow recall. Repeats already returned above.
+    if (get().mode === "trainer") useTrainerStore.getState().answer(qmk);
   },
 
   keyUp(e) {

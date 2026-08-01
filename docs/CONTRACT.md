@@ -150,6 +150,64 @@ tap dance (`QK_LOCK = 0x7C59`; `register_code16` only handles basic keycodes
 and never reaches `process_key_lock`), so OS-mode keys must occupy their own
 key positions.
 
+### Trainer mode (added 2026-08-01, frontend-only)
+
+**No schema, command, event or Rust changes.** Live Key View now has two modes
+over the same capture path: `monitor` (the original — watch and log, ask
+nothing) and `trainer` (prompt for a key, score the answer, weight the next
+prompt toward weak keys). `liveStore.mode` picks between them; monitoring stays
+reachable at all times.
+
+Pure logic is `src/lib/trainer.ts` (target classification, witness selection,
+weighting, scoring, summaries, stats (de)serialization); `src/state/
+trainerStore.ts` holds a session together and persists.
+
+**What the trainer cannot see, and what it does about it.** The constraint at
+the top of `liveKeys.ts` applies in full: we observe the board through
+`KeyboardEvent`, i.e. after QMK is done with the press, so keys the firmware
+consumes emit nothing. Every position is classified up front, and the UI names
+the count and reason for everything it left out rather than silently marking
+unseen keys wrong:
+
+| bucket | which keys | how it is scored |
+|---|---|---|
+| `direct` | anything with an emitted tap code (`basic`, `modTap`, `layerTap` tap, `dualFunc` tap, `tapDance` tap, `special`) | the emitted code must match |
+| `witness` | **momentary** layer keys — `MO`, `TT`, and `LT` when drilling layer navigation | hold the key and press a *witness* on the layer it activates; the witness's code arriving is the proof |
+| excluded `silent` | `qkLock`, `rgb`, `rgbHsv`, `macro`, tap-dance without a tap | not scored — nothing reaches the OS |
+| excluded `latching` | `TG`, `TO` | not scored — they park the board on another layer with no observable return, which would corrupt every later prompt in the session |
+| excluded `noWitness` | a momentary layer key whose target layer emits nothing the base layer can't | not scored (e.g. the seeded layout's `LT(3)`: layer 3 is only macros and `TO` keys) |
+| excluded `empty` | `none`, `transparent` | nothing to ask for; not reported |
+
+A witness is **strong** when its code appears nowhere on the base layer (layer
+0, `BASE_LAYER`) and **weak** when it merely differs from what the same position
+emits there. Weak witnesses, and any direct target whose code is emitted by more
+than one position in the layout, are flagged `ambiguous` and the UI says the
+answer could have come from another key. Two positions emitting the same code
+are genuinely indistinguishable from where we tap the signal.
+
+**Persisted shape** (localStorage only — nothing on disk, nothing over IPC):
+
+| key | value |
+|---|---|
+| `qmk-flasher.liveMode` | `"monitor" \| "trainer"` |
+| `qmk-flasher.trainerScope` | `"currentLayer" \| "allLayers" \| "layerKeys"` |
+| `qmk-flasher.trainerReveal` | `"true" \| "false"` — highlight the target on the board |
+| `qmk-flasher.trainerStats` | `{version: 1, byLayout: {[layoutId]: {[`layer:position`]: KeyStat}}}` |
+
+```
+KeyStat { attempts, hits,          // lifetime, for display
+          window: number[],        // last 10 outcomes, 1 = correct
+          times: number[],         // last 10 correct reaction times (ms)
+          lastAt }                 // epoch ms
+```
+
+Stats are bucketed **per layout id** because a position means nothing across
+layouts. `version` is not migrated: an unrecognized version, and any individual
+entry that fails its shape check, is dropped and practice history starts over
+(`parseStats` is deliberately total — losing history is a nuisance, refusing to
+open the trainer is worse). Weighting reads `window`/`times` only, so it decays:
+a key you used to miss stops being favoured after ten clean answers.
+
 ### Layout version history (added 2026-07-21, additive)
 
 Additive — **no existing signature changes**, `SCHEMA_VERSION` unchanged

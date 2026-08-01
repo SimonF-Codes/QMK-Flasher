@@ -67,6 +67,9 @@ beforeEach(() => {
   useLiveStore.getState().releaseAll();
   useLiveStore.setState({
     enabled: true,
+    // Monitor mode explicitly: these tests are about the monitor, and trainer
+    // mode would route every press into a scoring session.
+    mode: "monitor",
     followLayer: true,
     pinnedLayer: null,
     events: [],
