@@ -280,7 +280,7 @@ aliases — nothing shipped against them).
 |---|---|---|
 | `build-log` | `{line}` | Each MSYS make output line during `building` |
 | `pipeline-state` | `{phase, detail?, progress?}` | Every phase transition |
-| `dfu-device` | `{present}` | Bootloader (0483:df11) appears/disappears |
+| `dfu-device` | `{present}` | Bootloader (0483:df11 or 3297:2003) appears/disappears |
 
 `phase` ∈ `idle | saving | generating | building | waitingForBootloader |
 erasing | flashing | leaving | done | error`. `progress` is 0–100 within the

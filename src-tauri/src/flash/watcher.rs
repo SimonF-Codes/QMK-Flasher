@@ -1,10 +1,10 @@
 //! DFU bootloader presence watching.
 //!
-//! Polls `nusb::list_devices()` (1 s) for the STM32 ROM bootloader
-//! (0483:df11). Presence transitions are reported through a callback — the
-//! command layer forwards them to the webview as `dfu-device {present}`
-//! events. Flashing additionally waits a ~500 ms debounce after appearance
-//! so Windows finishes binding the driver before we open the device.
+//! Polls `nusb::list_devices()` (1 s) for any of [`KNOWN_BOOTLOADERS`].
+//! Presence transitions are reported through a callback — the command layer
+//! forwards them to the webview as `dfu-device {present}` events. Flashing
+//! additionally waits a ~500 ms debounce after appearance so Windows
+//! finishes binding the driver before we open the device.
 //!
 //! The state machine (`DebouncedWatcher`) is pure and unit-tested with fake
 //! clocks/device lists; only the thin poll loops touch USB.
@@ -15,10 +15,61 @@ use nusb::MaybeFuture;
 
 use crate::flash::pipeline::CancelToken;
 
-/// STM32 ROM DFU bootloader USB vendor id.
-pub const DFU_VID: u16 = 0x0483;
-/// STM32 ROM DFU bootloader USB product id.
-pub const DFU_PID: u16 = 0xdf11;
+/// A bootloader we know how to talk to.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Bootloader {
+    pub vid: u16,
+    pub pid: u16,
+    /// Where this bootloader expects the *application* image to start.
+    /// Not a constant of the chip: it depends on how much flash the
+    /// bootloader itself occupies, and the image must be linked to match.
+    pub flash_base: u32,
+    /// Which Moonlander revision ships this bootloader.
+    pub revision: &'static str,
+}
+
+/// Bootloaders that mean "a board is sitting in DFU mode", and the flash
+/// layout each one implies.
+///
+/// These are **not** two ways to reach the same target — they belong to
+/// different board revisions, with different application base addresses:
+///
+/// - `0483:df11` — the STM32F303 ROM DFU bootloader, used by **rev A**
+///   (`reva/keyboard.json`: `"bootloader": "stm32-dfu"`). The app owns all
+///   of flash from `0x08000000`. Observed on hardware 2026-07-19. ZSA's inf
+///   package (`oem44.inf`, "Keyboard Bootloader") binds it to WinUSB.
+/// - `3297:2003` — ZSA's "Moonlander Bootloader", used by **rev B**
+///   (`revb/rules.mk`: `DFU_ARGS = -d 3297:2003 -a 0 -s 0x08002000:leave`).
+///   It occupies the first 8 KB and exposes only `0x08002000` upward
+///   (`@Internal Flash /0x08002000/124*0002Kg`), so a rev B image is linked
+///   at `0x08002000` (`revb/ld/moonlander.ld`). It publishes an MS OS
+///   compatible-id descriptor, so Windows auto-binds `winusb.inf` with no
+///   Zadig step. Verified on hardware 2026-08-01: `nusb` opens and claims
+///   interface 0 in ~12 ms.
+///
+/// Because the base differs, [`crate::flash::dfu`] must flash at the base
+/// belonging to the bootloader it actually found, and must refuse an image
+/// linked for the other one.
+pub const KNOWN_BOOTLOADERS: &[Bootloader] = &[
+    Bootloader { vid: 0x0483, pid: 0xdf11, flash_base: 0x0800_0000, revision: "rev A" },
+    Bootloader { vid: 0x3297, pid: 0x2003, flash_base: 0x0800_2000, revision: "rev B" },
+];
+
+/// Look up the bootloader for an id pair, with its flash layout.
+pub fn find_bootloader(vid: u16, pid: u16) -> Option<&'static Bootloader> {
+    KNOWN_BOOTLOADERS.iter().find(|b| b.vid == vid && b.pid == pid)
+}
+
+/// Is this id pair one of [`KNOWN_BOOTLOADERS`]?
+pub fn is_known_bootloader(vid: u16, pid: u16) -> bool {
+    find_bootloader(vid, pid).is_some()
+}
+
+/// Presence predicate over an already-enumerated bus. Split out from
+/// [`is_dfu_present`] so the filtering is unit-testable without hardware.
+pub fn any_bootloader(devices: impl IntoIterator<Item = (u16, u16)>) -> bool {
+    devices.into_iter().any(|(vid, pid)| is_known_bootloader(vid, pid))
+}
 
 /// How often the bus is polled.
 pub const POLL_INTERVAL: Duration = Duration::from_secs(1);
@@ -76,12 +127,10 @@ impl DebouncedWatcher {
     }
 }
 
-/// One blocking bus scan: is a 0483:df11 device attached?
+/// One blocking bus scan: is any of [`KNOWN_BOOTLOADERS`] attached?
 pub fn is_dfu_present() -> bool {
     match nusb::list_devices().wait() {
-        Ok(mut devices) => {
-            devices.any(|d| d.vendor_id() == DFU_VID && d.product_id() == DFU_PID)
-        }
+        Ok(devices) => any_bootloader(devices.map(|d| (d.vendor_id(), d.product_id()))),
         Err(e) => {
             log::warn!("USB enumeration failed: {e}");
             false
@@ -175,6 +224,71 @@ mod tests {
 
     fn t(base: Instant, ms: u64) -> Instant {
         base + Duration::from_millis(ms)
+    }
+
+    /// The board in normal firmware — must never read as a bootloader.
+    /// This unit ships 3297:1972; older ones show 3297:1969.
+    const KEYBOARD_1972: (u16, u16) = (0x3297, 0x1972);
+    const KEYBOARD_1969: (u16, u16) = (0x3297, 0x1969);
+    const STM32_ROM: (u16, u16) = (0x0483, 0xdf11);
+    const ZSA_BOOTLOADER: (u16, u16) = (0x3297, 0x2003);
+    /// Some unrelated device that is always on this bus.
+    const HUB: (u16, u16) = (0x1d6b, 0x0002);
+
+    #[test]
+    fn both_known_bootloader_ids_are_recognised() {
+        assert!(is_known_bootloader(STM32_ROM.0, STM32_ROM.1));
+        assert!(is_known_bootloader(ZSA_BOOTLOADER.0, ZSA_BOOTLOADER.1));
+    }
+
+    #[test]
+    fn normal_firmware_and_strangers_are_not_bootloaders() {
+        assert!(!is_known_bootloader(KEYBOARD_1972.0, KEYBOARD_1972.1));
+        assert!(!is_known_bootloader(KEYBOARD_1969.0, KEYBOARD_1969.1));
+        assert!(!is_known_bootloader(HUB.0, HUB.1));
+        // Right vendor, wrong product, and vice versa — neither may match.
+        assert!(!is_known_bootloader(0x3297, 0xdf11));
+        assert!(!is_known_bootloader(0x0483, 0x2003));
+    }
+
+    #[test]
+    fn zsa_bootloader_sample_counts_as_present() {
+        // The exact bus seen on hardware the instant QK_BOOT is pressed:
+        // the keyboard has left, ZSA's bootloader has arrived.
+        assert!(any_bootloader([HUB, ZSA_BOOTLOADER]));
+    }
+
+    #[test]
+    fn stm32_rom_bootloader_sample_still_counts_as_present() {
+        assert!(any_bootloader([HUB, STM32_ROM]));
+    }
+
+    #[test]
+    fn bus_without_a_bootloader_is_absent() {
+        assert!(!any_bootloader([HUB, KEYBOARD_1972]));
+        assert!(!any_bootloader([]));
+    }
+
+    #[test]
+    fn watcher_fires_appeared_for_either_bootloader() {
+        // Drive the state machine from device lists, as the poll loop does:
+        // keyboard-only, then each bootloader in turn.
+        for bootloader in [STM32_ROM, ZSA_BOOTLOADER] {
+            let base = Instant::now();
+            let mut w = DebouncedWatcher::new(DEBOUNCE);
+            assert_eq!(w.observe(any_bootloader([HUB, KEYBOARD_1972]), t(base, 0)), None);
+            assert_eq!(
+                w.observe(any_bootloader([HUB, bootloader]), t(base, 1000)),
+                Some(Transition::Appeared),
+                "{bootloader:04x?} must register as the bootloader appearing"
+            );
+            assert!(w.ready(t(base, 1500)));
+            // ~7 s later ZSA's bootloader times out and the board reboots.
+            assert_eq!(
+                w.observe(any_bootloader([HUB, KEYBOARD_1972]), t(base, 8000)),
+                Some(Transition::Disappeared)
+            );
+        }
     }
 
     #[test]

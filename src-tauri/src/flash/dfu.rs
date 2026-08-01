@@ -1,17 +1,19 @@
 //! DFU flashing behind the [`Flasher`] trait.
 //!
 //! Primary backend: `dfu-core` + `dfu-nusb` speaking DfuSe (ST DFU 1.1a) to
-//! the STM32F303 ROM bootloader (0483:df11): page erase, set address
-//! pointer 0x08000000, chunked download, then zero-length download +
-//! GetStatus (manifest, dfu-util's `:leave`) and a USB reset — the board
-//! re-enumerates as the ZSA Moonlander (3297:1969). Behavioral reference:
-//! ZSA's `wally-cli`. The ROM bootloader cannot be bricked by a failed
-//! app-region flash, so every mid-flash error is safe to retry.
+//! whichever bootloader the board presents (`watcher::KNOWN_BOOTLOADERS` —
+//! the STM32F303 ROM at 0483:df11, or ZSA's own Moonlander Bootloader at
+//! 3297:2003): page erase, set address pointer 0x08000000, chunked
+//! download, then zero-length download + GetStatus (manifest, dfu-util's
+//! `:leave`) and a USB reset — the board re-enumerates as the ZSA
+//! Moonlander (3297:1969 or 3297:1972). Behavioral reference: ZSA's
+//! `wally-cli`. Neither bootloader can be bricked by a failed app-region
+//! flash, so every mid-flash error is safe to retry.
 //!
 //! Fallback backend (cargo feature `dfu-util-fallback`, selected at runtime
 //! with `QMK_FLASHER_DFU_BACKEND=dfu-util`): shells out to a bundled
-//! `dfu-util.exe -a 0 -d 0483:df11 -s 0x08000000:leave -D <bin>` and parses
-//! its progress output. Same trait, drop-in.
+//! `dfu-util.exe -a 0 -d <known ids> -s 0x08000000:leave -D <bin>` and
+//! parses its progress output. Same trait, drop-in.
 
 use std::io::Read;
 
@@ -19,9 +21,12 @@ use nusb::MaybeFuture;
 
 use crate::error::AppError;
 use crate::flash::pipeline::CancelToken;
-use crate::flash::watcher::{DFU_PID, DFU_VID};
+use crate::flash::watcher::{find_bootloader, is_known_bootloader};
 
-/// Start of the STM32 application flash region.
+/// Start of the STM32 application flash region on a **rev A** board, whose
+/// ROM bootloader hands the app all of flash. Rev B's app starts at
+/// `0x08002000` instead — always prefer the `flash_base` of the
+/// [`Bootloader`] actually found rather than assuming this one.
 pub const FLASH_BASE: u32 = 0x0800_0000;
 /// STM32F303xC flash size — a .bin larger than this cannot be right.
 pub const FLASH_CAPACITY: usize = 256 * 1024;
@@ -65,6 +70,53 @@ pub fn validate_firmware(firmware: &[u8]) -> Result<(), AppError> {
             "firmware image is {} bytes, larger than the {} byte flash",
             firmware.len(),
             FLASH_CAPACITY
+        )));
+    }
+    Ok(())
+}
+
+/// The address a Cortex-M image is linked to run at, read from its vector
+/// table: word 0 is the initial stack pointer (SRAM, `0x2000_0000` on an
+/// STM32F3), word 1 the reset vector — an address inside the image's own
+/// flash region. Returns `None` if this does not look like a vector table.
+pub fn image_link_base(firmware: &[u8]) -> Option<u32> {
+    if firmware.len() < 8 {
+        return None;
+    }
+    let word = |i: usize| u32::from_le_bytes(firmware[i..i + 4].try_into().unwrap());
+    let initial_sp = word(0);
+    let reset_vector = word(4);
+    // Sanity-check it really is a vector table before trusting the reset
+    // vector: SP in SRAM, reset vector in flash with the Thumb bit set.
+    if initial_sp & 0xFFF0_0000 != 0x2000_0000 || reset_vector & 0xFF00_0000 != 0x0800_0000 {
+        return None;
+    }
+    // The reset vector lands somewhere inside the image; the link base is
+    // that address rounded down to the flash sector the image starts on.
+    // Both candidate bases are 8 KB-aligned, so round to 8 KB.
+    Some(reset_vector & !0x1FFF)
+}
+
+/// Refuse an image that is not linked for the bootloader we are about to
+/// flash through. Rev A images start at `0x08000000`, rev B images at
+/// `0x08002000`; writing one through the other's bootloader produces a
+/// board that enumerates as nothing and needs a manual recovery.
+fn check_image_matches_bootloader(
+    firmware: &[u8],
+    bootloader: &crate::flash::watcher::Bootloader,
+) -> Result<(), AppError> {
+    let Some(link_base) = image_link_base(firmware) else {
+        // Not a recognisable vector table — leave it to the device.
+        log::warn!("firmware has no recognisable Cortex-M vector table; skipping link-base check");
+        return Ok(());
+    };
+    if link_base != bootloader.flash_base {
+        return Err(AppError::BuildFailed(format!(
+            "firmware is linked for 0x{link_base:08x} but the attached \
+             bootloader {:04x}:{:04x} ({}) flashes at 0x{:08x}. This image \
+             was built for the wrong Moonlander revision — flashing it would \
+             leave the board unbootable.",
+            bootloader.vid, bootloader.pid, bootloader.revision, bootloader.flash_base
         )));
     }
     Ok(())
@@ -122,8 +174,19 @@ impl Flasher for DfuNusbFlasher {
         let info = nusb::list_devices()
             .wait()
             .map_err(map_nusb_setup_error)?
-            .find(|d| d.vendor_id() == DFU_VID && d.product_id() == DFU_PID)
+            .find(|d| is_known_bootloader(d.vendor_id(), d.product_id()))
             .ok_or(AppError::DfuNotFound)?;
+        // Safe to unwrap the lookup: `find` already matched a known id.
+        let bootloader = find_bootloader(info.vendor_id(), info.product_id())
+            .expect("device matched a known bootloader id");
+        log::info!(
+            "opening bootloader {:04x}:{:04x} ({}), flashing at 0x{:08x}",
+            bootloader.vid,
+            bootloader.pid,
+            bootloader.revision,
+            bootloader.flash_base
+        );
+        check_image_matches_bootloader(firmware, bootloader)?;
         let device = info.open().wait().map_err(map_nusb_setup_error)?;
         let interface = device
             .claim_interface(0)
@@ -134,7 +197,7 @@ impl Flasher for DfuNusbFlasher {
         let dfu = pollster::block_on(dfu_nusb::DfuNusb::open(device, interface, 0))
             .map_err(map_dfu_error)?;
         let mut dfu = dfu.into_sync_dfu();
-        dfu.override_address(FLASH_BASE);
+        dfu.override_address(bootloader.flash_base);
 
         // dfu-core erases every needed page before the first chunk is sent;
         // it exposes no erase progress, so this phase is indeterminate.
@@ -233,6 +296,19 @@ mod dfu_util_impl {
     use std::path::PathBuf;
     use std::process::{Command, Stdio};
 
+    use crate::flash::watcher::Bootloader;
+
+    /// Which known bootloader is on the bus right now. dfu-util needs both
+    /// its id (`-d`) and its flash base (`-s`), and those must come from the
+    /// same device — a rev A address with a rev B board would brick it.
+    fn attached_bootloader() -> Result<&'static Bootloader, AppError> {
+        nusb::list_devices()
+            .wait()
+            .map_err(map_nusb_setup_error)?
+            .find_map(|d| find_bootloader(d.vendor_id(), d.product_id()))
+            .ok_or(AppError::DfuNotFound)
+    }
+
     /// Shells out to `dfu-util.exe`. The executable is resolved from
     /// `QMK_FLASHER_DFU_UTIL` or, by default, `dfu-util.exe` next to the
     /// app binary / on PATH.
@@ -272,13 +348,18 @@ mod dfu_util_impl {
         ) -> Result<FlashOutcome, AppError> {
             validate_firmware(firmware)?;
 
+            let bootloader = attached_bootloader()?;
+            check_image_matches_bootloader(firmware, bootloader)?;
+            let device_spec = format!("{:04x}:{:04x}", bootloader.vid, bootloader.pid);
+            let address_spec = format!("0x{:08x}:leave", bootloader.flash_base);
+
             let tmp = std::env::temp_dir().join("qmk-flasher-firmware.bin");
             std::fs::write(&tmp, firmware).map_err(|e| {
                 AppError::BuildFailed(format!("cannot stage firmware for dfu-util: {e}"))
             })?;
 
             let mut child = Command::new(&self.exe)
-                .args(["-a", "0", "-d", "0483:df11", "-s", "0x08000000:leave", "-D"])
+                .args(["-a", "0", "-d", &device_spec, "-s", &address_spec, "-D"])
                 .arg(&tmp)
                 .stdout(Stdio::piped())
                 .stderr(Stdio::piped())
@@ -357,6 +438,78 @@ pub fn default_flasher() -> Box<dyn Flasher + Send> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// A minimal Cortex-M image: initial SP in SRAM, reset vector `base+0x2BD`
+    /// (the offset a real Moonlander build produced), padded to `len`.
+    fn fake_image(base: u32, len: usize) -> Vec<u8> {
+        let mut v = Vec::with_capacity(len);
+        v.extend_from_slice(&0x2000_0400u32.to_le_bytes());
+        v.extend_from_slice(&(base + 0x2BD).to_le_bytes());
+        v.resize(len.max(8), 0xFF);
+        v
+    }
+
+    fn bootloader(pid: u16) -> &'static crate::flash::watcher::Bootloader {
+        find_bootloader(if pid == 0xdf11 { 0x0483 } else { 0x3297 }, pid).unwrap()
+    }
+
+    #[test]
+    fn reads_link_base_from_the_vector_table() {
+        assert_eq!(image_link_base(&fake_image(0x0800_0000, 1024)), Some(0x0800_0000));
+        assert_eq!(image_link_base(&fake_image(0x0800_2000, 1024)), Some(0x0800_2000));
+        // Not a vector table: SP outside SRAM, or reset vector outside flash.
+        assert_eq!(image_link_base(&[0xFF; 64]), None);
+        assert_eq!(image_link_base(&[]), None);
+    }
+
+    #[test]
+    fn accepts_an_image_linked_for_the_attached_bootloader() {
+        // rev A image through the rev A (STM32 ROM) bootloader.
+        assert!(check_image_matches_bootloader(
+            &fake_image(0x0800_0000, 1024),
+            bootloader(0xdf11)
+        )
+        .is_ok());
+        // rev B image through ZSA's bootloader.
+        assert!(check_image_matches_bootloader(
+            &fake_image(0x0800_2000, 1024),
+            bootloader(0x2003)
+        )
+        .is_ok());
+    }
+
+    #[test]
+    fn refuses_a_rev_a_image_through_the_rev_b_bootloader() {
+        // Exactly the situation on hardware 2026-08-01: the app builds a
+        // reva image (linked 0x08000000) while the board presents ZSA's
+        // rev B bootloader, which flashes at 0x08002000.
+        let err = check_image_matches_bootloader(
+            &fake_image(0x0800_0000, 69_416),
+            bootloader(0x2003),
+        )
+        .unwrap_err();
+        assert_eq!(err.code(), "BuildFailed");
+        let msg = err.to_string();
+        assert!(msg.contains("0x08000000"), "{msg}");
+        assert!(msg.contains("0x08002000"), "{msg}");
+        assert!(msg.contains("3297:2003"), "{msg}");
+    }
+
+    #[test]
+    fn refuses_a_rev_b_image_through_the_rev_a_bootloader() {
+        let err = check_image_matches_bootloader(
+            &fake_image(0x0800_2000, 1024),
+            bootloader(0xdf11),
+        )
+        .unwrap_err();
+        assert_eq!(err.code(), "BuildFailed");
+    }
+
+    #[test]
+    fn unrecognisable_image_is_left_to_the_device() {
+        // No vector table to check against — don't invent a verdict.
+        assert!(check_image_matches_bootloader(&[0x00; 256], bootloader(0x2003)).is_ok());
+    }
 
     #[test]
     fn firmware_validation_rejects_empty_and_oversized() {
