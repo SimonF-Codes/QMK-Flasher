@@ -91,11 +91,19 @@ export default function App() {
 
   return (
     <div className="flex h-screen flex-col">
-      <header className="flex items-center gap-3 border-b border-zinc-800 px-4 py-2.5">
-        <h1 className="text-base font-semibold tracking-tight">QMK Flasher</h1>
+      {/* Wraps rather than overflowing. Three features (live view, LED tooling,
+          OS-mode switch) each added header controls independently; together they
+          stopped fitting the 800px default window, and without `flex-wrap` the
+          row overflowed and scrolled the whole page sideways. */}
+      <header className="flex flex-wrap items-center gap-x-3 gap-y-2 border-b border-zinc-800 px-4 py-2.5">
+        <h1 className="shrink-0 text-base font-semibold tracking-tight">
+          QMK Flasher
+        </h1>
         <LayoutMenu />
         {layout && (
-          <span className="text-xs text-zinc-500">
+          // Truncate instead of forcing width: the Oryx id is the longest and
+          // least important thing in the row.
+          <span className="min-w-0 truncate text-xs text-zinc-500">
             Oryx {layout.meta.seededFrom.layoutId}/
             {layout.meta.seededFrom.revisionHash}
           </span>
@@ -105,7 +113,9 @@ export default function App() {
             mock
           </span>
         )}
-        <div className="ml-auto flex items-center gap-2">
+        {/* shrink-0 keeps the controls at full size; when the row runs out of
+            space this group wraps to its own line instead of being squeezed. */}
+        <div className="ml-auto flex shrink-0 items-center gap-2">
           <VersionHistoryPanel />
           <LiveToggle />
           <DisplayModeToggle />
