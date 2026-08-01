@@ -1,4 +1,5 @@
 import { GEOMETRY, viewBox } from "../lib/geometry";
+import { resolveLayerLeds } from "../lib/led";
 import { hasOsSwitchKey } from "../lib/osSwap";
 import { useDisplayStore } from "../state/displayStore";
 import { useLayoutStore } from "../state/layoutStore";
@@ -25,6 +26,8 @@ export default function Keyboard() {
   // Only honour the preview if the board can actually reach the swapped
   // state — otherwise the keycaps would show behavior you can't produce.
   const osSwapped = osSwapPreview && hasOsSwitchKey(layout);
+  // What the ledmap will actually light on this layer, in LAYOUT-arg order.
+  const leds = resolveLayerLeds(layout!, selectedLayer);
 
   // In swap mode a click picks the target (or cancels if it's the anchor);
   // otherwise it toggles the selection as usual.
@@ -52,6 +55,7 @@ export default function Keyboard() {
           selected={selectedKey === i}
           swapSource={swapping && swapSource === i}
           swapTargeting={swapping && swapSource !== i}
+          ledColor={leds[i]}
           mode={mode}
           osSwapped={osSwapped}
           layerNames={layerNames}

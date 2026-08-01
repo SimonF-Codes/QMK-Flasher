@@ -487,3 +487,94 @@ describe("layoutStore multi-layout (mock IPC)", () => {
     ]);
   });
 });
+
+describe("layoutStore LED colors (mock IPC)", () => {
+  beforeEach(async () => {
+    resetMockStore();
+    useLayoutStore.setState({
+      layout: null,
+      savedJson: null,
+      layouts: [],
+      activeId: null,
+      selectedLayer: 0,
+      selectedKey: null,
+      swapSource: null,
+      error: null,
+    });
+    await useLayoutStore.getState().load();
+  });
+
+  it("setting a layer color dirties and persists through save/load", async () => {
+    useLayoutStore.getState().setLayerColor(1, "#123456");
+    expect(useLayoutStore.getState().layout!.layers[1].color).toBe("#123456");
+    expect(useLayoutStore.getState().isDirty()).toBe(true);
+
+    await useLayoutStore.getState().save();
+    await useLayoutStore.getState().load();
+    expect(useLayoutStore.getState().layout!.layers[1].color).toBe("#123456");
+  });
+
+  it("re-picking the color already in place does not dirty the layout", () => {
+    const current = useLayoutStore.getState().layout!.layers[0].color;
+    useLayoutStore.getState().setLayerColor(0, current.toUpperCase());
+    expect(useLayoutStore.getState().isDirty()).toBe(false);
+  });
+
+  it("a bad hex is rejected without dirtying", () => {
+    useLayoutStore.getState().setLayerColor(0, "hotpink");
+    expect(useLayoutStore.getState().isDirty()).toBe(false);
+  });
+
+  it("key glow applies to the selected key and resets back to the layer base", () => {
+    const s = useLayoutStore.getState();
+    s.selectLayer(0);
+    s.selectKey(3);
+    useLayoutStore.getState().setSelectedKeyGlow("#ff00ff");
+    expect(useLayoutStore.getState().layout!.layers[0].keys[3].glow).toBe(
+      "#ff00ff",
+    );
+
+    useLayoutStore.getState().setSelectedKeyGlow(null);
+    expect(
+      "glow" in useLayoutStore.getState().layout!.layers[0].keys[3],
+    ).toBe(false);
+  });
+
+  it("key glow is a no-op with nothing selected", () => {
+    useLayoutStore.getState().selectKey(null);
+    useLayoutStore.getState().setSelectedKeyGlow("#ff00ff");
+    expect(useLayoutStore.getState().isDirty()).toBe(false);
+  });
+
+  it("tinting by destination colors layer keys and clearing undoes it", () => {
+    const s = useLayoutStore.getState();
+    // The fixture's layer 0 has layer keys; find one and its target's color.
+    const idx = s
+      .layout!.layers[0].keys.findIndex(
+        (k) => k.kind === "layerSwitch" || k.kind === "layerTap",
+      );
+    expect(idx).toBeGreaterThanOrEqual(0);
+    const target = (
+      s.layout!.layers[0].keys[idx] as { layer: number }
+    ).layer;
+
+    useLayoutStore.getState().glowLayerKeysByTarget(0);
+    expect(useLayoutStore.getState().layout!.layers[0].keys[idx].glow).toBe(
+      useLayoutStore.getState().layout!.layers[target].color,
+    );
+
+    useLayoutStore.getState().clearLayerGlows(0);
+    expect(
+      useLayoutStore.getState().layout!.layers[0].keys.some((k) => k.glow),
+    ).toBe(false);
+  });
+
+  it("clearing glows on an already-flat layer does not dirty it", async () => {
+    useLayoutStore.getState().clearLayerGlows(0);
+    await useLayoutStore.getState().save();
+    expect(useLayoutStore.getState().isDirty()).toBe(false);
+
+    useLayoutStore.getState().clearLayerGlows(0);
+    expect(useLayoutStore.getState().isDirty()).toBe(false);
+  });
+});
