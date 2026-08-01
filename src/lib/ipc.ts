@@ -19,9 +19,13 @@ import {
   DfuDeviceSchema,
   EVENT_BUILD_LOG,
   EVENT_DFU_DEVICE,
+  EVENT_KEY_REPORT,
+  EVENT_LAYER_REPORT,
   EVENT_PIPELINE_STATE,
   GeometryFileSchema,
   KeyboardInfoSchema,
+  KeyReportSchema,
+  LayerReportSchema,
   LayoutFileSchema,
   LayoutSummarySchema,
   LayoutVersionSummarySchema,
@@ -34,6 +38,8 @@ import {
   type GeneratedSources,
   type GeometryFile,
   type KeyboardInfo,
+  type KeyReport,
+  type LayerReport,
   type LayoutFile,
   type LayoutSummary,
   type LayoutVersionSummary,
@@ -76,9 +82,18 @@ export interface Ipc {
   cancelPipeline(): Promise<void>;
   listDfuDevices(): Promise<DfuDeviceInfo[]>;
   flashFirmware(binPath: string): Promise<void>;
+  /**
+   * Open the board's raw-HID channel and start streaming key/layer reports.
+   * Rejects with `KeyReportUnavailable` when it cannot be opened — held only
+   * while live view is on, so Keymapp/Oryx can have the channel otherwise.
+   */
+  startKeyReporting(): Promise<void>;
+  stopKeyReporting(): Promise<void>;
   onPipelineState(cb: (s: PipelineState) => void): Unsubscribe;
   onBuildLog(cb: (l: BuildLog) => void): Unsubscribe;
   onDfuDevice(cb: (d: DfuDevice) => void): Unsubscribe;
+  onKeyReport(cb: (k: KeyReport) => void): Unsubscribe;
+  onLayerReport(cb: (l: LayerReport) => void): Unsubscribe;
 }
 
 /** Normalize anything a command rejects with into an AppError shape. */
@@ -161,11 +176,17 @@ const realIpc: Ipc = {
   cancelPipeline: () => invoke("cancel_pipeline"),
   listDfuDevices: () => invoke("list_dfu_devices"),
   flashFirmware: (binPath) => invoke("flash_firmware", { binPath }),
+  startKeyReporting: () => invoke("start_key_reporting"),
+  stopKeyReporting: () => invoke("stop_key_reporting"),
   onPipelineState: tauriEvent(EVENT_PIPELINE_STATE, (r) =>
     PipelineStateSchema.parse(r),
   ),
   onBuildLog: tauriEvent(EVENT_BUILD_LOG, (r) => BuildLogSchema.parse(r)),
   onDfuDevice: tauriEvent(EVENT_DFU_DEVICE, (r) => DfuDeviceSchema.parse(r)),
+  onKeyReport: tauriEvent(EVENT_KEY_REPORT, (r) => KeyReportSchema.parse(r)),
+  onLayerReport: tauriEvent(EVENT_LAYER_REPORT, (r) =>
+    LayerReportSchema.parse(r),
+  ),
 };
 
 // ---------------------------------------------------------------- mock mode
@@ -174,12 +195,31 @@ const realIpc: Ipc = {
 export const mockControls = {
   /** Next start_flash_pipeline fails during `building` (error/retry path). */
   failNextBuild: false,
+  /**
+   * Make start_key_reporting fail, as it does when Keymapp holds the channel.
+   * There is no browser-event fallback, so this is the only way to see the
+   * "reports unavailable" notice without unplugging a board.
+   */
+  keyReportingUnavailable: false,
+  /**
+   * Inject a report. Mock mode has no board, and deliberately does not
+   * synthesize reports from browser keystrokes — inferring the switch from the
+   * emitted character is exactly the guesswork firmware reports replace.
+   */
+  report(row: number, col: number, pressed: boolean) {
+    listeners.keyReport.forEach((cb) => cb({ row, col, pressed }));
+  },
+  reportLayer(layer: number) {
+    listeners.layerReport.forEach((cb) => cb({ layer }));
+  },
 };
 
 const listeners = {
   pipelineState: new Set<(s: PipelineState) => void>(),
   buildLog: new Set<(l: BuildLog) => void>(),
   dfuDevice: new Set<(d: DfuDevice) => void>(),
+  keyReport: new Set<(k: KeyReport) => void>(),
+  layerReport: new Set<(l: LayerReport) => void>(),
 };
 
 function emitState(phase: PipelinePhase, extra?: Partial<PipelineState>) {
@@ -617,6 +657,20 @@ const mockIpc: Ipc = {
   flashFirmware: async () => {
     await mockPipeline();
   },
+  startKeyReporting: async () => {
+    if (mockControls.keyReportingUnavailable) {
+      throw {
+        code: "KeyReportUnavailable",
+        message:
+          "cannot read key reports from the board: cannot open raw-HID interface (mock)",
+        hint: "Plug the board in, and close anything else holding its raw-HID channel — ZSA Keymapp, or Oryx open in a browser tab.",
+      } satisfies AppError;
+    }
+    console.log("[mock] start_key_reporting");
+  },
+  stopKeyReporting: async () => {
+    console.log("[mock] stop_key_reporting");
+  },
   onPipelineState: (cb) => {
     listeners.pipelineState.add(cb);
     return () => listeners.pipelineState.delete(cb);
@@ -628,6 +682,14 @@ const mockIpc: Ipc = {
   onDfuDevice: (cb) => {
     listeners.dfuDevice.add(cb);
     return () => listeners.dfuDevice.delete(cb);
+  },
+  onKeyReport: (cb) => {
+    listeners.keyReport.add(cb);
+    return () => listeners.keyReport.delete(cb);
+  },
+  onLayerReport: (cb) => {
+    listeners.layerReport.add(cb);
+    return () => listeners.layerReport.delete(cb);
   },
 };
 

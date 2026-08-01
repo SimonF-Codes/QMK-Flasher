@@ -24,6 +24,11 @@ pub enum AppError {
     /// but load/save need a failure code; documented in CONTRACT.md).
     #[error("layout is invalid: {0}")]
     InvalidLayout(String),
+    /// The board's raw-HID channel could not be opened, so live key reports
+    /// are unavailable. There is no browser-events fallback by design — the
+    /// user sees this instead of a view that silently shows less.
+    #[error("cannot read key reports from the board: {0}")]
+    KeyReportUnavailable(String),
 }
 
 impl AppError {
@@ -37,6 +42,7 @@ impl AppError {
             AppError::DfuAccessDenied => "DfuAccessDenied",
             AppError::DfuVerifyFailed(_) => "DfuVerifyFailed",
             AppError::InvalidLayout(_) => "InvalidLayout",
+            AppError::KeyReportUnavailable(_) => "KeyReportUnavailable",
         }
     }
 
@@ -60,6 +66,10 @@ impl AppError {
             AppError::DfuVerifyFailed(_) => Some(
                 "Safe to retry — the bootloader is in ROM and cannot be \
                  bricked. Keymapp remains a manual fallback.",
+            ),
+            AppError::KeyReportUnavailable(_) => Some(
+                "Plug the board in, and close anything else holding its \
+                 raw-HID channel — ZSA Keymapp, or Oryx open in a browser tab.",
             ),
             _ => None,
         }

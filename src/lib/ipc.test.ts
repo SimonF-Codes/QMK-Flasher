@@ -82,3 +82,43 @@ describe("mock flash pipeline", () => {
     expect(phases).not.toContain("done");
   });
 });
+
+describe("mock key reporting", () => {
+  afterEach(() => {
+    mockControls.keyReportingUnavailable = false;
+  });
+
+  it("delivers key and layer reports to subscribers until they unsubscribe", async () => {
+    const keys: unknown[] = [];
+    const layers: unknown[] = [];
+    const unK = ipc.onKeyReport((k) => keys.push(k));
+    const unL = ipc.onLayerReport((l) => layers.push(l));
+
+    await ipc.startKeyReporting();
+    mockControls.report(1, 6, true);
+    mockControls.reportLayer(2);
+    mockControls.report(1, 6, false);
+
+    expect(keys).toEqual([
+      { row: 1, col: 6, pressed: true },
+      { row: 1, col: 6, pressed: false },
+    ]);
+    expect(layers).toEqual([{ layer: 2 }]);
+
+    unK();
+    unL();
+    mockControls.report(0, 0, true);
+    expect(keys).toHaveLength(2);
+    await ipc.stopKeyReporting();
+  });
+
+  it("reports an unopenable channel as KeyReportUnavailable with a hint", async () => {
+    mockControls.keyReportingUnavailable = true;
+    const error = await ipc.startKeyReporting().then(
+      () => null,
+      (e: unknown) => e,
+    );
+    expect(error).toMatchObject({ code: "KeyReportUnavailable" });
+    expect((error as { hint: string }).hint).toContain("Keymapp");
+  });
+});

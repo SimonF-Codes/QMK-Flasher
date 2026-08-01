@@ -26,10 +26,10 @@
 //! the thin poll loop touches USB.
 
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
-use hidapi::HidApi;
+use hidapi::{HidApi, HidDevice};
 
 /// ZSA vendor id. The product id is deliberately not pinned — this board
 /// enumerates as 0x1972 while `flash_bin.rs` hardcodes 0x1969, so it varies by
@@ -57,6 +57,14 @@ const EVT_ERROR: u8 = 0xFF;
 const RECONNECT_DELAY: Duration = Duration::from_secs(1);
 /// Read timeout; also how often the stop flag is checked.
 const READ_TIMEOUT_MS: i32 = 100;
+
+/// The running listener, if any. `Mutex<Option<..>>` rather than Tauri managed
+/// state, mirroring `flash::pipeline::ACTIVE`, so `stop` needs no `AppHandle`.
+///
+/// There is deliberately no app-lifetime listener: pairing sets the board's
+/// `rawhid_state.paired` flag, the same one ZSA Keymapp and Oryx use, so
+/// holding it while live view is off would contend with those tools.
+static ACTIVE: Mutex<Option<Listener>> = Mutex::new(None);
 
 /// One decoded message from the board.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -144,12 +152,45 @@ pub fn spawn(mut on_event: impl FnMut(Report) + Send + 'static) -> Listener {
     listener
 }
 
-/// One connect → pair → read loop. Returns when the board drops or we're
-/// stopped; the caller retries.
-fn session(
-    stop: &AtomicBool,
-    on_event: &mut impl FnMut(Report),
-) -> Result<(), String> {
+/// Start the one shared listener, replacing any already running.
+///
+/// The channel is opened once up front so "ZSA Keymapp has it" or "the board
+/// isn't plugged in" comes back as an error the user can read, instead of a
+/// feature that silently never reports anything. Once past that, [`spawn`]
+/// owns reconnection, so unplugging mid-session recovers on its own.
+pub fn start(on_event: impl FnMut(Report) + Send + 'static) -> Result<(), String> {
+    // Probe before taking the lock's contents away: a failed start must leave
+    // whatever was running alone.
+    let probe = open_raw_hid()?;
+    drop(probe);
+
+    let mut active = ACTIVE.lock().unwrap_or_else(|p| p.into_inner());
+    if let Some(previous) = active.take() {
+        previous.stop();
+    }
+    *active = Some(spawn(on_event));
+    Ok(())
+}
+
+/// Stop the shared listener, if one is running. Idempotent.
+pub fn stop() {
+    let taken = ACTIVE.lock().unwrap_or_else(|p| p.into_inner()).take();
+    if let Some(listener) = taken {
+        listener.stop();
+    }
+}
+
+/// Whether a listener is currently held.
+pub fn is_running() -> bool {
+    ACTIVE
+        .lock()
+        .unwrap_or_else(|p| p.into_inner())
+        .as_ref()
+        .is_some_and(|l| !l.stopped())
+}
+
+/// Find and open the board's raw-HID interface.
+fn open_raw_hid() -> Result<HidDevice, String> {
     let api = HidApi::new().map_err(|e| format!("HID API unavailable: {e}"))?;
     let info = api
         .device_list()
@@ -160,11 +201,19 @@ fn session(
         })
         .ok_or_else(|| "no ZSA raw-HID interface present".to_string())?;
 
-    let dev = info
-        .open_device(&api)
+    info.open_device(&api)
         // Usually means something else holds it exclusively — ZSA Keymapp, or
         // Oryx open in a browser tab.
-        .map_err(|e| format!("cannot open raw-HID interface: {e}"))?;
+        .map_err(|e| format!("cannot open raw-HID interface: {e}"))
+}
+
+/// One connect → pair → read loop. Returns when the board drops or we're
+/// stopped; the caller retries.
+fn session(
+    stop: &AtomicBool,
+    on_event: &mut impl FnMut(Report),
+) -> Result<(), String> {
+    let dev = open_raw_hid()?;
 
     dev.write(&command(CMD_PAIRING_INIT))
         .map_err(|e| format!("pairing write failed: {e}"))?;
@@ -246,5 +295,15 @@ mod tests {
         assert!(!l.stopped());
         l.stop();
         assert!(l.stopped());
+    }
+
+    /// `start` needs hardware, so only the half that doesn't is asserted here:
+    /// stopping when nothing runs must be a no-op, not a panic or a stale flag.
+    /// The real path is verified on the board — see the commit message.
+    #[test]
+    fn stop_without_a_running_listener_is_a_noop() {
+        stop();
+        stop();
+        assert!(!is_running());
     }
 }

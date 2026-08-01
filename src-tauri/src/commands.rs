@@ -11,11 +11,13 @@ use crate::appcfg::{self, AppConfig};
 use crate::codegen::{self, GeneratedSources};
 use crate::error::AppError;
 use crate::events::{
-    emit_build_log, emit_pipeline_state, PipelinePhase, PipelineState,
+    emit_build_log, emit_key_report, emit_layer_report, emit_pipeline_state,
+    PipelinePhase, PipelineState,
 };
 use crate::flash::{self, DfuDeviceInfo};
 use crate::geometry::{self, GeometryFile};
 use crate::keyboards::{self, KeyboardInfo};
+use crate::keyreport::{self, Report};
 use crate::layout::store::{LayoutSummary, LayoutVersionSummary, VersionReason};
 use crate::layout::{store, LayoutFile};
 use crate::{build, oryx};
@@ -195,9 +197,49 @@ pub fn flash_firmware(app: AppHandle, bin_path: String) -> Result<(), AppError> 
     )
 }
 
+// -- live key reports (additive, 2026-08-01) --------------------------------
+
+/// Open the board's raw-HID channel and stream `key-report` / `layer-report`
+/// events until `stop_key_reporting`.
+///
+/// Deliberately a command pair rather than an app-lifetime listener like
+/// `flash::watcher`: pairing sets the board's `rawhid_state.paired` flag, which
+/// ZSA Keymapp and Oryx also use, so the pairing is held only while live view
+/// or the trainer is actually on. Fails with `KeyReportUnavailable` when the
+/// channel cannot be opened, so the UI can say why instead of showing a live
+/// view that never lights up.
+#[tauri::command]
+pub fn start_key_reporting(app: AppHandle) -> Result<(), AppError> {
+    keyreport::start(move |report| match report {
+        Report::Key { row, col, pressed } => emit_key_report(&app, row, col, pressed),
+        Report::Layer { layer } => emit_layer_report(&app, layer),
+        // Pairing and error frames are listener-internal: pairing is retried by
+        // the listener itself, and there is no event on the contract for them.
+        Report::Paired => log::info!("key reporting paired"),
+        Report::PairingFailed => log::warn!("key report pairing refused by the board"),
+        Report::Error(code) => log::warn!("key report error frame from the board: {code}"),
+    })
+    .map_err(AppError::KeyReportUnavailable)
+}
+
+/// Stop streaming and unpair, releasing the channel back to Keymapp/Oryx.
+/// Idempotent — stopping when nothing is running is not an error.
+#[tauri::command]
+pub fn stop_key_reporting() -> Result<(), AppError> {
+    keyreport::stop();
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn stop_key_reporting_is_idempotent() {
+        assert!(stop_key_reporting().is_ok());
+        assert!(stop_key_reporting().is_ok());
+        assert!(!keyreport::is_running());
+    }
 
     #[test]
     fn load_layout_returns_valid_fixture() {

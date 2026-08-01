@@ -55,6 +55,8 @@ pub fn run() {
             commands::cancel_pipeline,
             commands::list_dfu_devices,
             commands::flash_firmware,
+            commands::start_key_reporting,
+            commands::stop_key_reporting,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

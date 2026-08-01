@@ -270,6 +270,8 @@ All results are `Result<T, AppError>` unless noted; errors cross IPC as
 | `cancel_pipeline` | `() -> ()` | `flash::cancel` |
 | `list_dfu_devices` | `() -> DfuDeviceInfo[]` | `flash::list_dfu_devices` |
 | `flash_firmware` | `(bin_path) -> ()` | `flash::flash_firmware` (no rebuild) |
+| `start_key_reporting` | `() -> ()` | `keyreport::start`; streams `key-report`/`layer-report` |
+| `stop_key_reporting` | `() -> ()` | `keyreport::stop` (idempotent) |
 
 ## Events (`src-tauri/src/events.rs`)
 
@@ -281,18 +283,29 @@ aliases — nothing shipped against them).
 | `build-log` | `{line}` | Each MSYS make output line during `building` |
 | `pipeline-state` | `{phase, detail?, progress?}` | Every phase transition |
 | `dfu-device` | `{present}` | Bootloader (0483:df11) appears/disappears |
+| `key-report` | `{row, col, pressed}` | A physical switch changed state, while key reporting is on |
+| `layer-report` | `{layer}` | The board's topmost active layer changed |
 
 `phase` ∈ `idle | saving | generating | building | waitingForBootloader |
 erasing | flashing | leaving | done | error`. `progress` is 0–100 within the
 phase. Phase `error` carries the message in `detail` (the command also
 returns the `AppError`).
 
+`key-report`/`layer-report` are **two events, not one**, deliberately: a layer
+is a *level* that persists until it changes, a keypress is an *edge*. The board
+reports them separately too — `pre_process_record_oryx` fires the switch before
+`layer_state_set_oryx` fires the layer it caused. `row`/`col` are matrix
+coordinates; `shared/moonlander_geometry.json` maps them to LAYOUT-arg indices
+(`src/lib/geometry.ts:positionForMatrix`).
+
 ## Errors (`src-tauri/src/error.rs`)
 
 One `AppError` enum, serialized `{code, message, hint}` (`hint` nullable):
 `OryxUnreachable, PermutationMismatch, CodegenUnsupportedKey, BuildFailed,
 DfuNotFound, DfuAccessDenied, DfuVerifyFailed` (per plan) + `InvalidLayout`
-(foundation addition — load/save/config validation failures need a code).
+(foundation addition — load/save/config validation failures need a code) +
+`KeyReportUnavailable` (the raw-HID channel could not be opened; since live
+view has no browser-events fallback, this has to be sayable).
 
 ## Shared data (`shared/`)
 
