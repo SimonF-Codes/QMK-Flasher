@@ -189,6 +189,12 @@ pub fn run_with(
     bail_if_cancelled!();
     on_state(PipelineState::phase(PipelinePhase::Building));
     let bin_path = ops.build(on_log)?;
+    // `build` is the one step that cannot be interrupted: it waits on the QMK
+    // `make` subprocess to completion, so a cancel pressed during the build
+    // lands here, at the first checkpoint after it. It is not a no-op — the run
+    // stops before the bootloader wait and the board is never written, which is
+    // exactly what the UI's "Cancel after build" promises.
+    bail_if_cancelled!();
     // Read (and sanity-check) the image before asking the user to reset the
     // board, so a bad build fails fast.
     let firmware = ops.read_firmware(&bin_path)?;
@@ -314,6 +320,11 @@ mod tests {
         wait_outcome: WaitOutcome,
         flasher: FakeFlasher,
         cancel_during_wait: bool,
+        /// Fire this token from inside `build`, then let `build` run to
+        /// completion — what really happens when the user hits Cancel (from
+        /// another thread) while the uninterruptible `make` subprocess runs.
+        /// `build` takes no token of its own, which is the point.
+        cancel_during_build: Option<CancelToken>,
     }
 
     impl FakeOps {
@@ -333,6 +344,7 @@ mod tests {
                     cancel_after: None,
                 },
                 cancel_during_wait: false,
+                cancel_during_build: None,
             }
         }
     }
@@ -350,6 +362,11 @@ mod tests {
 
         fn build(&mut self, on_log: &mut dyn FnMut(String)) -> Result<String, AppError> {
             self.calls.push("build");
+            if let Some(token) = &self.cancel_during_build {
+                token.cancel();
+            }
+            // Note there is no cancellation check here, and none in the real
+            // `build::build_firmware` either: make runs to completion.
             on_log("make: fake".into());
             match &self.build_result {
                 Ok(p) => Ok(p.clone()),
@@ -485,6 +502,43 @@ mod tests {
         assert!(phases(&states).contains(&PipelinePhase::Erasing));
         assert!(!phases(&states).contains(&PipelinePhase::Leaving));
         assert!(!phases(&states).contains(&PipelinePhase::Done));
+    }
+
+    /// Cancelling during the build is *deferred*, not immediate, and the UI
+    /// says so ("Cancel after build"). This pins both halves of that claim:
+    /// `make` is not interrupted, but the run still stops before the board is
+    /// touched. If `build` ever gains a `CancelToken`, this test should change
+    /// and so should the button label.
+    #[test]
+    fn cancelling_during_the_build_lets_make_finish_but_never_flashes() {
+        let mut ops = FakeOps::happy();
+        let cancel = CancelToken::default();
+        ops.cancel_during_build = Some(cancel.clone());
+        let mut states = Vec::new();
+        let result = run_with(
+            &fixture_layout(),
+            &mut ops,
+            &mut |s| states.push(s),
+            &mut |_| {},
+            &cancel,
+        );
+        assert!(result.is_ok(), "a cancelled run is not an error");
+        // make ran to completion — it cannot be interrupted.
+        assert!(ops.calls.contains(&"build"));
+        // ...but nothing after it happened: no image read, no bootloader wait,
+        // and above all no flash.
+        assert_eq!(ops.calls, vec!["save", "generate", "build"]);
+        assert_eq!(
+            phases(&states),
+            vec![
+                PipelinePhase::Saving,
+                PipelinePhase::Generating,
+                PipelinePhase::Building,
+                PipelinePhase::Idle,
+            ]
+        );
+        let last = states.last().unwrap();
+        assert_eq!(last.detail.as_deref(), Some("cancelled"));
     }
 
     #[test]
