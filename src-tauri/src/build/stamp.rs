@@ -341,11 +341,17 @@ mod tests {
     fn a_changed_keyboard_target_rebuilds() {
         let t = TempSources::new("kbtarget");
         let prev = stamp_of(&t.inputs());
+        let before = prev.inputs.qmk_keyboard.clone();
         let mut now = t.inputs();
-        now.qmk_keyboard = "zsa/moonlander/revb".into();
+        // Derived from the current target rather than hardcoded: this test once
+        // named revb as "the other target", and retargeting the board reva ->
+        // revb turned the change into a no-op, so it passed a Reuse decision
+        // while claiming to prove a rebuild.
+        let other = format!("{before}-other");
+        now.qmk_keyboard = other.clone();
         assert_eq!(
             why(&decide(Some(&prev), &now, true)),
-            "keyboard target changed (zsa/moonlander/reva -> zsa/moonlander/revb)"
+            format!("keyboard target changed ({before} -> {other})")
         );
     }
 
