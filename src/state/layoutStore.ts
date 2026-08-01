@@ -5,6 +5,12 @@
 import { create } from "zustand";
 import { ipc, toAppError } from "../lib/ipc";
 import {
+  clearLayerGlows as clearLayerGlowsInLayout,
+  glowLayerKeysByTarget as glowLayerKeysByTargetInLayout,
+  setKeyGlow,
+  setLayerColor as setLayerColorInLayout,
+} from "../lib/led";
+import {
   swapKeysInLayer,
   swapLayers as swapLayersInLayout,
   transposeIndex,
@@ -103,6 +109,20 @@ interface LayoutState {
    * viewed layer's content selected.
    */
   swapLayers(a: number, b: number): void;
+  /** Set a layer's base LED color (the ledmap base HSV for all its keys). */
+  setLayerColor(index: number, color: string): void;
+  /**
+   * Set the selected key's per-key LED override, or clear it (null) so the key
+   * falls back to its layer's base color. No-op with no key selected.
+   */
+  setSelectedKeyGlow(glow: string | null): void;
+  /** Drop every per-key override on a layer, flattening it to its base color. */
+  clearLayerGlows(index: number): void;
+  /**
+   * Glow every layer key (MO/TG/TO/TT/LT) on a layer with the color of the
+   * layer it navigates to, so the board shows where each key leads.
+   */
+  glowLayerKeysByTarget(index: number): void;
   isDirty(): boolean;
 }
 
@@ -401,6 +421,37 @@ export const useLayoutStore = create<LayoutState>()((set, get) => ({
       selectedKey: null,
       swapSource: null,
     });
+  },
+
+  setLayerColor(index, color) {
+    const { layout } = get();
+    if (!layout) return;
+    // The lib transforms return the SAME object when the edit is invalid (bad
+    // hex, index out of range). Bailing on identity keeps a rejected edit from
+    // marking the layout dirty.
+    const next = setLayerColorInLayout(layout, index, color);
+    if (next !== layout) set({ layout: next });
+  },
+
+  setSelectedKeyGlow(glow) {
+    const { layout, selectedLayer, selectedKey } = get();
+    if (!layout || selectedKey === null) return;
+    const next = setKeyGlow(layout, selectedLayer, selectedKey, glow);
+    if (next !== layout) set({ layout: next });
+  },
+
+  clearLayerGlows(index) {
+    const { layout } = get();
+    if (!layout) return;
+    const next = clearLayerGlowsInLayout(layout, index);
+    if (next !== layout) set({ layout: next });
+  },
+
+  glowLayerKeysByTarget(index) {
+    const { layout } = get();
+    if (!layout) return;
+    const next = glowLayerKeysByTargetInLayout(layout, index);
+    if (next !== layout) set({ layout: next });
   },
 
   isDirty() {

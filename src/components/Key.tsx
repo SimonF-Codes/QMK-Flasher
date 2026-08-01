@@ -15,6 +15,12 @@ interface KeyProps {
   pressed?: boolean;
   /** Live view: released a moment ago, still glowing so fast taps register. */
   recent?: boolean;
+  /**
+   * The color the firmware lights this LED with on the current layer — the
+   * key's own glow if it has one, else the layer's base color. Drawn faded
+   * when inherited, so an explicit per-key override still reads as deliberate.
+   */
+  ledColor?: string;
   mode: DisplayMode;
   /**
    * Label this key as the board behaves with Ctrl↔Cmd swapped (OS mode).
@@ -38,6 +44,7 @@ export default function Key({
   swapTargeting = false,
   pressed = false,
   recent = false,
+  ledColor,
   mode,
   osSwapped = false,
   layerNames,
@@ -49,6 +56,9 @@ export default function Key({
   });
   const b = badge(action);
   const transparent = action.kind === "transparent" || action.kind === "none";
+  // Fall back to the raw glow so a Key rendered without ledColor (tests, any
+  // future standalone use) still shows an explicit override.
+  const led = ledColor ?? action.glow;
 
   // Swap mode wins (it's a modal interaction), then live press state, then the
   // edit selection — so a key you're holding stays visible while editing.
@@ -80,14 +90,15 @@ export default function Key({
         className={rectClass}
         strokeWidth={selected || swapSource || pressed ? 2 : 1}
       />
-      {action.glow && (
+      {led && (
         <rect
           x={r.x + 4}
           y={r.y + 3}
           width={r.w - 8}
           height={3}
           rx={1.5}
-          fill={action.glow}
+          fill={led}
+          opacity={action.glow ? 1 : 0.35}
         />
       )}
       <text

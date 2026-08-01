@@ -14,6 +14,7 @@ import {
 import { useLayoutStore } from "../state/layoutStore";
 import type { KeyAction, KeycodeEntry, LayerSwitchAction } from "../lib/types";
 import DualFunctionEditor from "./DualFunctionEditor";
+import KeyGlowEditor from "./KeyGlowEditor";
 
 const LAYER_ACTIONS: { action: LayerSwitchAction; hint: string }[] = [
   { action: "MO", hint: "momentary" },
@@ -123,6 +124,8 @@ export default function KeyPicker() {
           >
             ⇄ Swap with…
           </button>
+
+          <KeyGlowEditor />
 
           <input
             value={query}

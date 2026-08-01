@@ -66,6 +66,44 @@ layer, every layer exactly `keyCount` keys for the layout's keyboard (from
 Moonlander, the only board today), `settings.keyLock === true`, colors/glows
 are `#rrggbb`, combo layer/key indices in range.
 
+### LED layering (per-layer colors + per-key glows)
+
+The LED map is a second, parallel expression of the layer stack. Rendered by
+`src-tauri/src/codegen/ledmap.rs` into the `ledmap[][RGB_MATRIX_LED_COUNT][3]`
+block, with the surrounding firmware emitted by `ledmap_section` in
+`keymap_c.rs`. Only present when `settings.rgbMatrixCustom` is true.
+
+Resolution rule, in both the firmware and the UI: **a key lights with its own
+`glow`, else with its layer's `color`.** `Layer.color` is the base HSV for all
+of the layer's LEDs; `KeyAction.glow` overrides one. Colors are `#rrggbb` and
+go through `hex_to_hsv` (`oryx/seed.rs`), which matches Oryx's own conversion.
+`#000000` is not a color — `set_layer_color` reads `h=s=v=0` as **LED off**.
+
+Two properties fall out of how the generated `rgb_matrix_indicators_user()`
+works, and both are load-bearing when editing colors:
+
+- It switches on `biton32(layer_state)` — the **topmost active layer** — and
+  repaints every LED from that one row. Lower layers contribute nothing, so
+  each layer's row has to be readable on its own.
+- A `transparent` key falls through to a lower layer **behaviorally** but is
+  still lit by the top layer's row. Its light does not tell you what it types.
+  `fallthroughSource` (`src/lib/led.ts`) reports where the behavior comes from;
+  `resolveLedColor` reports what the firmware shows.
+
+`ledmap.rs` scatters argument order → **LED order** via `geometry.keys[arg].led`
+(the two are a non-trivial permutation), and sizes each row by the geometry, not
+by the layer.
+
+**Editing** (added 2026-08-01). `src/lib/led.ts` holds the pure transforms —
+`setLayerColor`, `setKeyGlow`, `clearLayerGlows`, `glowLayerKeysByTarget`,
+`resolveLedColor`/`resolveLayerLeds`, `fallthroughSource`. Each returns the
+**input object unchanged** when the edit is a no-op (bad hex, out-of-range
+index, or a value already in place); `layoutStore` keys off that identity so a
+redundant edit never marks the layout dirty. UI: `LedPanel` (layer base color +
+bulk operations) in the layer tab bar, `KeyGlowEditor` (per-key override) in
+the key picker, and `Keyboard` passes each key its resolved color so the board
+previews the ledmap — inherited colors render faded, explicit glows solid.
+
 ### Multi-layout storage + keyboard registry (added 2026-07-19, additive)
 
 `%APPDATA%\qmk-flasher\layouts\<id>.json` holds one LayoutFile per saved

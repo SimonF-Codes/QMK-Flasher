@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useLayoutStore } from "../state/layoutStore";
 import { useLiveStore } from "../state/liveStore";
+import LedPanel from "./LedPanel";
 
 export default function LayerTabs() {
   const layout = useLayoutStore((s) => s.layout);
@@ -88,8 +89,12 @@ export default function LayerTabs() {
         </button>
       ))}
 
+      <div className="ml-2">
+        <LedPanel />
+      </div>
+
       {layout.layers.length >= 2 && (
-        <div className="relative ml-2">
+        <div className="relative">
           <button
             onClick={() => (swapOpen ? setSwapOpen(false) : openSwap())}
             className="rounded-md px-2.5 py-1.5 text-sm text-zinc-400 hover:bg-zinc-800 hover:text-zinc-200"
