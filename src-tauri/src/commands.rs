@@ -208,7 +208,20 @@ pub fn flash_firmware(app: AppHandle, bin_path: String) -> Result<(), AppError> 
 /// or the trainer is actually on. Fails with `KeyReportUnavailable` when the
 /// channel cannot be opened, so the UI can say why instead of showing a live
 /// view that never lights up.
-#[tauri::command]
+///
+/// `(async)`: runs on a worker thread, and MUST — same reason as
+/// `start_flash_pipeline` above, at a smaller scale. The up-front probe in
+/// `keyreport::start` enumerates every HID interface on the machine (dozens on
+/// a box that has seen a few ZSA boards) and then opens one; on Windows that is
+/// seconds of blocking work. Run on the main thread it stops the window pumping
+/// messages and Windows kills the app as hung (`AppHangB1`) — and because live
+/// view restores its last state at launch, that freeze lands on startup, not
+/// only when the user toggles it.
+///
+/// The probe itself stays. It is what turns "ZSA Keymapp has the channel" into
+/// a readable error instead of a live view that silently never lights up;
+/// moving it off the main thread is the fix, removing it would not be.
+#[tauri::command(async)]
 pub fn start_key_reporting(app: AppHandle) -> Result<(), AppError> {
     keyreport::start(move |report| match report {
         Report::Key { row, col, pressed } => emit_key_report(&app, row, col, pressed),
@@ -224,6 +237,14 @@ pub fn start_key_reporting(app: AppHandle) -> Result<(), AppError> {
 
 /// Stop streaming and unpair, releasing the channel back to Keymapp/Oryx.
 /// Idempotent — stopping when nothing is running is not an error.
+///
+/// Stays synchronous, deliberately, and it is worth saying why since its
+/// sibling above could not: this does no I/O. It sets an `AtomicBool` and
+/// returns. The listener thread notices on its next read tick (≤100 ms), and it
+/// is that thread — not this one — that writes `ORYX_CMD_DISCONNECT` and exits.
+/// Nothing here joins it. The only wait is `ACTIVE`'s mutex, which `start`
+/// holds just long enough to swap a handle, having done its blocking probe
+/// before taking it. Same shape as `cancel_pipeline`.
 #[tauri::command]
 pub fn stop_key_reporting() -> Result<(), AppError> {
     keyreport::stop();
