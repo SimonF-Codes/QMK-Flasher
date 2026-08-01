@@ -7,6 +7,7 @@ pub mod events;
 pub mod flash;
 pub mod geometry;
 pub mod keyboards;
+pub mod keyreport;
 pub mod layout;
 pub mod oryx;
 
