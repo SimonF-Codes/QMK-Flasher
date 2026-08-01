@@ -11,11 +11,16 @@ export default function LayerTabs() {
   const pinLayer = useLiveStore((s) => s.pinLayer);
   const renameLayer = useLayoutStore((s) => s.renameLayer);
   const swapLayers = useLayoutStore((s) => s.swapLayers);
+  const addLayer = useLayoutStore((s) => s.addLayer);
+  const deleteLayer = useLayoutStore((s) => s.deleteLayer);
+  const layerReferenceCount = useLayoutStore((s) => s.layerReferenceCount);
   const [editing, setEditing] = useState<number | null>(null);
   const [draft, setDraft] = useState("");
   const [swapOpen, setSwapOpen] = useState(false);
   const [swapA, setSwapA] = useState(0);
   const [swapB, setSwapB] = useState(1);
+  /** Layer index awaiting delete confirmation, mirroring LayoutMenu's flow. */
+  const [confirmDelete, setConfirmDelete] = useState<number | null>(null);
 
   if (!layout) return null;
 
@@ -46,6 +51,11 @@ export default function LayerTabs() {
     if (swapA !== swapB) swapLayers(swapA, swapB);
     setSwapOpen(false);
   };
+
+  // The schema needs at least one layer, so the last one can't go.
+  const canDelete = layout.layers.length > 1;
+  const pendingRefs =
+    confirmDelete === null ? 0 : layerReferenceCount(confirmDelete);
 
   return (
     <nav className="flex flex-wrap items-center gap-1 border-b border-zinc-800 px-4 py-2">
@@ -86,8 +96,69 @@ export default function LayerTabs() {
               {i} · {layer.title}
             </span>
           )}
+          {/* Delete affordance on the selected tab only, so the row stays calm. */}
+          {i === selectedLayer && canDelete && confirmDelete === null && (
+            <span
+              role="button"
+              tabIndex={0}
+              aria-label={`Delete layer ${i}`}
+              title="Delete this layer"
+              onClick={(e) => {
+                e.stopPropagation();
+                setConfirmDelete(i);
+              }}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" || e.key === " ") {
+                  e.stopPropagation();
+                  setConfirmDelete(i);
+                }
+              }}
+              className="-mr-1 ml-0.5 rounded px-1 text-xs text-zinc-500 hover:bg-red-900/60 hover:text-red-200"
+            >
+              ×
+            </span>
+          )}
         </button>
       ))}
+
+      <button
+        onClick={() => addLayer()}
+        className="rounded-md px-2.5 py-1.5 text-sm text-zinc-400 hover:bg-zinc-800 hover:text-zinc-200"
+        title="Add a new layer at the end (transparent keys)"
+      >
+        + Layer
+      </button>
+
+      {confirmDelete !== null && (
+        <div className="ml-2 flex items-center gap-2 rounded-md border border-red-900 bg-red-950/40 px-2 py-1 text-xs">
+          <span className="text-red-200">
+            Delete layer {confirmDelete} · {layout.layers[confirmDelete]?.title}?
+          </span>
+          {pendingRefs > 0 && (
+            // Say exactly what collateral damage this does before it happens —
+            // these are keys the user did not touch.
+            <span className="text-amber-300">
+              {pendingRefs} reference{pendingRefs === 1 ? "" : "s"} to it will be
+              cleared
+            </span>
+          )}
+          <button
+            onClick={() => {
+              deleteLayer(confirmDelete);
+              setConfirmDelete(null);
+            }}
+            className="rounded bg-red-800 px-2 py-0.5 font-medium text-red-50 hover:bg-red-700"
+          >
+            Delete
+          </button>
+          <button
+            onClick={() => setConfirmDelete(null)}
+            className="rounded px-2 py-0.5 text-zinc-400 hover:text-zinc-200"
+          >
+            Cancel
+          </button>
+        </div>
+      )}
 
       <div className="ml-2">
         <LedPanel />
