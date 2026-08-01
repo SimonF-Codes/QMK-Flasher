@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  beginRun,
   bootloaderNotice,
   initialBootloaderState,
   reduceDfuDevice,
@@ -76,6 +77,29 @@ describe("waitingBannerText", () => {
     expect(unknown).toMatch(/press the reset key/i);
     expect(present).toMatch(/detected/i);
     expect(gone).toMatch(/left the bus/i);
+  });
+});
+
+describe("beginRun", () => {
+  it("forgets a departure that belonged to the previous run", () => {
+    // Caught by running the app: after a successful flash the board leaves the
+    // bus, and the next run's banner claimed "the bootloader left the bus
+    // before flashing could start" — about the *previous* run's reboot.
+    expect(beginRun(fold(true, false)).status).toBe("unknown");
+    expect(waitingBannerText(beginRun(fold(true, false)).status)).toMatch(
+      /press the reset key/i,
+    );
+  });
+
+  it("keeps a board that is on the bus right now", () => {
+    // Presence is a current fact, not a historical one: a board already in DFU
+    // when the run starts is still in DFU.
+    const present = fold(true);
+    expect(beginRun(present)).toBe(present);
+  });
+
+  it("leaves a never-seen board alone", () => {
+    expect(beginRun(initialBootloaderState)).toBe(initialBootloaderState);
   });
 });
 

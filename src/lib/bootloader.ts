@@ -70,6 +70,23 @@ export function reduceDfuDevice(
   return { status: next, seq: prev.seq + 1 };
 }
 
+/**
+ * Scope the *historical* half of the state to the run that is starting.
+ *
+ * `present` is a statement about the bus right now — a board already sitting in
+ * DFU when you press Build & Flash is still sitting there — so it survives.
+ * `gone` is a past edge, and its meaning is run-relative: after a successful
+ * flash the board leaves the bus, and carrying that into the next run made the
+ * wait banner announce "the bootloader left the bus before flashing could
+ * start" about a departure that happened during the *previous* run. Dropping it
+ * back to `unknown` says the true thing instead: nothing has been seen yet this
+ * run.
+ */
+export function beginRun(state: BootloaderState): BootloaderState {
+  if (state.status !== "gone") return state;
+  return { status: "unknown", seq: state.seq + 1 };
+}
+
 export interface BootloaderNotice {
   text: string;
   tone: "good" | "warn";

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
+  beginRun,
   initialBootloaderState,
   reduceDfuDevice,
   strandedInBootloader,
@@ -76,6 +77,8 @@ export default function BuildFlashPanel() {
     if (!layout) return;
     setError(null);
     setCancelRequested(false);
+    // A departure belongs to the run it happened in; presence carries over.
+    setDfu(beginRun);
     logBufRef.current = [];
     setLog([]);
     setLogOpen(true);
