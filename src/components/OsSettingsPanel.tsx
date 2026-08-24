@@ -1,24 +1,10 @@
 import { useState } from "react";
 import { OS_MODE_LABEL } from "../lib/labels";
+import { findOsModeKeys } from "../lib/osSwap";
 import { useLayoutStore } from "../state/layoutStore";
-import type { Layer, OsTarget } from "../lib/types";
+import type { OsTarget } from "../lib/types";
 
 const OS_LABEL: Record<OsTarget, string> = { mac: "Mac", windows: "Windows" };
-
-/** Every osMode key in the layout, so the panel can say how the mode is set. */
-function findOsModeKeys(
-  layers: Layer[],
-): { layer: number; index: number; action: string }[] {
-  const found: { layer: number; index: number; action: string }[] = [];
-  layers.forEach((layer, li) =>
-    layer.keys.forEach((k, ki) => {
-      if (k.kind === "osMode") {
-        found.push({ layer: li, index: ki, action: k.action });
-      }
-    }),
-  );
-  return found;
-}
 
 /**
  * `osDetection` / `osDefault`, plus the precedence rule in words.
@@ -38,7 +24,7 @@ export default function OsSettingsPanel() {
 
   if (!layout) return null;
   const { osDetection, osDefault } = layout.settings;
-  const modeKeys = findOsModeKeys(layout.layers);
+  const modeKeys = findOsModeKeys(layout);
 
   return (
     <div className="relative">

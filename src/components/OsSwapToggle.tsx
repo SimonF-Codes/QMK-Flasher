@@ -5,10 +5,21 @@
  * This changes what the preview says a key EMITS, modelling the board's
  * Ctrl↔Cmd swap. The two are deliberately separate controls because they are
  * separate things — and this one is bridged to reality: it stays disabled
- * until the layout actually contains a CG_* key, since without one the board
- * can never enter the swapped state.
+ * until the board can actually reach the swapped state, since otherwise the
+ * keycaps would show behavior you cannot produce.
+ *
+ * Since schema v3 there are three ways to reach it — a `CG_*` key, a
+ * `QF_OS_*` key, or host detection — and which OS is "unswapped" comes from
+ * `settings.osDefault` rather than a constant. Both live in `osSwap.ts`.
  */
-import { osForSwapState, findOsSwitchKeys } from "../lib/osSwap";
+import {
+  authoredOs,
+  canSwitchOs,
+  findOsModeKeys,
+  findOsSwitchKeys,
+  osForSwapState,
+} from "../lib/osSwap";
+import { OS_MODE_LABEL } from "../lib/labels";
 import { useDisplayStore } from "../state/displayStore";
 import { useLayoutStore } from "../state/layoutStore";
 
@@ -19,23 +30,27 @@ export default function OsSwapToggle() {
   const swapped = useDisplayStore((s) => s.osSwapPreview);
   const setSwapped = useDisplayStore((s) => s.setOsSwapPreview);
 
-  const switchKeys = findOsSwitchKeys(layout);
-  const enabled = switchKeys.length > 0;
-  const current = osForSwapState(enabled && swapped);
+  const enabled = canSwitchOs(layout);
+  const current = osForSwapState(enabled && swapped, authoredOs(layout));
 
   // Lead with the index: layer titles are frequently all "Layer", so the
   // title alone would not identify which layer to press.
-  const where = switchKeys
-    .map((k) => {
-      const t = layout?.layers[k.layer]?.title?.trim();
-      const name = t && t !== "Layer" ? ` ${t}` : "";
-      return `${k.code} on layer ${k.layer}${name}`;
-    })
-    .join(", ");
+  const where = (layer: number, label: string) => {
+    const t = layout?.layers[layer]?.title?.trim();
+    const name = t && t !== "Layer" ? ` ${t}` : "";
+    return `${label} on layer ${layer}${name}`;
+  };
+  const routes = [
+    ...findOsSwitchKeys(layout).map((k) => where(k.layer, k.code)),
+    ...findOsModeKeys(layout).map((k) =>
+      where(k.layer, OS_MODE_LABEL[k.action] ?? k.action),
+    ),
+    ...(layout?.settings.osDetection ? ["host detection at plug-in"] : []),
+  ].join(", ");
 
   const title = enabled
-    ? `Previewing the board as ${OS_LABEL[current]}. Switch it on the keyboard with: ${where}`
-    : "No OS-switch key in this layout — assign CG_TOGG (OS mode section) to a key to enable this preview.";
+    ? `Previewing the board as ${OS_LABEL[current]}. It switches with: ${routes}`
+    : "The board can never leave this OS — assign a QF_OS_* or CG_* key, or turn on host detection, to enable this preview.";
 
   return (
     <button

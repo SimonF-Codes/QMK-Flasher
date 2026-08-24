@@ -2,6 +2,9 @@ import { describe, expect, it } from "vitest";
 import {
   HOME_OS,
   applySwap,
+  authoredOs,
+  canSwitchOs,
+  findOsModeKeys,
   findOsSwitchKeys,
   hasOsSwitchKey,
   isOsSwitchCode,
@@ -189,5 +192,82 @@ describe("findOsSwitchKeys", () => {
       { layer: 0, index: 5, code: "CG_TOGG" },
     ]);
     expect(hasOsSwitchKey(withKeys)).toBe(true);
+  });
+});
+
+describe("reaching the swapped state (schema v3)", () => {
+  const layout = LayoutFileSchema.parse(seeded);
+  const bare: LayoutFile = {
+    ...layout,
+    layers: layout.layers.map((l) => ({
+      ...l,
+      keys: l.keys.map((k) =>
+        k.kind === "special" && isOsSwitchCode(k.code)
+          ? { kind: "none" as const }
+          : k,
+      ),
+    })),
+  };
+
+  it("takes the authored OS from settings.osDefault, falling back to HOME_OS", () => {
+    expect(authoredOs(layout)).toBe("windows");
+    expect(
+      authoredOs({
+        ...layout,
+        settings: { ...layout.settings, osDefault: "mac" },
+      }),
+    ).toBe("mac");
+    expect(authoredOs(null)).toBe(HOME_OS);
+  });
+
+  it("resolves the previewed OS against the authored one", () => {
+    expect(osForSwapState(false, "mac")).toBe("mac");
+    expect(osForSwapState(true, "mac")).toBe("windows");
+    expect(osForSwapState(true)).toBe("mac"); // HOME_OS is windows
+  });
+
+  it("counts a QF_OS_* key and host detection, not just CG_*", () => {
+    expect(canSwitchOs(null)).toBe(false);
+    expect(findOsModeKeys(bare)).toEqual([]);
+    expect(canSwitchOs(bare)).toBe(false);
+
+    const withMode: LayoutFile = {
+      ...bare,
+      layers: bare.layers.map((l, i) =>
+        i === 0
+          ? {
+              ...l,
+              keys: l.keys.map((k, j) =>
+                j === 3 ? { kind: "osMode" as const, action: "toggle" as const } : k,
+              ),
+            }
+          : l,
+      ),
+    };
+    expect(findOsModeKeys(withMode)).toEqual([
+      { layer: 0, index: 3, action: "toggle" },
+    ]);
+    expect(canSwitchOs(withMode)).toBe(true);
+
+    const detected: LayoutFile = {
+      ...bare,
+      settings: { ...bare.settings, osDetection: true },
+    };
+    expect(canSwitchOs(detected)).toBe(true);
+    // And the old route still counts: a CG_* key on its own.
+    const withCg: LayoutFile = {
+      ...bare,
+      layers: bare.layers.map((l, i) =>
+        i === 0
+          ? {
+              ...l,
+              keys: l.keys.map((k, j) =>
+                j === 4 ? { kind: "special" as const, code: "CG_TOGG" } : k,
+              ),
+            }
+          : l,
+      ),
+    };
+    expect(canSwitchOs(withCg)).toBe(true);
   });
 });

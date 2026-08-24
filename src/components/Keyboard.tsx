@@ -1,6 +1,6 @@
 import { GEOMETRY, viewBox } from "../lib/geometry";
 import { resolveLayerLeds } from "../lib/led";
-import { hasOsSwitchKey } from "../lib/osSwap";
+import { canSwitchOs } from "../lib/osSwap";
 import { useDisplayStore } from "../state/displayStore";
 import { useLayoutStore } from "../state/layoutStore";
 import { useLiveStore } from "../state/liveStore";
@@ -41,7 +41,7 @@ export default function Keyboard() {
   const swapping = swapSource !== null;
   // Only honour the preview if the board can actually reach the swapped
   // state — otherwise the keycaps would show behavior you can't produce.
-  const osSwapped = osSwapPreview && hasOsSwitchKey(layout);
+  const osSwapped = osSwapPreview && canSwitchOs(layout);
   // What the ledmap will actually light on this layer, in LAYOUT-arg order.
   const leds = resolveLayerLeds(layout!, selectedLayer);
 
