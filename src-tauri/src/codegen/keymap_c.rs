@@ -163,6 +163,19 @@ pub fn render_key(key: &KeyAction, plan: &RenderPlan) -> Result<String, AppError
             format!("ST_MACRO_{n}")
         }
         KeyAction::RgbHsv { h, s, v, .. } => format!("HSV_{h}_{s}_{v}"),
+        // Contract-only for now: the schema can carry these, codegen cannot
+        // yet emit them. Erroring here keeps a layout that uses one from
+        // silently building into firmware that ignores it.
+        KeyAction::OsMacro { label, .. } => {
+            return Err(unsupported(format!(
+                "osMacro {label:?}: OS-aware macros are not generated yet"
+            )))
+        }
+        KeyAction::OsMode { action, .. } => {
+            return Err(unsupported(format!(
+                "osMode {action:?}: OS-mode keys are not generated yet"
+            )))
+        }
     })
 }
 

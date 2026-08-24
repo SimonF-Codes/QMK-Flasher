@@ -277,7 +277,7 @@ function slug(name: string): string {
 function mockBlankLayout(name: string, kb: KeyboardInfo): LayoutFile {
   const now = new Date().toISOString();
   return {
-    schemaVersion: 2,
+    schemaVersion: 3,
     meta: {
       name,
       geometry: kb.id,
@@ -309,6 +309,8 @@ function mockBlankLayout(name: string, kb: KeyboardInfo): LayoutFile {
       layerState8bit: true,
       serialNumber: `qmk-flasher/${kb.id}`,
       rgbStartupSpeed: 60,
+      osDetection: false,
+      osDefault: "windows" as const,
     },
   };
 }

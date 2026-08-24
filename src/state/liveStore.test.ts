@@ -16,7 +16,7 @@ function layerWith(overrides: Record<number, KeyAction>, title: string): Layer {
 /** A deterministic layout so position assertions don't depend on the fixture. */
 function makeLayout(layers: Layer[]): LayoutFile {
   return {
-    schemaVersion: 2,
+    schemaVersion: 3,
     meta: {
       name: "test",
       geometry: "moonlander",
@@ -40,6 +40,8 @@ function makeLayout(layers: Layer[]): LayoutFile {
       layerState8bit: false,
       serialNumber: "",
       rgbStartupSpeed: 0,
+      osDetection: false,
+      osDefault: "windows" as const,
     },
   };
 }

@@ -2250,5 +2250,41 @@
     "category": "osmode",
     "tappable": false,
     "modsApplicable": false
+  },
+  {
+    "qmk": "QF_OS_TOGG",
+    "aliases": [],
+    "label": "OS ⇄",
+    "longLabel": "Toggle the board between Mac and Windows mode",
+    "category": "osmode",
+    "tappable": false,
+    "modsApplicable": false
+  },
+  {
+    "qmk": "QF_OS_MAC",
+    "aliases": [],
+    "label": "Mac",
+    "longLabel": "Force Mac mode (overrides host detection)",
+    "category": "osmode",
+    "tappable": false,
+    "modsApplicable": false
+  },
+  {
+    "qmk": "QF_OS_WIN",
+    "aliases": [],
+    "label": "Win",
+    "longLabel": "Force Windows mode (overrides host detection)",
+    "category": "osmode",
+    "tappable": false,
+    "modsApplicable": false
+  },
+  {
+    "qmk": "QF_OS_AUTO",
+    "aliases": [],
+    "label": "OS auto",
+    "longLabel": "Drop the manual override and follow host detection again",
+    "category": "osmode",
+    "tappable": false,
+    "modsApplicable": false
   }
 ]

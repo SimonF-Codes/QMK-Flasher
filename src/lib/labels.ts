@@ -26,6 +26,22 @@ const MOD_SHORT: Record<string, string> = {
   MOD_RGUI: "RGui",
 };
 
+/** The keycap text for each `osMode` action. */
+export const OS_MODE_LABEL: Record<string, string> = {
+  toggle: "OS ⇄",
+  mac: "Mac",
+  windows: "Win",
+  auto: "OS auto",
+};
+
+/** The QMK custom keycode each `osMode` action generates. */
+export const OS_MODE_KEYCODE: Record<string, string> = {
+  toggle: "QF_OS_TOGG",
+  mac: "QF_OS_MAC",
+  windows: "QF_OS_WIN",
+  auto: "QF_OS_AUTO",
+};
+
 /** MOD_LCTL → LCTL (the C-macro wrapper name). */
 const modWrapper = (mod: string) => mod.replace(/^MOD_/, "");
 
@@ -47,6 +63,10 @@ export function tapLabel(a: KeyAction): string {
     }
     case "layerSwitch":
       return `${a.action} ${a.layer}`;
+    case "osMacro":
+      return a.label;
+    case "osMode":
+      return OS_MODE_LABEL[a.action] ?? a.action;
     case "modTap":
     case "layerTap":
       return labelFor(a.tap);
@@ -138,6 +158,10 @@ export function qmkToken(a: KeyAction): string {
       return "ST_MACRO(…)";
     case "rgbHsv":
       return `HSV_${a.h}_${a.s}_${a.v}`;
+    case "osMacro":
+      return "OS_MACRO(…)";
+    case "osMode":
+      return OS_MODE_KEYCODE[a.action] ?? a.action;
   }
 }
 

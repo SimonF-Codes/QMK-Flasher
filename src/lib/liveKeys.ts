@@ -147,6 +147,10 @@ export function emittedTapCode(a: KeyAction): string | null {
     case "macro":
     case "rgb":
     case "rgbHsv":
+    // Both send whole sequences (or nothing) through process_record_user,
+    // so no single code identifies them on the wire.
+    case "osMacro":
+    case "osMode":
       return null;
   }
 }

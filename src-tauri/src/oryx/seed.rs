@@ -9,7 +9,7 @@ use serde::Deserialize;
 use crate::error::AppError;
 use crate::layout::schema::{
     Combo, KeyAction, Layer, LayerSwitchAction, LayoutFile, MacroStep, Meta,
-    SeededFrom, Settings, TapSpec, MOONLANDER_KEY_COUNT, SCHEMA_VERSION,
+    OsTarget, SeededFrom, Settings, TapSpec, MOONLANDER_KEY_COUNT, SCHEMA_VERSION,
 };
 use crate::oryx::permute;
 
@@ -483,6 +483,10 @@ pub fn layout_from_snapshot(
         layer_state_8bit: true,
         serial_number: format!("{layout_id}/{}", rev.hash_id),
         rgb_startup_speed: 60,
+        // Oryx layouts carry no OS intent; a seeded layout starts on the
+        // app defaults and the user opts in from the OS panel.
+        os_detection: false,
+        os_default: OsTarget::default(),
     };
 
     let layout = LayoutFile {
@@ -560,6 +564,13 @@ pub(crate) fn canon_action(a: &KeyAction) -> String {
         ),
         KeyAction::Macro { steps, .. } => macro_canon(steps),
         KeyAction::RgbHsv { h, s, v, .. } => format!("HSV_{h}_{s}_{v}"),
+        // Oryx has no concept of either of these, so the seeder never builds
+        // one and the cross-check can never meet one on the seeded side.
+        // They still need a canonical form for the exhaustiveness check.
+        KeyAction::OsMacro { mac, windows, .. } => {
+            format!("OSMACRO({},{})", macro_canon(mac), macro_canon(windows))
+        }
+        KeyAction::OsMode { action, .. } => format!("OSMODE({action:?})"),
     }
 }
 

@@ -24,7 +24,7 @@ Worker modules expose plain functions taking `FnMut` callbacks for
 progress/logs — they never touch `AppHandle`; the command layer forwards
 callbacks to the webview as events. Keep that pattern.
 
-## Layout schema (v2)
+## Layout schema (v3)
 
 Source of truth: **`src-tauri/src/layout/schema.rs`** (serde). Mirrors:
 **`src/lib/types.ts`** (zod), **`shared/layout.schema.json`** (generated —
@@ -261,6 +261,67 @@ Auto-snapshot behavior on existing commands (signatures unchanged):
   internal `store::save` and other paths do **not** auto-snapshot.
 - `restore_layout_version` snapshots the current reason `preRestore` first,
   then overwrites the current with the chosen version and returns it.
+
+## OS tooling (v3)
+
+Schema v3 is additive over v2. `LayoutFile::migrate()` (called from the single
+`parse_and_validate` funnel in `layout/store.rs`) stamps a v2 file up to v3;
+the two new `Settings` fields are `serde(default)`, so serde has already
+filled them in by the time it runs. A layout written by an older build keeps
+opening — that path is pinned by `v2_layout_migrates_to_current_schema`.
+
+### One key, two operating systems
+
+```ts
+{ kind: "osMacro", label: "Desktop right",
+  mac:     [{ code: "KC_RIGHT", mods: ["MOD_LCTL"] }],
+  windows: [{ code: "KC_RIGHT", mods: ["MOD_LGUI", "MOD_LCTL"] }] }
+```
+
+The board holds an **OS mode** and picks a half at press time, so one physical
+key does the right thing on either machine — the two lists are unrelated
+sequences, not a mod substitution, which is why the existing Ctrl↔Cmd swap
+cannot express them (Windows uses `Gui+Ctrl+←/→` for virtual desktops, macOS
+uses `Ctrl+←/→`). Either list may be empty, meaning "this key does nothing on
+that OS"; both empty is a validation error.
+
+`{ kind: "osMode", action: "toggle" | "mac" | "windows" | "auto" }` sets that
+mode, generating `QF_OS_TOGG` / `QF_OS_MAC` / `QF_OS_WIN` / `QF_OS_AUTO`
+(all four are in `shared/keycodes.json`, category `osmode`). Setting the mode
+drives **both** the Ctrl↔Cmd swap and which half of every `osMacro` fires, so
+there is one source of truth rather than two things to keep in sync. The older
+`CG_TOGG`/`CG_SWAP`/`CG_NORM` keys still parse and still work; they move the
+swap only, and `src/lib/osSwap.ts` continues to model them.
+
+### Settings
+
+- `osDetection` (default `false`) — emits `OS_DETECTION_ENABLE` so the board
+  asks the host what it is at USB enumeration.
+- `osDefault` (default `"windows"`) — the OS assumed before detection answers
+  and whenever detection is off. It is also the OS the layout's plain Ctrl/Gui
+  mods were authored against, so it decides which way the swap runs. Windows is
+  the default because Arrows Together is Windows-authored (see `osSwap.ts`
+  `HOME_OS`, which this field supersedes).
+
+Agreed precedence: **detection is authoritative, a manual `osMode` key
+overrides it, and the override is dropped when detection reports a *different*
+OS than last time** (i.e. you moved to another machine). `"auto"` drops the
+override on demand.
+
+### Combos
+
+`Combo.keys` must now hold **at least two distinct** key indices — a one-key
+"combo" is just a key, and a repeated index cannot fire. Both are validation
+errors. This is what makes the combo editor's output well-formed by
+construction.
+
+### Codegen status
+
+`codegen/keymap_c.rs` deliberately **errors** on `osMacro` and `osMode`
+("not generated yet") rather than emitting something inert, so a layout using
+one cannot silently build into firmware that ignores it. Wiring those two arms
+(plus `OS_DETECTION_ENABLE`, the mode variable, and
+`process_detected_host_os_user`) is the backend half of this feature.
 
 ## Commands (`src-tauri/src/commands.rs`)
 

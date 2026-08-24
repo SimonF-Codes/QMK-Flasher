@@ -10,7 +10,7 @@ use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
 /// Current version of the layout-file schema.
-pub const SCHEMA_VERSION: u32 = 2;
+pub const SCHEMA_VERSION: u32 = 3;
 
 /// Keys per layer in `LAYOUT_moonlander` argument order.
 pub const MOONLANDER_KEY_COUNT: usize = 72;
@@ -163,6 +163,48 @@ pub enum KeyAction {
         #[serde(skip_serializing_if = "Option::is_none")]
         glow: Option<String>,
     },
+    /// OS_MACRO_n — one key, a different step list per host OS. The board picks
+    /// which list to send at press time from its current OS mode, so the same
+    /// physical key does the right thing on either machine. At least one of the
+    /// two lists must be non-empty; an empty list means "do nothing on that OS".
+    OsMacro {
+        label: String,
+        mac: Vec<MacroStep>,
+        windows: Vec<MacroStep>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        glow: Option<String>,
+    },
+    /// QF_OS_* — sets the board’s OS mode, and with it both the Ctrl↔Cmd swap
+    /// and which half of every [`KeyAction::OsMacro`] fires.
+    OsMode {
+        action: OsModeAction,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        glow: Option<String>,
+    },
+}
+
+/// Which OS a layout is written for / the board is currently in.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "lowercase")]
+pub enum OsTarget {
+    Mac,
+    /// The Arrows Together layout is Windows-authored, so this is the default.
+    #[default]
+    Windows,
+}
+
+/// What an [`KeyAction::OsMode`] key does to the board’s OS mode.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub enum OsModeAction {
+    /// Flip between Mac and Windows.
+    Toggle,
+    /// Force Mac.
+    Mac,
+    /// Force Windows.
+    Windows,
+    /// Drop the manual override and follow host detection again.
+    Auto,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
@@ -224,6 +266,15 @@ pub struct Settings {
     pub serial_number: String,
     /// RGB_MATRIX_STARTUP_SPD in config.h.
     pub rgb_startup_speed: u16,
+    /// OS_DETECTION_ENABLE — the board asks the host what it is at USB
+    /// enumeration and sets its OS mode from the answer.
+    #[serde(default)]
+    pub os_detection: bool,
+    /// The OS the board assumes before detection answers (and whenever
+    /// detection is off). This is also the OS the layout’s plain Ctrl/Gui
+    /// mods were authored against, so it decides which way the swap runs.
+    #[serde(default)]
+    pub os_default: OsTarget,
 }
 
 fn is_hex_color(s: &str) -> bool {
@@ -247,12 +298,25 @@ impl KeyAction {
             | KeyAction::TapDance { glow, .. }
             | KeyAction::Macro { glow, .. }
             | KeyAction::Rgb { glow, .. }
-            | KeyAction::RgbHsv { glow, .. } => glow.as_ref(),
+            | KeyAction::RgbHsv { glow, .. }
+            | KeyAction::OsMacro { glow, .. }
+            | KeyAction::OsMode { glow, .. } => glow.as_ref(),
         }
     }
 }
 
 impl LayoutFile {
+    /// Upgrade an older on-disk layout in place, so a file written by a
+    /// previous build still opens. v2→v3 added only `serde(default)` fields
+    /// (`settings.osDetection`, `settings.osDefault`), so serde has already
+    /// filled them in by the time this runs and the version stamp is all
+    /// that is left to move.
+    pub fn migrate(&mut self) {
+        if self.schema_version == 2 {
+            self.schema_version = 3;
+        }
+    }
+
     /// Structural checks beyond what serde enforces.
     pub fn validate(&self) -> Result<(), String> {
         if self.schema_version != SCHEMA_VERSION {
@@ -302,9 +366,43 @@ impl LayoutFile {
                         ));
                     }
                 }
+                if let KeyAction::OsMacro {
+                    label, mac, windows, ..
+                } = key
+                {
+                    if label.trim().is_empty() {
+                        return Err(format!("layer {i} key {k}: osMacro needs a label"));
+                    }
+                    // Both halves empty means the key is dead on every host,
+                    // which is never what an author meant.
+                    if mac.is_empty() && windows.is_empty() {
+                        return Err(format!(
+                            "layer {i} key {k}: osMacro {label:?} has no steps for either OS"
+                        ));
+                    }
+                }
             }
         }
         for combo in &self.combos {
+            // A combo is "these keys pressed together"; one key is just a key.
+            if combo.keys.len() < 2 {
+                return Err(format!(
+                    "combo {:?} needs at least 2 keys, has {}",
+                    combo.name,
+                    combo.keys.len()
+                ));
+            }
+            {
+                let mut seen = combo.keys.clone();
+                seen.sort_unstable();
+                seen.dedup();
+                if seen.len() != combo.keys.len() {
+                    return Err(format!(
+                        "combo {:?} lists the same key twice",
+                        combo.name
+                    ));
+                }
+            }
             if combo.layer as usize >= self.layers.len() {
                 return Err(format!(
                     "combo {:?} references layer {} but only {} layers exist",
@@ -339,6 +437,70 @@ mod tests {
 
     fn fixture() -> LayoutFile {
         serde_json::from_str(FIXTURE).expect("fixture must match schema")
+    }
+
+    /// A layout written by the previous build (schemaVersion 2, no OS fields)
+    /// must still open. This is the whole reason `migrate` exists: without it
+    /// the version check rejects every layout already on disk.
+    #[test]
+    fn v2_layout_migrates_to_current_schema() {
+        let mut doc: serde_json::Value = serde_json::from_str(FIXTURE).unwrap();
+        doc["schemaVersion"] = serde_json::json!(2);
+        let settings = doc["settings"].as_object_mut().unwrap();
+        settings.remove("osDetection");
+        settings.remove("osDefault");
+
+        let mut layout: LayoutFile = serde_json::from_value(doc).expect("v2 must deserialize");
+        assert_eq!(layout.schema_version, 2);
+        layout.migrate();
+
+        assert_eq!(layout.schema_version, SCHEMA_VERSION);
+        layout.validate().expect("migrated layout must validate");
+        // The absent fields land on the documented defaults.
+        assert!(!layout.settings.os_detection);
+        assert_eq!(layout.settings.os_default, OsTarget::Windows);
+    }
+
+    #[test]
+    fn os_macro_with_no_steps_on_either_os_is_rejected() {
+        let mut layout = fixture();
+        layout.layers[0].keys[0] = KeyAction::OsMacro {
+            label: "Desktop right".into(),
+            mac: vec![],
+            windows: vec![],
+            glow: None,
+        };
+        assert!(layout.validate().is_err());
+    }
+
+    #[test]
+    fn os_macro_with_one_side_populated_is_allowed() {
+        let mut layout = fixture();
+        layout.layers[0].keys[0] = KeyAction::OsMacro {
+            label: "Desktop right".into(),
+            mac: vec![],
+            windows: vec![MacroStep {
+                code: "KC_RIGHT".into(),
+                delay: None,
+                mods: Some(vec!["MOD_LGUI".into(), "MOD_LCTL".into()]),
+            }],
+            glow: None,
+        };
+        layout.validate().expect("one populated side is enough");
+    }
+
+    #[test]
+    fn combo_with_a_single_key_is_rejected() {
+        let mut layout = fixture();
+        layout.combos[0].keys = vec![21];
+        assert!(layout.validate().is_err());
+    }
+
+    #[test]
+    fn combo_repeating_a_key_is_rejected() {
+        let mut layout = fixture();
+        layout.combos[0].keys = vec![21, 21];
+        assert!(layout.validate().is_err());
     }
 
     #[test]
