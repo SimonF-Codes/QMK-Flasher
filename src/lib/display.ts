@@ -137,6 +137,11 @@ export function keycapLabels(
     case "macro":
     case "rgb":
     case "rgbHsv":
+    // OS keys carry their own name in every mode: an osMacro is labelled by
+    // its author, and an osMode key names the mode it selects. Neither is a
+    // character whose Mac/Windows spelling could differ.
+    case "osMacro":
+    case "osMode":
       return { tap: tapLabel(a), hold: holdLabel(a) };
   }
 

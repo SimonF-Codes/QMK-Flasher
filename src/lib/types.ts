@@ -11,7 +11,7 @@
 import { z } from "zod";
 
 /** Current version of the layout-file schema. */
-export const SCHEMA_VERSION = 2;
+export const SCHEMA_VERSION = 3;
 /** Keys per layer in LAYOUT_moonlander argument order. */
 export const MOONLANDER_KEY_COUNT = 72;
 
@@ -30,6 +30,14 @@ export const MacroStepSchema = z.object({
 });
 
 export const LayerSwitchActionSchema = z.enum(["MO", "TG", "TO", "TT"]);
+
+/** Which OS a layout is written for / the board is currently in. */
+export const OsTargetSchema = z.enum(["mac", "windows"]);
+export type OsTarget = z.infer<typeof OsTargetSchema>;
+
+/** What an `osMode` key does to the board’s OS mode. */
+export const OsModeActionSchema = z.enum(["toggle", "mac", "windows", "auto"]);
+export type OsModeAction = z.infer<typeof OsModeActionSchema>;
 
 export const KeyActionSchema = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("none"), glow }),
@@ -89,6 +97,24 @@ export const KeyActionSchema = z.discriminatedUnion("kind", [
     v: z.number().int().min(0).max(255),
     glow,
   }),
+  /**
+   * One key, a different step list per host OS — the board picks at press
+   * time from its current OS mode. An empty list means "do nothing on that
+   * OS"; both empty is rejected by the Rust validator.
+   */
+  z.object({
+    kind: z.literal("osMacro"),
+    label: z.string().min(1),
+    mac: z.array(MacroStepSchema),
+    windows: z.array(MacroStepSchema),
+    glow,
+  }),
+  /** Sets the board’s OS mode (Ctrl↔Cmd swap + which osMacro half fires). */
+  z.object({
+    kind: z.literal("osMode"),
+    action: OsModeActionSchema,
+    glow,
+  }),
 ]);
 
 export const LayerSchema = z.object({
@@ -116,6 +142,10 @@ export const SettingsSchema = z.object({
   layerState8bit: z.boolean(),
   serialNumber: z.string(),
   rgbStartupSpeed: z.number().int().nonnegative(),
+  /** OS_DETECTION_ENABLE — board asks the host what it is at enumeration. */
+  osDetection: z.boolean().default(false),
+  /** OS assumed before detection answers, and what plain Ctrl/Gui mods mean. */
+  osDefault: OsTargetSchema.default("windows"),
 });
 
 export const SeededFromSchema = z.object({

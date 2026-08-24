@@ -1,5 +1,5 @@
 {
-  "schemaVersion": 2,
+  "schemaVersion": 3,
   "meta": {
     "name": "Arrows Together",
     "geometry": "moonlander",
@@ -2135,6 +2135,8 @@
     "rgbMatrixCustom": true,
     "layerState8bit": true,
     "serialNumber": "rddD7/QzpBEp",
-    "rgbStartupSpeed": 60
+    "rgbStartupSpeed": 60,
+    "osDetection": false,
+    "osDefault": "windows"
   }
 }

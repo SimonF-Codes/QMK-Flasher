@@ -109,8 +109,12 @@ fn io_err(path: &Path) -> impl Fn(std::io::Error) -> AppError + '_ {
 }
 
 fn parse_and_validate(json: &str, what: &str) -> Result<LayoutFile, AppError> {
-    let layout: LayoutFile = serde_json::from_str(json)
+    let mut layout: LayoutFile = serde_json::from_str(json)
         .map_err(|e| AppError::InvalidLayout(format!("{what}: {e}")))?;
+    // Every read funnels through here, so this is the one place an older
+    // on-disk layout gets brought up to the current schema before the
+    // version check in `validate` sees it.
+    layout.migrate();
     layout.validate().map_err(AppError::InvalidLayout)?;
     Ok(layout)
 }
@@ -577,6 +581,8 @@ fn blank_layout(name: &str, kb: &crate::keyboards::KeyboardInfo) -> LayoutFile {
             layer_state_8bit: true,
             serial_number: format!("qmk-flasher/{}", kb.id),
             rgb_startup_speed: 60,
+            os_detection: false,
+            os_default: Default::default(),
         },
     }
 }

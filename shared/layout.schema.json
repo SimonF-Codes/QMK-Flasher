@@ -446,6 +446,66 @@
             "s",
             "v"
           ]
+        },
+        {
+          "description": "OS_MACRO_n — one key, a different step list per host OS. The board picks\nwhich list to send at press time from its current OS mode, so the same\nphysical key does the right thing on either machine. At least one of the\ntwo lists must be non-empty; an empty list means \"do nothing on that OS\".",
+          "type": "object",
+          "properties": {
+            "glow": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "kind": {
+              "type": "string",
+              "const": "osMacro"
+            },
+            "label": {
+              "type": "string"
+            },
+            "mac": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/MacroStep"
+              }
+            },
+            "windows": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/MacroStep"
+              }
+            }
+          },
+          "required": [
+            "kind",
+            "label",
+            "mac",
+            "windows"
+          ]
+        },
+        {
+          "description": "QF_OS_* — sets the board’s OS mode, and with it both the Ctrl↔Cmd swap\nand which half of every [`KeyAction::OsMacro`] fires.",
+          "type": "object",
+          "properties": {
+            "action": {
+              "$ref": "#/$defs/OsModeAction"
+            },
+            "glow": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "kind": {
+              "type": "string",
+              "const": "osMode"
+            }
+          },
+          "required": [
+            "kind",
+            "action"
+          ]
         }
       ]
     },
@@ -534,6 +594,47 @@
         "seededFrom"
       ]
     },
+    "OsModeAction": {
+      "description": "What an [`KeyAction::OsMode`] key does to the board’s OS mode.",
+      "oneOf": [
+        {
+          "description": "Flip between Mac and Windows.",
+          "type": "string",
+          "const": "toggle"
+        },
+        {
+          "description": "Force Mac.",
+          "type": "string",
+          "const": "mac"
+        },
+        {
+          "description": "Force Windows.",
+          "type": "string",
+          "const": "windows"
+        },
+        {
+          "description": "Drop the manual override and follow host detection again.",
+          "type": "string",
+          "const": "auto"
+        }
+      ]
+    },
+    "OsTarget": {
+      "description": "Which OS a layout is written for / the board is currently in.",
+      "oneOf": [
+        {
+          "type": "string",
+          "enum": [
+            "mac"
+          ]
+        },
+        {
+          "description": "The Arrows Together layout is Windows-authored, so this is the default.",
+          "type": "string",
+          "const": "windows"
+        }
+      ]
+    },
     "SeededFrom": {
       "type": "object",
       "properties": {
@@ -583,6 +684,16 @@
         },
         "oryx": {
           "type": "boolean"
+        },
+        "osDefault": {
+          "description": "The OS the board assumes before detection answers (and whenever\ndetection is off). This is also the OS the layout’s plain Ctrl/Gui\nmods were authored against, so it decides which way the swap runs.",
+          "$ref": "#/$defs/OsTarget",
+          "default": "windows"
+        },
+        "osDetection": {
+          "description": "OS_DETECTION_ENABLE — the board asks the host what it is at USB\nenumeration and sets its OS mode from the answer.",
+          "type": "boolean",
+          "default": false
         },
         "rgbMatrixCustom": {
           "type": "boolean"

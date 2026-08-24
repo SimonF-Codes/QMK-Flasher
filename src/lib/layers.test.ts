@@ -25,7 +25,7 @@ function tinyLayout(): LayoutFile {
     keys,
   });
   return {
-    schemaVersion: 2,
+    schemaVersion: 3,
     meta: {
       name: "T",
       geometry: "moonlander",
@@ -65,6 +65,8 @@ function tinyLayout(): LayoutFile {
       layerState8bit: true,
       serialNumber: "s",
       rgbStartupSpeed: 60,
+      osDetection: false,
+      osDefault: "windows" as const,
     },
   } as LayoutFile;
 }

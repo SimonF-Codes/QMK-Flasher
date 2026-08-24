@@ -92,7 +92,7 @@ describe("emittedTapCode", () => {
 describe("resolvedAction", () => {
   function makeLayout(layers: Layer[]): LayoutFile {
     return {
-      schemaVersion: 2,
+      schemaVersion: 3,
       meta: {
         name: "test",
         geometry: "moonlander",
@@ -116,6 +116,8 @@ describe("resolvedAction", () => {
         layerState8bit: false,
         serialNumber: "",
         rgbStartupSpeed: 0,
+        osDetection: false,
+        osDefault: "windows" as const,
       },
     };
   }
