@@ -11,6 +11,10 @@ interface KeyProps {
   swapSource?: boolean;
   /** A swap is in progress (this key is a candidate target). */
   swapTargeting?: boolean;
+  /** Combo editor: this position is in the combo's trigger set. */
+  comboMember?: boolean;
+  /** Combo editor is open (this key is a candidate trigger). */
+  comboTargeting?: boolean;
   /** Live view: this position is held down right now. */
   pressed?: boolean;
   /** Live view: released a moment ago, still glowing so fast taps register. */
@@ -44,6 +48,8 @@ export default function Key({
   selected,
   swapSource = false,
   swapTargeting = false,
+  comboMember = false,
+  comboTargeting = false,
   pressed = false,
   recent = false,
   target = false,
@@ -63,26 +69,33 @@ export default function Key({
   // future standalone use) still shows an explicit override.
   const led = ledColor ?? action.glow;
 
-  // Swap mode wins (it's a modal interaction), then live press state, then the
-  // trainer's prompt, then the edit selection — so a key you're holding stays
-  // visible while editing, and your answer is never hidden by the question.
+  // The modal board interactions win (swap, then combo picking), then live
+  // press state, then the trainer's prompt, then the edit selection — so a key
+  // you're holding stays visible while editing, and your answer is never
+  // hidden by the question.
   //
   // Fuchsia for the trainer is a deliberate choice: green already means "you
   // pressed this" and sky means "you're editing this", so a target has to be
   // neither. It stays dark enough for the LED preview strip to read on top.
+  // Combo membership borrows sky (it IS a kind of selection — of several keys
+  // at once) with a heavier stroke, and non-members dim so the set stands out.
   const rectClass = swapSource
     ? "fill-amber-900 stroke-amber-400"
     : swapTargeting
       ? "fill-zinc-800 stroke-amber-500/60 hover:fill-amber-900/40"
-      : pressed
-        ? "fill-green-600 stroke-green-300"
-        : recent
-          ? "fill-green-900 stroke-green-500/70"
-          : target
-            ? "fill-fuchsia-800 stroke-fuchsia-300"
-            : selected
-              ? "fill-sky-900 stroke-sky-400"
-              : "fill-zinc-800 stroke-zinc-700 hover:fill-zinc-700";
+      : comboMember
+        ? "fill-sky-800 stroke-sky-300"
+        : comboTargeting
+          ? "fill-zinc-900 stroke-zinc-700 hover:fill-sky-950"
+          : pressed
+            ? "fill-green-600 stroke-green-300"
+            : recent
+              ? "fill-green-900 stroke-green-500/70"
+              : target
+                ? "fill-fuchsia-800 stroke-fuchsia-300"
+                : selected
+                  ? "fill-sky-900 stroke-sky-400"
+                  : "fill-zinc-800 stroke-zinc-700 hover:fill-zinc-700";
 
   return (
     <g
@@ -98,7 +111,9 @@ export default function Key({
         height={r.h}
         rx={6}
         className={rectClass}
-        strokeWidth={selected || swapSource || pressed || target ? 2 : 1}
+        strokeWidth={
+          selected || swapSource || comboMember || pressed || target ? 2 : 1
+        }
       />
       {led && (
         <rect

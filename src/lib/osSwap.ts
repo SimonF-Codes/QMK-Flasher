@@ -35,9 +35,22 @@ export const OS_SWITCH_CODES = ["CG_TOGG", "CG_SWAP", "CG_NORM"] as const;
 export type OsSwitchCode = (typeof OS_SWITCH_CODES)[number];
 
 /** The OS in effect for a given swap state, given how the layout was authored. */
-export function osForSwapState(swapped: boolean): FriendlyOs {
-  const other: FriendlyOs = HOME_OS === "windows" ? "mac" : "windows";
-  return swapped ? other : HOME_OS;
+export function osForSwapState(
+  swapped: boolean,
+  home: FriendlyOs = HOME_OS,
+): FriendlyOs {
+  const other: FriendlyOs = home === "windows" ? "mac" : "windows";
+  return swapped ? other : home;
+}
+
+/**
+ * The OS this layout's plain Ctrl/Gui modifiers were written against.
+ * `settings.osDefault` (schema v3) is the answer where a layout has one;
+ * `HOME_OS` is the fallback for a layout that predates the field, and stays
+ * the single place the assumption lives.
+ */
+export function authoredOs(layout: LayoutFile | null): FriendlyOs {
+  return layout?.settings?.osDefault ?? HOME_OS;
 }
 
 /** What a given OS-switch keycode does to the swap state. */
@@ -167,4 +180,35 @@ export function findOsSwitchKeys(layout: LayoutFile | null): OsSwitchKey[] {
 /** Whether the board can reach the swapped state at all. */
 export function hasOsSwitchKey(layout: LayoutFile | null): boolean {
   return findOsSwitchKeys(layout).length > 0;
+}
+
+/** Every `osMode` key in the layout, in layer then key order. */
+export function findOsModeKeys(
+  layout: LayoutFile | null,
+): { layer: number; index: number; action: string }[] {
+  if (!layout) return [];
+  const found: { layer: number; index: number; action: string }[] = [];
+  layout.layers.forEach((layer, li) =>
+    layer.keys.forEach((k, ki) => {
+      if (k.kind === "osMode") found.push({ layer: li, index: ki, action: k.action });
+    }),
+  );
+  return found;
+}
+
+/**
+ * Whether the board can ever leave the authored OS. Three routes since schema
+ * v3, and the swap preview has to honour all of them or it claims a state the
+ * keyboard cannot reach (or refuses one it can):
+ *  - a `CG_*` key, which moves the swap only;
+ *  - a `QF_OS_*` key, which sets the whole OS mode (swap included);
+ *  - host detection, which sets it without any key at all.
+ */
+export function canSwitchOs(layout: LayoutFile | null): boolean {
+  if (!layout) return false;
+  return (
+    findOsSwitchKeys(layout).length > 0 ||
+    findOsModeKeys(layout).length > 0 ||
+    layout.settings.osDetection
+  );
 }

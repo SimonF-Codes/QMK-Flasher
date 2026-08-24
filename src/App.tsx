@@ -1,5 +1,6 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import BuildFlashPanel from "./components/BuildFlashPanel";
+import ComboPanel from "./components/ComboPanel";
 import DisplayModeToggle from "./components/DisplayModeToggle";
 import Keyboard from "./components/Keyboard";
 import KeyPicker from "./components/KeyPicker";
@@ -7,7 +8,9 @@ import LayerTabs from "./components/LayerTabs";
 import LayoutMenu from "./components/LayoutMenu";
 import LivePanel from "./components/LivePanel";
 import LiveToggle from "./components/LiveToggle";
+import OsSettingsPanel from "./components/OsSettingsPanel";
 import OsSwapToggle from "./components/OsSwapToggle";
+import ToolGuidePanel from "./components/ToolGuidePanel";
 import VersionHistoryPanel from "./components/VersionHistoryPanel";
 import { targetKind } from "./lib/focus";
 import { ipc, MOCK } from "./lib/ipc";
@@ -25,6 +28,7 @@ export default function App() {
   const selectedKey = useLayoutStore((s) => s.selectedKey);
   const dirty = useLayoutStore((s) => s.isDirty)();
   const liveEnabled = useLiveStore((s) => s.enabled);
+  const [guideOpen, setGuideOpen] = useState(false);
 
   useEffect(() => {
     void load();
@@ -134,12 +138,23 @@ export default function App() {
         {/* shrink-0 keeps the controls at full size; when the row runs out of
             space this group wraps to its own line instead of being squeezed. */}
         <div className="ml-auto flex shrink-0 items-center gap-2">
+          <button
+            onClick={() => setGuideOpen(true)}
+            className="rounded-md border border-zinc-700 bg-zinc-900 px-2 py-1 text-xs font-medium text-zinc-300 hover:bg-zinc-800"
+            title="Every non-obvious key in this layout, derived from it — printable"
+          >
+            📖 Guide
+          </button>
           <VersionHistoryPanel />
           <LiveToggle />
           <DisplayModeToggle />
           {/* Divider: what keys are CALLED (left) vs what they EMIT (right). */}
           <span className="h-4 w-px bg-zinc-700" aria-hidden />
           <OsSwapToggle />
+          {/* Next to the swap preview because they are the same subject seen
+              from two sides: the toggle previews an OS, this decides how the
+              board picks one. */}
+          <OsSettingsPanel />
           {dirty && (
             <span className="text-xs text-amber-400" title="Unsaved changes">
               ● unsaved
@@ -180,11 +195,36 @@ export default function App() {
             </p>
           )}
           <LivePanel />
+          {/* Under the board because that is where its trigger keys are picked
+              — the panel and the keyboard are one editor while it is open. */}
+          <ComboPanel />
         </section>
         <KeyPicker />
       </main>
 
       <BuildFlashPanel />
+
+      {/* A drawer rather than a pane: the guide is a document you consult and
+          dismiss, and it wants full height for its own scroll and its print
+          stylesheet (which isolates #tool-guide-print from the rest of the
+          page). It reads nothing from the stores — everything it shows is
+          derived from the layout handed to it. */}
+      {guideOpen && (
+        <div className="fixed inset-0 z-30 flex justify-end">
+          <div
+            className="flex-1 bg-black/50"
+            onClick={() => setGuideOpen(false)}
+            aria-hidden
+          />
+          <aside className="h-full w-full max-w-3xl border-l border-zinc-800 shadow-2xl">
+            <ToolGuidePanel
+              layout={layout}
+              layerNames={layout?.layers.map((l) => l.title)}
+              onClose={() => setGuideOpen(false)}
+            />
+          </aside>
+        </div>
+      )}
     </div>
   );
 }

@@ -111,6 +111,8 @@ export function badge(a: KeyAction): string | null {
       return "TD";
     case "macro":
       return "M";
+    case "osMacro":
+      return "OS";
     case "rgb":
     case "rgbHsv":
       return "RGB";
@@ -123,9 +125,13 @@ export function badge(a: KeyAction): string | null {
   }
 }
 
-/** Kinds the v1 UI cannot edit in place (only replace wholesale). */
+/**
+ * Kinds the UI cannot edit in place (only replace wholesale). `macro` left
+ * this set when the macro editor landed — macros are authored here now, not
+ * only imported from Oryx.
+ */
 export function isReadOnly(a: KeyAction): boolean {
-  return a.kind === "tapDance" || a.kind === "macro" || a.kind === "rgbHsv";
+  return a.kind === "tapDance" || a.kind === "rgbHsv";
 }
 
 /** The QMK token this action will emit (best effort for display). */
@@ -155,11 +161,11 @@ export function qmkToken(a: KeyAction): string {
     case "tapDance":
       return "TD(…)";
     case "macro":
-      return "ST_MACRO(…)";
+      return a.label ? `ST_MACRO(${a.label})` : "ST_MACRO(…)";
     case "rgbHsv":
       return `HSV_${a.h}_${a.s}_${a.v}`;
     case "osMacro":
-      return "OS_MACRO(…)";
+      return `OS_MACRO(${a.label})`;
     case "osMode":
       return OS_MODE_KEYCODE[a.action] ?? a.action;
   }
