@@ -1,67 +1,23 @@
 import { useMemo, useState } from "react";
-import { labelFor, searchKeycodes } from "../lib/keycodes";
 import { ALL_MODS, modsShort, qmkToken, withGlow } from "../lib/labels";
 import { useLayoutStore } from "../state/layoutStore";
 import type { KeyAction } from "../lib/types";
+import KeycodeSearch from "./KeycodeSearch";
 
 type HoldMode = "mods" | "layer" | "keycode";
-
-function TapSearch({
-  value,
-  onPick,
-}: {
-  value: string;
-  onPick(code: string): void;
-}) {
-  const [query, setQuery] = useState("");
-  const results = useMemo(
-    () => searchKeycodes(query).filter((e) => e.tappable).slice(0, 12),
-    [query],
-  );
-  return (
-    <div>
-      <div className="mb-1 text-xs text-zinc-400">
-        Current: <span className="text-zinc-200">{labelFor(value)}</span> (
-        {value})
-      </div>
-      <input
-        value={query}
-        onChange={(e) => setQuery(e.target.value)}
-        placeholder="Search keycode…"
-        className="w-full rounded bg-zinc-900 px-2 py-1 text-sm outline-none ring-1 ring-zinc-700 focus:ring-sky-500"
-      />
-      {results.length > 0 && (
-        <ul className="mt-1 max-h-40 overflow-y-auto rounded border border-zinc-700 bg-zinc-900">
-          {results.map((e) => (
-            <li key={e.qmk}>
-              <button
-                className="flex w-full justify-between px-2 py-1 text-left text-sm hover:bg-zinc-700"
-                onClick={() => {
-                  onPick(e.qmk);
-                  setQuery("");
-                }}
-              >
-                <span>{e.longLabel}</span>
-                <span className="text-zinc-500">{e.qmk}</span>
-              </button>
-            </li>
-          ))}
-        </ul>
-      )}
-    </div>
-  );
-}
 
 /** Tap + hold pickers; emits modTap / layerTap / dualFunc per the hold choice. */
 export default function DualFunctionEditor({
   current,
+  onApply,
   onClose,
 }: {
   current: KeyAction;
+  /** Where the result goes — a key, or the combo draft when that is open. */
+  onApply(action: KeyAction): void;
   onClose(): void;
 }) {
   const layout = useLayoutStore((s) => s.layout);
-  const setKeyAction = useLayoutStore((s) => s.setKeyAction);
 
   const [tap, setTap] = useState(() => {
     if (current.kind === "modTap" || current.kind === "layerTap") return current.tap;
@@ -113,7 +69,7 @@ export default function DualFunctionEditor({
         <div className="mb-1 text-xs font-medium uppercase tracking-wide text-zinc-500">
           Tap
         </div>
-        <TapSearch value={tap} onPick={setTap} />
+        <KeycodeSearch value={tap} onPick={setTap} />
       </div>
 
       <div>
@@ -190,7 +146,7 @@ export default function DualFunctionEditor({
         )}
 
         {holdMode === "keycode" && (
-          <TapSearch value={holdCode} onPick={setHoldCode} />
+          <KeycodeSearch value={holdCode} onPick={setHoldCode} />
         )}
       </div>
 
@@ -202,7 +158,7 @@ export default function DualFunctionEditor({
         disabled={!result}
         onClick={() => {
           if (result) {
-            setKeyAction(withGlow(result, current));
+            onApply(withGlow(result, current));
             onClose();
           }
         }}

@@ -14,9 +14,11 @@ export default function Keyboard() {
   const selectedLayer = useLayoutStore((s) => s.selectedLayer);
   const selectedKey = useLayoutStore((s) => s.selectedKey);
   const swapSource = useLayoutStore((s) => s.swapSource);
+  const comboEditor = useLayoutStore((s) => s.comboEditor);
   const selectKey = useLayoutStore((s) => s.selectKey);
   const swapKeys = useLayoutStore((s) => s.swapKeys);
   const cancelSwap = useLayoutStore((s) => s.cancelSwap);
+  const toggleComboDraftKey = useLayoutStore((s) => s.toggleComboDraftKey);
   const mode = useDisplayStore((s) => s.mode);
   const osSwapPreview = useDisplayStore((s) => s.osSwapPreview);
   const live = useLiveStore((s) => s.enabled);
@@ -43,9 +45,18 @@ export default function Keyboard() {
   // What the ledmap will actually light on this layer, in LAYOUT-arg order.
   const leds = resolveLayerLeds(layout!, selectedLayer);
 
+  // While a combo is being edited the board is a multi-select over its trigger
+  // set — the one interaction where clicking a key does not mean "edit this
+  // key". The two modal modes cannot overlap: starting either cancels the other.
+  const comboKeys = comboEditor?.combo.keys;
+
   // In swap mode a click picks the target (or cancels if it's the anchor);
   // otherwise it toggles the selection as usual.
   const onKey = (i: number) => {
+    if (comboKeys) {
+      toggleComboDraftKey(i);
+      return;
+    }
     if (swapping) {
       if (i === swapSource) cancelSwap();
       else swapKeys(swapSource, i);
@@ -69,6 +80,8 @@ export default function Keyboard() {
           selected={selectedKey === i}
           swapSource={swapping && swapSource === i}
           swapTargeting={swapping && swapSource !== i}
+          comboMember={comboKeys?.includes(i) ?? false}
+          comboTargeting={!!comboKeys}
           pressed={live && pressed.has(i)}
           recent={live && recent.has(i)}
           target={targetPos === i}

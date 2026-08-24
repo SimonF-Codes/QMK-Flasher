@@ -1,5 +1,6 @@
 import { useEffect } from "react";
 import BuildFlashPanel from "./components/BuildFlashPanel";
+import ComboPanel from "./components/ComboPanel";
 import DisplayModeToggle from "./components/DisplayModeToggle";
 import Keyboard from "./components/Keyboard";
 import KeyPicker from "./components/KeyPicker";
@@ -7,6 +8,7 @@ import LayerTabs from "./components/LayerTabs";
 import LayoutMenu from "./components/LayoutMenu";
 import LivePanel from "./components/LivePanel";
 import LiveToggle from "./components/LiveToggle";
+import OsSettingsPanel from "./components/OsSettingsPanel";
 import OsSwapToggle from "./components/OsSwapToggle";
 import VersionHistoryPanel from "./components/VersionHistoryPanel";
 import { targetKind } from "./lib/focus";
@@ -140,6 +142,10 @@ export default function App() {
           {/* Divider: what keys are CALLED (left) vs what they EMIT (right). */}
           <span className="h-4 w-px bg-zinc-700" aria-hidden />
           <OsSwapToggle />
+          {/* Next to the swap preview because they are the same subject seen
+              from two sides: the toggle previews an OS, this decides how the
+              board picks one. */}
+          <OsSettingsPanel />
           {dirty && (
             <span className="text-xs text-amber-400" title="Unsaved changes">
               ● unsaved
@@ -180,6 +186,9 @@ export default function App() {
             </p>
           )}
           <LivePanel />
+          {/* Under the board because that is where its trigger keys are picked
+              — the panel and the keyboard are one editor while it is open. */}
+          <ComboPanel />
         </section>
         <KeyPicker />
       </main>

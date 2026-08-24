@@ -3,6 +3,16 @@
  * dirty tracking (deep compare vs last-saved), and save.
  */
 import { create } from "zustand";
+import {
+  addCombo as addComboToLayout,
+  comboIssue,
+  deleteCombo as deleteComboFromLayout,
+  newCombo,
+  suggestComboName,
+  toggleComboKey,
+  updateCombo as updateComboInLayout,
+  withDerivedComboFlag,
+} from "../lib/combos";
 import { ipc, toAppError } from "../lib/ipc";
 import {
   clearLayerGlows as clearLayerGlowsInLayout,
@@ -21,16 +31,29 @@ import {
 } from "../lib/layers";
 import type {
   AppError,
+  Combo,
   KeyAction,
   Layer,
   LayoutFile,
   LayoutSummary,
   LayoutVersionSummary,
+  OsTarget,
 } from "../lib/types";
 
 /** True iff any key across all layers is a tap-dance action. */
 function layersUseTapDance(layers: Layer[]): boolean {
   return layers.some((layer) => layer.keys.some((k) => k.kind === "tapDance"));
+}
+
+/**
+ * An in-progress combo edit. It is held apart from `layout.combos` so a
+ * half-built combo — one key picked so far, no action yet — never exists in
+ * the layout, where it would be an invalid save waiting to happen. `index`
+ * is the combo being edited, or null for one that does not exist yet.
+ */
+export interface ComboDraft {
+  index: number | null;
+  combo: Combo;
 }
 
 /**
@@ -69,6 +92,12 @@ interface LayoutState {
    * keyboard is swapped with this position (within the selected layer).
    */
   swapSource: number | null;
+  /**
+   * When set, the combo editor is open: the next keys clicked on the board
+   * join or leave this combo's trigger set, and KeyPicker edits the combo's
+   * action instead of a key's.
+   */
+  comboEditor: ComboDraft | null;
   loading: boolean;
   saving: boolean;
   error: AppError | null;
@@ -139,6 +168,39 @@ interface LayoutState {
    * layer it navigates to, so the board shows where each key leads.
    */
   glowLayerKeysByTarget(index: number): void;
+
+  // ---- Combos ----
+  /**
+   * Open the combo editor on an existing combo, or on a new one (null). The
+   * viewed layer follows the combo's, because the trigger keys are picked by
+   * clicking the board and they only mean anything on that layer.
+   */
+  beginComboEdit(index: number | null): void;
+  /** Close the combo editor, discarding an uncommitted draft. */
+  cancelComboEdit(): void;
+  /** Patch fields of the draft combo (name, layer, action). */
+  updateComboDraft(patch: Partial<Combo>): void;
+  /** Add/remove a key position from the draft's trigger set. */
+  toggleComboDraftKey(position: number): void;
+  /** Set the draft's resulting action (what KeyPicker feeds while open). */
+  setComboDraftAction(action: KeyAction): void;
+  /**
+   * Why the draft cannot be saved yet, or null. Drives the disabled state of
+   * Save so the ≥2-distinct-keys rule is enforced here rather than by a
+   * failed round-trip through the Rust validator.
+   */
+  comboDraftIssue(): string | null;
+  /** Commit the draft into the layout. Returns false if it is not valid. */
+  commitComboDraft(): boolean;
+  /** Remove a combo, re-deriving settings.combos from what is left. */
+  deleteCombo(index: number): void;
+
+  // ---- OS settings ----
+  /** OS_DETECTION_ENABLE — ask the host what it is at USB enumeration. */
+  setOsDetection(enabled: boolean): void;
+  /** The OS assumed before detection answers, and what plain mods mean. */
+  setOsDefault(os: OsTarget): void;
+
   isDirty(): boolean;
 }
 
@@ -151,6 +213,7 @@ export const useLayoutStore = create<LayoutState>()((set, get) => ({
   selectedLayer: 0,
   selectedKey: null,
   swapSource: null,
+  comboEditor: null,
   loading: false,
   saving: false,
   error: null,
@@ -170,6 +233,7 @@ export const useLayoutStore = create<LayoutState>()((set, get) => ({
         selectedLayer: 0,
         selectedKey: null,
         swapSource: null,
+        comboEditor: null,
         loading: false,
       });
       await get().refreshVersions();
@@ -225,6 +289,7 @@ export const useLayoutStore = create<LayoutState>()((set, get) => ({
         selectedLayer: 0,
         selectedKey: null,
         swapSource: null,
+        comboEditor: null,
         loading: false,
       });
       await get().refreshVersions(); // the pre-restore backup is now listed
@@ -261,6 +326,7 @@ export const useLayoutStore = create<LayoutState>()((set, get) => ({
         selectedLayer: 0,
         selectedKey: null,
         swapSource: null,
+        comboEditor: null,
         versions: [],
       });
       await get().refreshVersions();
@@ -353,6 +419,7 @@ export const useLayoutStore = create<LayoutState>()((set, get) => ({
         selectedLayer: 0,
         selectedKey: null,
         swapSource: null,
+        comboEditor: null,
         loading: false,
       });
       await get().refreshLayouts();
@@ -363,7 +430,18 @@ export const useLayoutStore = create<LayoutState>()((set, get) => ({
   },
 
   selectLayer(index) {
-    set({ selectedLayer: index, selectedKey: null, swapSource: null });
+    // A combo's trigger keys are positions ON its layer, so while the editor
+    // is open the two move together: switching tabs re-points the combo rather
+    // than leaving you picking keys on a layer it does not listen to.
+    const draft = get().comboEditor;
+    set({
+      selectedLayer: index,
+      selectedKey: null,
+      swapSource: null,
+      ...(draft
+        ? { comboEditor: { ...draft, combo: { ...draft.combo, layer: index } } }
+        : {}),
+    });
   },
 
   selectKey(index) {
@@ -411,6 +489,7 @@ export const useLayoutStore = create<LayoutState>()((set, get) => ({
       selectedLayer: next.layers.length - 1,
       selectedKey: null,
       swapSource: null,
+      comboEditor: null,
     });
   },
 
@@ -441,16 +520,22 @@ export const useLayoutStore = create<LayoutState>()((set, get) => ({
         ? selectedLayer - 1
         : Math.min(selectedLayer, next.layers.length - 1);
 
+    // Deleting a layer also drops every combo that listened on it — the exact
+    // mirror of the tap-dance case above, so settings.combos is re-derived
+    // too. Losing the last combo this way would otherwise leave COMBO_ENABLE
+    // on with no combo table to go with it.
     set({
-      layout: { ...next, settings },
+      layout: withDerivedComboFlag({ ...next, settings }),
       selectedLayer: selected,
       selectedKey: null,
       swapSource: null,
+      comboEditor: null,
     });
   },
 
   beginSwap(source) {
-    set({ swapSource: source, selectedKey: source });
+    // Two modal board interactions; the second one to start wins.
+    set({ swapSource: source, selectedKey: source, comboEditor: null });
   },
 
   cancelSwap() {
@@ -484,6 +569,7 @@ export const useLayoutStore = create<LayoutState>()((set, get) => ({
       selectedLayer: selectedLayerNext,
       selectedKey: null,
       swapSource: null,
+      comboEditor: null,
     });
   },
 
@@ -516,6 +602,110 @@ export const useLayoutStore = create<LayoutState>()((set, get) => ({
     if (!layout) return;
     const next = glowLayerKeysByTargetInLayout(layout, index);
     if (next !== layout) set({ layout: next });
+  },
+
+  // ---- Combos ----
+
+  beginComboEdit(index) {
+    const { layout, selectedLayer } = get();
+    if (!layout) return;
+    const existing = index === null ? null : layout.combos[index];
+    if (index !== null && !existing) return;
+    const combo = existing
+      ? { ...existing, keys: existing.keys.slice() }
+      : newCombo(selectedLayer, suggestComboName(layout));
+    set({
+      comboEditor: { index, combo },
+      // The board is now the combo's trigger picker, so a lingering key
+      // selection (and any half-started swap) would only be confusing.
+      selectedLayer: combo.layer,
+      selectedKey: null,
+      swapSource: null,
+    });
+  },
+
+  cancelComboEdit() {
+    set({ comboEditor: null });
+  },
+
+  updateComboDraft(patch) {
+    const draft = get().comboEditor;
+    if (!draft) return;
+    const combo = { ...draft.combo, ...patch };
+    set({
+      comboEditor: { ...draft, combo },
+      // Re-pointing the combo re-points the board it is picked on.
+      ...(patch.layer !== undefined ? { selectedLayer: patch.layer } : {}),
+    });
+  },
+
+  toggleComboDraftKey(position) {
+    const draft = get().comboEditor;
+    if (!draft) return;
+    const keys = toggleComboKey(draft.combo.keys, position);
+    set({ comboEditor: { ...draft, combo: { ...draft.combo, keys } } });
+  },
+
+  setComboDraftAction(action) {
+    get().updateComboDraft({ action });
+  },
+
+  comboDraftIssue() {
+    const { layout, comboEditor } = get();
+    if (!layout || !comboEditor) return null;
+    return comboIssue(
+      comboEditor.combo,
+      layout.layers.length,
+      layout.layers[0]?.keys.length ?? 0,
+    );
+  },
+
+  commitComboDraft() {
+    const { layout, comboEditor } = get();
+    if (!layout || !comboEditor) return false;
+    if (get().comboDraftIssue() !== null) return false;
+    const { index, combo } = comboEditor;
+    const next =
+      index === null
+        ? addComboToLayout(layout, combo)
+        : updateComboInLayout(layout, index, combo);
+    set({ layout: next, comboEditor: null });
+    return true;
+  },
+
+  deleteCombo(index) {
+    const { layout, comboEditor } = get();
+    if (!layout) return;
+    const next = deleteComboFromLayout(layout, index);
+    if (next === layout) return;
+    // Indices shift under a delete, so an open editor pointing past it would
+    // now be editing the wrong combo — close it rather than try to re-anchor.
+    const editorSurvives =
+      comboEditor === null ||
+      comboEditor.index === null ||
+      comboEditor.index < index;
+    set({ layout: next, ...(editorSurvives ? {} : { comboEditor: null }) });
+  },
+
+  // ---- OS settings ----
+
+  setOsDetection(enabled) {
+    const { layout } = get();
+    if (!layout || layout.settings.osDetection === enabled) return;
+    set({
+      layout: {
+        ...layout,
+        settings: { ...layout.settings, osDetection: enabled },
+      },
+    });
+  },
+
+  setOsDefault(os) {
+    const { layout } = get();
+    if (!layout || layout.settings.osDefault === os) return;
+    set({
+      layout: { ...layout, settings: { ...layout.settings, osDefault: os } },
+    });
   },
 
   isDirty() {
