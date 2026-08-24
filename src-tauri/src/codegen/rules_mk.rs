@@ -30,7 +30,16 @@ pub fn render(layout: &LayoutFile) -> String {
         }
     };
     flag("CAPS_WORD_ENABLE", s.caps_word);
-    flag("COMBO_ENABLE", s.combos);
+    // Same desync class as tap dance above, and the same fix: derived from
+    // `layout.combos`, never from the stored `s.combos` flag. `COMBO_ENABLE=yes`
+    // with no `key_combos[]`/`COMBO_COUNT` does not compile, and the inverse
+    // (combos in the layout, flag off) would silently drop them. A combo editor
+    // is landing in the UI, so this pair will start moving.
+    flag("COMBO_ENABLE", super::keymap_c::uses_combos(layout));
+    // Host OS detection: `OS_DETECTION` is a QMK generic feature
+    // (builddefs/generic_features.mk), so this is all the build needs to
+    // compile in os_detection.c and call `process_detected_host_os_user`.
+    flag("OS_DETECTION_ENABLE", s.os_detection);
     flag("KEY_LOCK_ENABLE", true);
     out
 }

@@ -3,7 +3,9 @@
 //! spec: output must match it byte-identically modulo whitespace.
 
 use crate::error::AppError;
-use crate::layout::schema::{KeyAction, LayoutFile, MacroStep, TapSpec};
+use crate::layout::schema::{
+    KeyAction, LayoutFile, MacroStep, OsModeAction, OsTarget, TapSpec,
+};
 
 /// Numbering plan for the custom constructs a layout uses, in first-occurrence
 /// LAYOUT-arg scan order (layers first, then combo actions).
@@ -12,8 +14,21 @@ pub struct RenderPlan {
     pub rgb_sld: bool,
     pub hsv_enums: Vec<(u8, u8, u8)>,
     pub macros: Vec<Vec<MacroStep>>,
+    pub os_macros: Vec<OsMacroSpec>,
+    /// OS-mode actions the layout binds, in first-occurrence order. Only the
+    /// ones actually used get a keycode and a `process_record_user` case.
+    pub os_modes: Vec<OsModeAction>,
     pub dual_funcs: Vec<(TapSpec, TapSpec)>,
     pub dances: Vec<DanceSpec>,
+}
+
+/// The (mac, windows) step-list pair behind one `OS_MACRO_n`. Deduped by value
+/// exactly the way `plan.macros` dedupes `ST_MACRO_n`, so two keys carrying the
+/// same pair share one keycode.
+#[derive(Debug, Clone, PartialEq)]
+pub struct OsMacroSpec {
+    pub mac: Vec<MacroStep>,
+    pub windows: Vec<MacroStep>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -45,6 +60,17 @@ impl RenderPlan {
                     plan.dual_funcs.push(pair);
                 }
             }
+            KeyAction::OsMacro { mac, windows, .. } => {
+                let spec = OsMacroSpec { mac: mac.clone(), windows: windows.clone() };
+                if !plan.os_macros.contains(&spec) {
+                    plan.os_macros.push(spec);
+                }
+            }
+            KeyAction::OsMode { action, .. } => {
+                if !plan.os_modes.contains(action) {
+                    plan.os_modes.push(*action);
+                }
+            }
             KeyAction::TapDance { tap, hold, double_tap, tap_hold, .. } => {
                 let spec = DanceSpec {
                     tap: tap.clone(),
@@ -70,7 +96,15 @@ impl RenderPlan {
     }
 
     fn has_custom_keycodes(&self) -> bool {
-        self.rgb_sld || !self.hsv_enums.is_empty() || !self.macros.is_empty()
+        self.rgb_sld
+            || !self.hsv_enums.is_empty()
+            || !self.macros.is_empty()
+            || !self.os_macros.is_empty()
+            || !self.os_modes.is_empty()
+    }
+
+    fn has_os_keys(&self) -> bool {
+        !self.os_macros.is_empty() || !self.os_modes.is_empty()
     }
 }
 
@@ -88,6 +122,35 @@ impl RenderPlan {
 /// drift in the flag harmless.
 pub fn uses_tap_dance(layout: &LayoutFile) -> bool {
     !RenderPlan::build(layout).dances.is_empty()
+}
+
+/// Whether the layout actually has combos. Same single-source-of-truth rule as
+/// [`uses_tap_dance`], for the same reason: `COMBO_ENABLE` (rules.mk),
+/// `COMBO_COUNT` (config.h) and the `key_combos[]` array (keymap.c) must agree,
+/// and `settings.combos` is a stored flag that can drift away from the layout.
+/// `COMBO_ENABLE=yes` with `COMBO_COUNT` unset — or set to 0 — does not build.
+pub fn uses_combos(layout: &LayoutFile) -> bool {
+    !layout.combos.is_empty()
+}
+
+/// Whether keymap.c needs the OS-mode block: a `KeyAction::OsMacro`, a
+/// `KeyAction::OsMode` key, or host OS detection (which drives the Ctrl↔Cmd
+/// swap on its own). Gating on this keeps a layout that uses none of them
+/// byte-identical to what previous builds emitted.
+pub fn uses_os_tooling(layout: &LayoutFile) -> bool {
+    layout.settings.os_detection || RenderPlan::build(layout).has_os_keys()
+}
+
+/// The custom keycode an [`OsModeAction`] generates. These four names are in
+/// `shared/keycodes.json` (category `osmode`); `super::leaf_codes` feeds them
+/// back through the catalog check so the two cannot drift apart.
+pub fn os_mode_keycode(action: OsModeAction) -> &'static str {
+    match action {
+        OsModeAction::Toggle => "QF_OS_TOGG",
+        OsModeAction::Mac => "QF_OS_MAC",
+        OsModeAction::Windows => "QF_OS_WIN",
+        OsModeAction::Auto => "QF_OS_AUTO",
+    }
 }
 
 fn unsupported(what: impl std::fmt::Display) -> AppError {
@@ -163,19 +226,16 @@ pub fn render_key(key: &KeyAction, plan: &RenderPlan) -> Result<String, AppError
             format!("ST_MACRO_{n}")
         }
         KeyAction::RgbHsv { h, s, v, .. } => format!("HSV_{h}_{s}_{v}"),
-        // Contract-only for now: the schema can carry these, codegen cannot
-        // yet emit them. Erroring here keeps a layout that uses one from
-        // silently building into firmware that ignores it.
-        KeyAction::OsMacro { label, .. } => {
-            return Err(unsupported(format!(
-                "osMacro {label:?}: OS-aware macros are not generated yet"
-            )))
+        KeyAction::OsMacro { mac, windows, .. } => {
+            let spec = OsMacroSpec { mac: mac.clone(), windows: windows.clone() };
+            let n = plan
+                .os_macros
+                .iter()
+                .position(|m| *m == spec)
+                .ok_or_else(|| unsupported("osMacro missing from plan"))?;
+            format!("OS_MACRO_{n}")
         }
-        KeyAction::OsMode { action, .. } => {
-            return Err(unsupported(format!(
-                "osMode {action:?}: OS-mode keys are not generated yet"
-            )))
-        }
+        KeyAction::OsMode { action, .. } => os_mode_keycode(*action).into(),
     })
 }
 
@@ -244,6 +304,12 @@ fn header(plan: &RenderPlan) -> String {
         for n in 0..plan.macros.len() {
             out.push_str(&format!("  ST_MACRO_{n},\n"));
         }
+        for n in 0..plan.os_macros.len() {
+            out.push_str(&format!("  OS_MACRO_{n},\n"));
+        }
+        for action in &plan.os_modes {
+            out.push_str(&format!("  {},\n", os_mode_keycode(*action)));
+        }
         out.push_str("};\n\n\n");
     }
     if !plan.dances.is_empty() {
@@ -258,6 +324,37 @@ fn header(plan: &RenderPlan) -> String {
             "#define DUAL_FUNC_{n} {}\n",
             dual_func_decoy(n, tap, hold)
         ));
+    }
+    out
+}
+
+/// The OS-mode block. `qf_os_mac` is the board's mode and the single source of
+/// truth the feature needs: the same flag decides the Ctrl<->Cmd swap and which
+/// half of every `OS_MACRO_n` fires.
+///
+/// `settings.osDefault` is emitted as `QF_OS_DEFAULT_MAC` and the swap is
+/// derived from it (`swap == (qf_os_mac != QF_OS_DEFAULT_MAC)`) rather than the
+/// direction being baked in: a Windows-authored layout swaps in Mac mode, a
+/// Mac-authored one swaps in Windows mode, from the same generated code.
+///
+/// Emitted only when [`uses_os_tooling`]; it also carries
+/// `keyboard_post_init_user` when the ledmap section — which owns that function
+/// otherwise — is not emitted.
+fn os_section(layout: &LayoutFile) -> String {
+    let mut out = String::from(
+        "\n\n/* ---- OS mode --------------------------------------------------------------\n * `qf_os_mac` is the board\'s OS mode and the single source of truth for it: it\n * drives both the Ctrl<->Cmd magic swap and which half of every OS_MACRO_n\n * fires, so the two cannot disagree.\n *\n * QF_OS_DEFAULT_MAC is settings.osDefault - the OS this layout\'s plain Ctrl/Gui\n * mods were authored against, and the mode assumed before detection answers.\n * The swap runs exactly when the current mode differs from it, so the direction\n * is derived from the define instead of being baked into this code.\n *\n * The OS_MACRO_n SEND_STRINGs are deliberately NOT wrapped to suspend the swap.\n * Verified in the firmware source, in two places:\n *   - mod_config()/keycode_config(), where keymap_config.swap_lctl_lgui is\n *     applied, are called ONLY from quantum/keymap_common.c, on the\n *     keycode->action path (QK_MODS, one-shot, layer-mod, mod-tap).\n *   - register_code16 (quantum/quantum.c:126) does not call them, and neither\n *     does the register_code()/unregister_code()/tap_code() trio SEND_STRING\n *     runs on: a modifier goes straight to add_mods(MOD_BIT(code))\n *     (quantum/action.c).\n * So these mods are emitted literally and are never re-swapped. There is no\n * double transformation here, and nothing to neutralize.\n */\n",
+    );
+    out.push_str(&format!(
+        "#define QF_OS_DEFAULT_MAC {}\n\nstatic bool qf_os_mac = QF_OS_DEFAULT_MAC;\n\nstatic void qf_os_apply(void) {{\n  const bool swap = (qf_os_mac != QF_OS_DEFAULT_MAC);\n  eeconfig_read_keymap(&keymap_config);\n  if (keymap_config.swap_lctl_lgui != swap || keymap_config.swap_rctl_rgui != swap) {{\n    keymap_config.swap_lctl_lgui = swap;\n    keymap_config.swap_rctl_rgui = swap;\n    eeconfig_update_keymap(&keymap_config);\n    clear_keyboard();\n  }}\n}}\n",
+        if matches!(layout.settings.os_default, OsTarget::Mac) { "true" } else { "false" }
+    ));
+    if layout.settings.os_detection {
+        out.push_str(
+            "\nstatic bool         qf_os_override      = false;\nstatic bool         qf_os_detected_once = false;\nstatic os_variant_t qf_os_last_detected = OS_UNSURE;\n\nstatic bool qf_os_is_mac(os_variant_t os) {\n  return os == OS_MACOS || os == OS_IOS;\n}\n\nbool process_detected_host_os_user(os_variant_t os) {\n  /* OS_UNSURE is not an answer: keep whatever mode we are in. */\n  if (os == OS_UNSURE) {\n    return true;\n  }\n  /* Detection is authoritative, a manual QF_OS_* key overrides it, and the\n   * override is dropped as soon as detection reports a DIFFERENT OS than last\n   * time - the board moved to another machine, so the override was about the\n   * old one. This is why config.h leaves OS_DETECTION_SINGLE_REPORT undefined:\n   * with it set, os_detection_task() suppresses every report after the first\n   * and that second report would never arrive. */\n  if (qf_os_override && qf_os_detected_once && os != qf_os_last_detected) {\n    qf_os_override = false;\n  }\n  qf_os_last_detected = os;\n  qf_os_detected_once = true;\n  if (!qf_os_override) {\n    qf_os_mac = qf_os_is_mac(os);\n    qf_os_apply();\n  }\n  return true;\n}\n",
+        );
+    }
+    if !layout.settings.rgb_matrix_custom {
+        out.push_str("\nvoid keyboard_post_init_user(void) {\n  qf_os_apply();\n}\n");
     }
     out
 }
@@ -295,7 +392,7 @@ fn keymaps(layout: &LayoutFile, plan: &RenderPlan) -> Result<String, AppError> {
 }
 
 fn combos(layout: &LayoutFile, plan: &RenderPlan) -> Result<String, AppError> {
-    if layout.combos.is_empty() {
+    if !uses_combos(layout) {
         return Ok(String::new());
     }
     let mut out = String::from("\n");
@@ -325,10 +422,18 @@ fn combos(layout: &LayoutFile, plan: &RenderPlan) -> Result<String, AppError> {
     Ok(out)
 }
 
-fn ledmap_section(layout: &LayoutFile) -> Result<String, AppError> {
+/// `uses_os` adds the boot-time OS-mode apply to `keyboard_post_init_user`,
+/// which this section owns; `os_section` emits its own copy of that function
+/// when the ledmap section is not emitted at all.
+fn ledmap_section(layout: &LayoutFile, uses_os: bool) -> Result<String, AppError> {
     let mut out = String::from(
-        "\n\n\nextern rgb_config_t rgb_matrix_config;\n\nRGB hsv_to_rgb_with_value(HSV hsv) {\n  RGB rgb = hsv_to_rgb( hsv );\n  float f = (float)rgb_matrix_config.hsv.v / UINT8_MAX;\n  return (RGB){ f * rgb.r, f * rgb.g, f * rgb.b };\n}\n\nvoid keyboard_post_init_user(void) {\n  rgb_matrix_enable();\n}\n\n",
+        "\n\n\nextern rgb_config_t rgb_matrix_config;\n\nRGB hsv_to_rgb_with_value(HSV hsv) {\n  RGB rgb = hsv_to_rgb( hsv );\n  float f = (float)rgb_matrix_config.hsv.v / UINT8_MAX;\n  return (RGB){ f * rgb.r, f * rgb.g, f * rgb.b };\n}\n\n",
     );
+    out.push_str(if uses_os {
+        "void keyboard_post_init_user(void) {\n  rgb_matrix_enable();\n  qf_os_apply();\n}\n\n"
+    } else {
+        "void keyboard_post_init_user(void) {\n  rgb_matrix_enable();\n}\n\n"
+    });
     out.push_str(&super::ledmap::render(layout)?);
     out.push_str(
         "\nvoid set_layer_color(int layer) {\n  for (int i = 0; i < RGB_MATRIX_LED_COUNT; i++) {\n    HSV hsv = {\n      .h = pgm_read_byte(&ledmap[layer][i][0]),\n      .s = pgm_read_byte(&ledmap[layer][i][1]),\n      .v = pgm_read_byte(&ledmap[layer][i][2]),\n    };\n    if (!hsv.h && !hsv.s && !hsv.v) {\n        rgb_matrix_set_color( i, 0, 0, 0 );\n    } else {\n        RGB rgb = hsv_to_rgb_with_value(hsv);\n        rgb_matrix_set_color(i, rgb.r, rgb.g, rgb.b);\n    }\n  }\n}\n\nbool rgb_matrix_indicators_user(void) {\n  if (rawhid_state.rgb_control) {\n      return false;\n  }\n  if (!keyboard_config.disable_layer_led) { \n    switch (biton32(layer_state)) {\n",
@@ -421,7 +526,9 @@ fn dance_section(plan: &RenderPlan) -> String {
     out
 }
 
-fn process_record_user(plan: &RenderPlan) -> Result<String, AppError> {
+fn process_record_user(layout: &LayoutFile, plan: &RenderPlan)
+    -> Result<String, AppError>
+{
     let mut out = String::from(
         "\nbool process_record_user(uint16_t keycode, keyrecord_t *record) {\n  switch (keycode) {\n  case QK_MODS ... QK_MODS_MAX:\n    // Mouse and consumer keys (volume, media) with modifiers work inconsistently across operating systems,\n    // this makes sure that modifiers are always applied to the key that was pressed.\n    if (IS_MOUSE_KEYCODE(QK_MODS_GET_BASIC_KEYCODE(keycode)) || IS_CONSUMER_KEYCODE(QK_MODS_GET_BASIC_KEYCODE(keycode))) {\n      if (record->event.pressed) {\n        add_mods(QK_MODS_GET_MODS(keycode));\n        send_keyboard_report();\n        wait_ms(2);\n        register_code(QK_MODS_GET_BASIC_KEYCODE(keycode));\n        return false;\n      } else {\n        wait_ms(2);\n        del_mods(QK_MODS_GET_MODS(keycode));\n      }\n    }\n    break;\n",
     );
@@ -434,6 +541,7 @@ fn process_record_user(plan: &RenderPlan) -> Result<String, AppError> {
     if !plan.macros.is_empty() {
         out.push('\n');
     }
+    out.push_str(&os_cases(layout, plan)?);
     for (n, (tap, hold)) in plan.dual_funcs.iter().enumerate() {
         let tap_tok = render_tap_spec(tap)?;
         let hold_tok = render_tap_spec(hold)?;
@@ -452,6 +560,80 @@ fn process_record_user(plan: &RenderPlan) -> Result<String, AppError> {
         ));
     }
     out.push_str("  }\n  return true;\n}\n");
+    Ok(out)
+}
+
+/// The `process_record_user` arms for `OS_MACRO_n` and the `QF_OS_*` keys.
+///
+/// An OS macro reads the same `qf_os_mac` flag the Ctrl<->Cmd swap is derived
+/// from, so a key and the swap can never disagree about which OS the board is
+/// on. An empty step list for one OS means the key does nothing there: that
+/// branch is dropped entirely rather than emitting an empty `SEND_STRING()`,
+/// which is not valid C. `validate()` already rejects both sides empty.
+///
+/// `qf_os_override` only exists when detection is on — with nothing to override
+/// it would be a set-but-never-read variable, and the manual keys are simply
+/// authoritative.
+fn os_cases(layout: &LayoutFile, plan: &RenderPlan) -> Result<String, AppError> {
+    if !plan.has_os_keys() {
+        return Ok(String::new());
+    }
+    let detection = layout.settings.os_detection;
+    let mut out = String::new();
+    for (n, spec) in plan.os_macros.iter().enumerate() {
+        let body = match (spec.mac.is_empty(), spec.windows.is_empty()) {
+            (false, false) => format!(
+                "      if (qf_os_mac) {{\n        SEND_STRING({});\n      }} else {{\n        SEND_STRING({});\n      }}\n",
+                send_string_body(&spec.mac)?,
+                send_string_body(&spec.windows)?
+            ),
+            (true, false) => format!(
+                "      /* nothing to send in Mac mode */\n      if (!qf_os_mac) {{\n        SEND_STRING({});\n      }}\n",
+                send_string_body(&spec.windows)?
+            ),
+            (false, true) => format!(
+                "      /* nothing to send in Windows mode */\n      if (qf_os_mac) {{\n        SEND_STRING({});\n      }}\n",
+                send_string_body(&spec.mac)?
+            ),
+            // validate() rejects this; be explicit rather than emit dead C.
+            (true, true) => {
+                return Err(unsupported(format!(
+                    "osMacro {n} has no steps for either OS"
+                )))
+            }
+        };
+        out.push_str(&format!(
+            "    case OS_MACRO_{n}:\n    if (record->event.pressed) {{\n{body}    }}\n    break;\n"
+        ));
+    }
+    for action in &plan.os_modes {
+        let keycode = os_mode_keycode(*action);
+        let mut body = String::new();
+        if detection {
+            // A manual key pins the mode until detection says the board moved.
+            body.push_str(if matches!(action, OsModeAction::Auto) {
+                "        qf_os_override = false;\n"
+            } else {
+                "        qf_os_override = true;\n"
+            });
+        }
+        body.push_str(&match action {
+            OsModeAction::Toggle => "        qf_os_mac = !qf_os_mac;\n".to_string(),
+            OsModeAction::Mac => "        qf_os_mac = true;\n".to_string(),
+            OsModeAction::Windows => "        qf_os_mac = false;\n".to_string(),
+            OsModeAction::Auto if detection => {
+                "        /* Follow the host again: adopt whatever it last told us,\n           and the layout's authored default until it tells us anything. */\n        const os_variant_t os = detected_host_os();\n        qf_os_mac = (os == OS_UNSURE) ? QF_OS_DEFAULT_MAC : qf_os_is_mac(os);\n"
+                    .to_string()
+            }
+            // Detection is off, so there is nothing to hand control back to:
+            // "auto" means the OS the layout was authored against.
+            OsModeAction::Auto => "        qf_os_mac = QF_OS_DEFAULT_MAC;\n".to_string(),
+        });
+        out.push_str(&format!(
+            "    case {keycode}:\n      if (record->event.pressed) {{\n{body}        qf_os_apply();\n      }}\n      return false;\n"
+        ));
+    }
+    out.push('\n');
     Ok(out)
 }
 
@@ -476,13 +658,19 @@ pub fn render(layout: &LayoutFile) -> Result<String, AppError> {
         )));
     }
     let plan = RenderPlan::build(layout);
+    let uses_os = uses_os_tooling(layout);
     let mut out = header(&plan);
+    // Before keymaps: `keyboard_post_init_user` (in the ledmap section) calls
+    // `qf_os_apply`, so the OS block has to be defined by then.
+    if uses_os {
+        out.push_str(&os_section(layout));
+    }
     out.push_str(&keymaps(layout, &plan)?);
     out.push_str(&combos(layout, &plan)?);
     if layout.settings.rgb_matrix_custom {
-        out.push_str(&ledmap_section(layout)?);
+        out.push_str(&ledmap_section(layout, uses_os)?);
     }
     out.push_str(&dance_section(&plan));
-    out.push_str(&process_record_user(&plan)?);
+    out.push_str(&process_record_user(layout, &plan)?);
     Ok(out)
 }
