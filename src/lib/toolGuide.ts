@@ -786,7 +786,8 @@ function actionKey(a: KeyAction): string {
 
 // ---- Building the guide ----
 
-const RELATION_ORDER: OsRelation[] = [
+/** Display order of the OS report: the keys most likely to be wrong first. */
+export const OS_RELATION_ORDER: readonly OsRelation[] = [
   "control",
   "osAware",
   "bypassed",
@@ -948,8 +949,8 @@ export function buildToolGuide(
       counts,
       entries: osEntries.sort(
         (a, b) =>
-          RELATION_ORDER.indexOf(a.os!.relation) -
-          RELATION_ORDER.indexOf(b.os!.relation),
+          OS_RELATION_ORDER.indexOf(a.os!.relation) -
+          OS_RELATION_ORDER.indexOf(b.os!.relation),
       ),
     },
   };
@@ -988,7 +989,7 @@ export function toolGuideMarkdown(guide: ToolGuide): string {
       : `No OS-mode key in this layout and host detection is off — the board can only ever be in ${OS_NAME[guide.os.authoredOs]} mode.`,
   );
   out.push("");
-  for (const rel of RELATION_ORDER) {
+  for (const rel of OS_RELATION_ORDER) {
     const entries = guide.os.entries.filter((e) => e.os!.relation === rel);
     if (!entries.length) continue;
     out.push(`### ${OS_RELATION_LABEL[rel]} (${entries.length})`);
