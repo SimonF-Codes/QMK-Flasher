@@ -1,5 +1,69 @@
 # Changelog
 
+## Unreleased
+
+### Multi-key and multi-output keys
+
+Combos and macros have always been *generated* — they arrived from the Oryx
+seed and codegen reproduced them faithfully — but nothing in the app could
+author one. Both are now first-class.
+
+- **Macro editor** — create, edit and delete a one-key-many-keystrokes macro,
+  with an ordered step list (keycode + modifiers + delay), reordering and a
+  label. Macros seeded from Oryx open in place and round-trip unchanged.
+- **Combo editor** — several keys pressed together produce one action. Build
+  the trigger set by clicking the board, pick the layer it listens on and the
+  action it fires. At least two distinct keys are required: a one-key combo is
+  just a key, and a repeated index cannot fire.
+- `COMBO_ENABLE`/`COMBO_COUNT` now derive from the layout's actual combos
+  rather than a settings flag, so the two can no longer disagree.
+
+### One key, two operating systems
+
+Windows and macOS screen navigation are different sequences, not a modifier
+substitution — Windows moves a virtual desktop with `Gui+Ctrl+Left/Right`,
+macOS with `Ctrl+Left/Right`. The existing Ctrl<->Cmd swap cannot express that,
+so a key now carries a separate sequence per OS and the board picks one at
+press time.
+
+- **OS macros** — one key, a Mac half and a Windows half. Either half may be
+  empty, meaning the key does nothing on that OS.
+- **12 navigation presets** across four groups — virtual desktops, window
+  snap/tile, app and window switching, screenshot and lock — each filling both
+  halves in one click. The Mac window-snap preset uses Rectangle/Magnet-style
+  shortcuts and says so, since macOS has no native equivalent.
+- **OS-mode keys** — `QF_OS_TOGG` / `QF_OS_MAC` / `QF_OS_WIN` / `QF_OS_AUTO`.
+  Setting the mode drives both the Ctrl<->Cmd swap and which half of every OS
+  macro fires, so there is one source of truth instead of two.
+- **Host OS detection** — the board asks the host what it is at USB
+  enumeration. Detection is authoritative, a manual OS key overrides it, and
+  the override is dropped once detection reports a different OS — i.e. the
+  board moved to another machine.
+- The older `CG_TOGG`/`CG_SWAP`/`CG_NORM` keys still work; they move the swap
+  only. Picking one used to produce a `basic` key the swap preview could not
+  see — fixed.
+
+### Tool Guide
+
+A reference for every non-obvious key in the layout, **derived from the layout
+itself** so it cannot go stale: macros with their full step sequence, combos
+with the keys that trigger them, OS macros with both halves, dual-function
+keys, tap dances, layer switches, Key Lock, lighting and system keys — each
+with the layer and position it lives at.
+
+Every key carrying Ctrl or Gui is classified by how the Ctrl<->Cmd swap
+actually treats it, derived from the swap itself rather than declared:
+`swapped`, `osAware`, `bypassed` (macros and dual-function keys, which the swap
+never reaches), `balanced` (chords carrying both Ctrl and Gui, which QMK's XOR
+guard leaves alone), and `control` for the keys that set the mode. A key
+carrying a hard-coded chord the swap does not touch is flagged as a warning —
+it is a shortcut for one OS only. Printable, for keeping beside the keyboard.
+
+### Schema
+
+Layout schema v3, additive over v2. Layouts written by an earlier build are
+migrated on load, so nothing on disk needs touching.
+
 ## 0.2.0 — 2026-08-01
 
 ### LED tooling

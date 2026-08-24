@@ -315,13 +315,42 @@ override on demand.
 errors. This is what makes the combo editor's output well-formed by
 construction.
 
-### Codegen status
+### How it reaches the firmware
 
-`codegen/keymap_c.rs` deliberately **errors** on `osMacro` and `osMode`
-("not generated yet") rather than emitting something inert, so a layout using
-one cannot silently build into firmware that ignores it. Wiring those two arms
-(plus `OS_DETECTION_ENABLE`, the mode variable, and
-`process_detected_host_os_user`) is the backend half of this feature.
+`qf_os_mac` is the board's OS mode and the single source of truth for it: it
+drives both the Ctrl<->Cmd swap and which half of every `OS_MACRO_n` fires, so
+the two cannot disagree. `settings.osDefault` is emitted as
+`#define QF_OS_DEFAULT_MAC` and the swap runs exactly when the current mode
+differs from it — the direction is derived from the define rather than baked
+into the generated code, so flipping the setting changes that one line.
+
+`QF_OS_*` keys are emitted only when the layout actually binds one, and an
+`osMacro` with one empty side generates correctly ("does nothing on that OS").
+
+**The `OS_MACRO_n` `SEND_STRING`s are deliberately not wrapped to suspend the
+swap**, because the swap never reaches them. `mod_config()`/`keycode_config()`,
+where `keymap_config.swap_lctl_lgui` is applied, are called **only** from
+`quantum/keymap_common.c` — the keycode->action path (`QK_MODS`, one-shot,
+layer-mod, mod-tap). `register_code16` (`quantum/quantum.c:126`) does not call
+them, and neither does the `register_code()`/`tap_code()` trio `SEND_STRING`
+runs on. So macro modifiers are emitted literally on both machines and are
+never re-swapped. The same fact means a plain `macro` or `dualFunc` carrying
+Ctrl/Gui is **not** swapped either — which is exactly why `osMacro` exists, and
+what the Tool Guide flags as `bypassed`.
+
+`OS_DETECTION_SINGLE_REPORT` is deliberately left **undefined**:
+`quantum/os_detection.c` suppresses every report after the first when it is set
+(`if (!first_report) return;`), and the agreed precedence rule — drop the
+manual override when detection reports a *different* OS — depends on that later
+report arriving.
+
+### Combos are counted, not flagged
+
+`COMBO_ENABLE` and `COMBO_COUNT` derive from `layout.combos.len()`, not from
+`settings.combos`, so adding or removing a combo can never desync the build.
+`settings.combos` is now unused by codegen — the same status as
+`settings.tapDance`, and for the same reason (a stale flag broke a build in
+July).
 
 ## Commands (`src-tauri/src/commands.rs`)
 
