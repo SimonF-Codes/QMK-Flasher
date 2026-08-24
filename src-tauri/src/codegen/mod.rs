@@ -69,6 +69,15 @@ fn leaf_codes(key: &KeyAction) -> Vec<&str> {
             .filter_map(|s| s.as_deref())
             .collect(),
         KeyAction::Macro { steps, .. } => steps.iter().map(|s| s.code.as_str()).collect(),
+        KeyAction::OsMacro { mac, windows, .. } => {
+            mac.iter().chain(windows).map(|s| s.code.as_str()).collect()
+        }
+        // Not a field on the action: the four QF_OS_* names come from codegen,
+        // and running them through the catalog check is what keeps
+        // `shared/keycodes.json` and `os_mode_keycode` from drifting apart.
+        KeyAction::OsMode { action, .. } => {
+            vec![keymap_c::os_mode_keycode(*action)]
+        }
         _ => Vec::new(),
     }
 }
@@ -355,6 +364,377 @@ mod tests {
     /// Build speed depends on this: make keys off mtime, so re-writing a
     /// byte-identical config.h/rules.mk would force a full rebuild of the
     /// tree (~240s) instead of the ~30s a keymap.c-only change costs.
+
+    // ---- OS tooling (v3) --------------------------------------------------
+
+    use crate::layout::schema::{MacroStep, OsModeAction, OsTarget};
+
+    fn step(code: &str, mods: &[&str]) -> MacroStep {
+        MacroStep {
+            code: code.into(),
+            delay: None,
+            mods: if mods.is_empty() {
+                None
+            } else {
+                Some(mods.iter().map(|m| m.to_string()).collect())
+            },
+        }
+    }
+
+    /// The contract's worked example. Windows drives virtual desktops with
+    /// Gui+Ctrl+arrow and macOS with Ctrl+arrow — two unrelated sequences,
+    /// which is exactly what the Ctrl↔Cmd swap cannot express.
+    fn desktop_right() -> KeyAction {
+        KeyAction::OsMacro {
+            label: "Desktop right".into(),
+            mac: vec![step("KC_RIGHT", &["MOD_LCTL"])],
+            windows: vec![step("KC_RIGHT", &["MOD_LGUI", "MOD_LCTL"])],
+            glow: None,
+        }
+    }
+
+    fn desktop_left() -> KeyAction {
+        KeyAction::OsMacro {
+            label: "Desktop left".into(),
+            mac: vec![step("KC_LEFT", &["MOD_LCTL"])],
+            windows: vec![step("KC_LEFT", &["MOD_LGUI", "MOD_LCTL"])],
+            glow: None,
+        }
+    }
+
+    fn os_mode(action: OsModeAction) -> KeyAction {
+        KeyAction::OsMode { action, glow: None }
+    }
+
+    /// A layout with no OS tooling must be untouched by this feature — the
+    /// golden test pins the bytes, this pins the reason.
+    #[test]
+    fn a_layout_without_os_tooling_emits_none_of_it() {
+        let out = generate(&fixture()).unwrap();
+        for absent in ["QF_OS_", "OS_MACRO_", "qf_os_mac", "process_detected_host_os_user"] {
+            assert!(!out.keymap_c.contains(absent), "{absent} leaked into keymap.c");
+        }
+        assert!(!out.rules_mk.contains("OS_DETECTION_ENABLE"));
+        assert!(!out.config_h.contains("OS_DETECTION"));
+    }
+
+    /// One custom keycode per *distinct* (mac, windows) pair, the way
+    /// `plan.macros` dedupes `ST_MACRO_n`: three keys, two pairs, two keycodes,
+    /// and the repeat renders the keycode it shares.
+    #[test]
+    fn os_macros_dedupe_by_step_pair_like_st_macros() {
+        let mut layout = fixture();
+        layout.layers[0].keys[0] = desktop_right();
+        layout.layers[0].keys[1] = desktop_left();
+        layout.layers[1].keys[0] = desktop_right();
+        let c = generate(&layout).unwrap().keymap_c;
+
+        assert!(c.contains("  OS_MACRO_0,"), "enum entry missing:\n{c}");
+        assert!(c.contains("  OS_MACRO_1,"));
+        assert!(!c.contains("OS_MACRO_2"), "three keys but only two distinct pairs");
+        assert_eq!(c.matches("case OS_MACRO_0:").count(), 1);
+        assert_eq!(c.matches("case OS_MACRO_1:").count(), 1);
+        // enum entry + two LAYOUT slots + one case.
+        assert_eq!(
+            c.matches("OS_MACRO_0").count(),
+            4,
+            "both keys with the same pair must render the shared keycode"
+        );
+    }
+
+    /// Both halves present: the board picks one at press time from `qf_os_mac`.
+    #[test]
+    fn os_macro_sends_the_half_matching_the_boards_os_mode() {
+        let mut layout = fixture();
+        layout.layers[0].keys[0] = desktop_right();
+        let c = generate(&layout).unwrap().keymap_c;
+        assert!(
+            c.contains(concat!(
+                "      if (qf_os_mac) {\n",
+                "        SEND_STRING(SS_LCTL(SS_TAP(X_RIGHT)));\n",
+                "      } else {\n",
+                "        SEND_STRING(SS_LGUI(SS_LCTL(SS_TAP(X_RIGHT))));\n",
+                "      }\n"
+            )),
+            "{c}"
+        );
+    }
+
+    /// "Does nothing on that OS" is an empty branch, not `SEND_STRING()` —
+    /// which is not valid C.
+    #[test]
+    fn os_macro_with_an_empty_side_emits_no_send_string_for_it() {
+        for mac_side_empty in [true, false] {
+            let mut layout = fixture();
+            let steps = vec![step("KC_RIGHT", &["MOD_LGUI", "MOD_LCTL"])];
+            layout.layers[0].keys[0] = KeyAction::OsMacro {
+                label: "One-sided".into(),
+                mac: if mac_side_empty { vec![] } else { steps.clone() },
+                windows: if mac_side_empty { steps.clone() } else { vec![] },
+                glow: None,
+            };
+            let c = generate(&layout).unwrap().keymap_c;
+            let case = os_macro_case(&c, 0);
+
+            assert!(!case.contains("SEND_STRING()"), "empty SEND_STRING emitted:\n{case}");
+            assert_eq!(case.matches("SEND_STRING(").count(), 1, "{case}");
+            assert!(!case.contains("} else {"), "the dead branch must be dropped:\n{case}");
+            let guard = if mac_side_empty { "if (!qf_os_mac) {" } else { "if (qf_os_mac) {" };
+            assert!(case.contains(guard), "{case}");
+        }
+    }
+
+    /// The body of `case OS_MACRO_n:` up to its `break;`.
+    fn os_macro_case(keymap_c: &str, n: usize) -> String {
+        keymap_c
+            .split(&format!("case OS_MACRO_{n}:"))
+            .nth(1)
+            .expect("case not generated")
+            .split("    break;")
+            .next()
+            .unwrap()
+            .to_string()
+    }
+
+    #[test]
+    fn os_mode_keys_generate_only_the_actions_the_layout_binds() {
+        let mut layout = fixture();
+        layout.layers[0].keys[0] = os_mode(OsModeAction::Toggle);
+        layout.layers[0].keys[1] = os_mode(OsModeAction::Mac);
+        let out = generate(&layout).unwrap();
+        for used in ["QF_OS_TOGG", "QF_OS_MAC"] {
+            assert!(out.keymap_c.contains(&format!("  {used},")), "{used} enum entry");
+            assert!(out.keymap_c.contains(&format!("case {used}:")), "{used} case");
+        }
+        for unused in ["QF_OS_WIN", "QF_OS_AUTO"] {
+            assert!(!out.keymap_c.contains(unused), "{unused} is not bound by this layout");
+        }
+    }
+
+    /// The point of the feature: setting the mode drives BOTH the Ctrl↔Cmd swap
+    /// and which half of every OS macro fires, off one flag.
+    #[test]
+    fn os_mode_and_os_macros_read_the_same_flag() {
+        let mut layout = fixture();
+        layout.layers[0].keys[0] = os_mode(OsModeAction::Toggle);
+        layout.layers[0].keys[1] = desktop_right();
+        let c = generate(&layout).unwrap().keymap_c;
+
+        assert!(c.contains("        qf_os_mac = !qf_os_mac;\n        qf_os_apply();"), "{c}");
+        assert!(c.contains("const bool swap = (qf_os_mac != QF_OS_DEFAULT_MAC);"));
+        assert!(c.contains("keymap_config.swap_lctl_lgui = swap;"));
+        assert!(c.contains("keymap_config.swap_rctl_rgui = swap;"));
+        assert!(c.contains("      if (qf_os_mac) {"), "the macro reads the same flag");
+    }
+
+    /// `settings.osDefault` is the OS the layout's plain Ctrl/Gui mods were
+    /// authored against, so it decides which way the swap runs. It has to reach
+    /// the firmware as a `#define` with the direction derived from it — flipping
+    /// the setting must change that one line and nothing else.
+    #[test]
+    fn os_default_is_a_define_and_the_swap_direction_is_derived_from_it() {
+        let mut windows_authored = fixture();
+        windows_authored.layers[0].keys[0] = desktop_right();
+        assert_eq!(windows_authored.settings.os_default, OsTarget::Windows);
+        let mut mac_authored = windows_authored.clone();
+        mac_authored.settings.os_default = OsTarget::Mac;
+
+        let win_c = generate(&windows_authored).unwrap().keymap_c;
+        let mac_c = generate(&mac_authored).unwrap().keymap_c;
+        assert!(win_c.contains("#define QF_OS_DEFAULT_MAC false"), "{win_c}");
+        assert!(mac_c.contains("#define QF_OS_DEFAULT_MAC true"), "{mac_c}");
+        assert_eq!(
+            win_c.replace("#define QF_OS_DEFAULT_MAC false", "@"),
+            mac_c.replace("#define QF_OS_DEFAULT_MAC true", "@"),
+            "osDefault must move the #define and nothing else — no baked-in direction"
+        );
+    }
+
+    /// Detection on, no OS keys: the board still follows the host, because the
+    /// mode drives the Ctrl↔Cmd swap on its own.
+    #[test]
+    fn detection_alone_still_emits_the_mode_and_the_swap() {
+        let mut layout = fixture();
+        layout.settings.os_detection = true;
+        let c = generate(&layout).unwrap().keymap_c;
+        assert!(c.contains("#define QF_OS_DEFAULT_MAC false"));
+        assert!(c.contains("qf_os_apply();"));
+        // The banner comment names OS_MACRO_n; what must be absent is the code.
+        assert!(!c.contains("case OS_MACRO_"));
+        assert!(!c.contains("  OS_MACRO_0,"));
+    }
+
+    #[test]
+    fn os_detection_emits_the_feature_and_the_agreed_precedence() {
+        let mut layout = fixture();
+        layout.settings.os_detection = true;
+        let out = generate(&layout).unwrap();
+
+        assert!(out.rules_mk.contains("OS_DETECTION_ENABLE = yes"), "{}", out.rules_mk);
+        assert!(out.config_h.contains("#define OS_DETECTION_DEBOUNCE 250"), "{}", out.config_h);
+        // Single-report suppresses every report after the first, and the
+        // precedence rule is built on the later one that says the board moved.
+        assert!(
+            !out.config_h.contains("OS_DETECTION_SINGLE_REPORT"),
+            "single-report would break the override-drop rule"
+        );
+
+        let c = &out.keymap_c;
+        assert!(c.contains("bool process_detected_host_os_user(os_variant_t os) {"), "{c}");
+        // OS_UNSURE is ignored.
+        assert!(c.contains("  if (os == OS_UNSURE) {\n    return true;\n  }"), "{c}");
+        // The override is dropped only when detection reports a DIFFERENT OS.
+        assert!(
+            c.contains(concat!(
+                "  if (qf_os_override && qf_os_detected_once && os != qf_os_last_detected) {\n",
+                "    qf_os_override = false;\n",
+                "  }\n"
+            )),
+            "{c}"
+        );
+        // Detection is authoritative whenever no override stands.
+        assert!(
+            c.contains(concat!(
+                "  if (!qf_os_override) {\n",
+                "    qf_os_mac = qf_os_is_mac(os);\n",
+                "    qf_os_apply();\n",
+                "  }\n"
+            )),
+            "{c}"
+        );
+        assert!(c.contains("return os == OS_MACOS || os == OS_IOS;"), "iOS counts as Mac");
+    }
+
+    #[test]
+    fn a_manual_os_key_overrides_detection_and_auto_hands_it_back() {
+        let mut layout = fixture();
+        layout.settings.os_detection = true;
+        layout.layers[0].keys[0] = os_mode(OsModeAction::Mac);
+        layout.layers[0].keys[1] = os_mode(OsModeAction::Auto);
+        let c = generate(&layout).unwrap().keymap_c;
+
+        assert!(
+            c.contains(concat!(
+                "    case QF_OS_MAC:\n",
+                "      if (record->event.pressed) {\n",
+                "        qf_os_override = true;\n",
+                "        qf_os_mac = true;\n",
+                "        qf_os_apply();\n"
+            )),
+            "{c}"
+        );
+        assert!(
+            c.contains("    case QF_OS_AUTO:\n      if (record->event.pressed) {\n        qf_os_override = false;\n"),
+            "auto must clear the override:\n{c}"
+        );
+        assert!(
+            c.contains("qf_os_mac = (os == OS_UNSURE) ? QF_OS_DEFAULT_MAC : qf_os_is_mac(os);"),
+            "auto must re-adopt what detection last reported:\n{c}"
+        );
+    }
+
+    /// With detection off there is nothing to override, so the override flag is
+    /// not emitted at all (it would be set-but-never-read), and "auto" can only
+    /// mean the OS the layout was authored against.
+    #[test]
+    fn without_detection_there_is_no_override_and_auto_means_the_default() {
+        let mut layout = fixture();
+        assert!(!layout.settings.os_detection);
+        layout.layers[0].keys[0] = os_mode(OsModeAction::Auto);
+        let c = generate(&layout).unwrap().keymap_c;
+        assert!(!c.contains("qf_os_override"), "{c}");
+        assert!(!c.contains("process_detected_host_os_user"), "{c}");
+        assert!(
+            c.contains("        qf_os_mac = QF_OS_DEFAULT_MAC;\n        qf_os_apply();"),
+            "{c}"
+        );
+    }
+
+    /// Settled against the firmware source before the generator was written, and
+    /// independently confirmed by Alpha. `mod_config()` / `keycode_config()` —
+    /// where `keymap_config.swap_lctl_lgui` is applied — are called ONLY from
+    /// `quantum/keymap_common.c`, on the keycode→action path (QK_MODS, one-shot,
+    /// layer-mod, mod-tap). `register_code16` (`quantum/quantum.c:126`) does not
+    /// call them, and neither does the `register_code()`/`tap_code()` trio that
+    /// `SEND_STRING` runs on: a modifier goes straight to
+    /// `add_mods(MOD_BIT(code))` (`quantum/action.c`).
+    ///
+    /// So an OS macro's mods reach the host literally and are never swapped a
+    /// second time. The case must NOT suspend and restore the swap: that would be
+    /// dead code holding a licence to clobber the board's real mode. This pins the
+    /// conclusion so a future "fix" has to argue with a test.
+    #[test]
+    fn os_macro_send_string_is_not_wrapped_in_a_swap_suspend() {
+        let mut layout = fixture();
+        layout.settings.os_detection = true;
+        layout.layers[0].keys[0] = desktop_right();
+        let case = os_macro_case(&generate(&layout).unwrap().keymap_c, 0);
+        for banned in ["swap_lctl_lgui", "swap_rctl_rgui", "keymap_config", "qf_os_apply"] {
+            assert!(!case.contains(banned), "OS macro must not touch the swap:\n{case}");
+        }
+    }
+
+    /// The ledmap section owns `keyboard_post_init_user`; the OS block emits its
+    /// own only when that section is absent. Two definitions would not link.
+    #[test]
+    fn keyboard_post_init_user_is_defined_exactly_once() {
+        for rgb_matrix_custom in [true, false] {
+            let mut layout = fixture();
+            layout.settings.rgb_matrix_custom = rgb_matrix_custom;
+            layout.layers[0].keys[0] = desktop_right();
+            let c = generate(&layout).unwrap().keymap_c;
+            assert_eq!(
+                c.matches("void keyboard_post_init_user(void) {").count(),
+                1,
+                "rgb_matrix_custom={rgb_matrix_custom}:\n{c}"
+            );
+            assert!(
+                c.contains("  qf_os_apply();\n}"),
+                "the OS mode must be applied at boot (rgb_matrix_custom={rgb_matrix_custom}):\n{c}"
+            );
+        }
+    }
+
+    #[test]
+    fn generate_rejects_an_unknown_keycode_inside_an_os_macro() {
+        let mut layout = fixture();
+        layout.layers[0].keys[0] = KeyAction::OsMacro {
+            label: "Bad".into(),
+            mac: vec![step("KC_NOT_A_KEY", &[])],
+            windows: vec![step("KC_RIGHT", &[])],
+            glow: None,
+        };
+        let err = generate(&layout).unwrap_err();
+        assert_eq!(err.code(), "CodegenUnsupportedKey");
+    }
+
+    /// Same desync the tap-dance tests above cover, now for combos: the stored
+    /// `settings.combos` flag says yes but the layout has none. `COMBO_ENABLE`
+    /// with no `key_combos[]` / `COMBO_COUNT` does not compile.
+    #[test]
+    fn stale_combo_flag_does_not_enable_without_combos() {
+        let mut layout = fixture();
+        assert!(layout.settings.combos, "fixture starts with the flag set");
+        layout.combos.clear();
+        let out = generate(&layout).unwrap();
+        assert!(!out.rules_mk.contains("COMBO_ENABLE"), "{}", out.rules_mk);
+        assert!(!out.config_h.contains("COMBO_COUNT"), "{}", out.config_h);
+        assert!(!out.keymap_c.contains("key_combos"));
+    }
+
+    /// Inverse drift: combos present, flag off. Usage wins, as it does for tap
+    /// dance — otherwise a combo editor's output would silently not fire.
+    #[test]
+    fn combos_enable_the_feature_even_if_the_flag_is_off() {
+        let mut layout = fixture();
+        layout.settings.combos = false;
+        assert_eq!(layout.combos.len(), 2, "fixture must have combos for this test");
+        let out = generate(&layout).unwrap();
+        assert!(out.rules_mk.contains("COMBO_ENABLE = yes"), "{}", out.rules_mk);
+        assert!(out.config_h.contains("#define COMBO_COUNT 2"), "{}", out.config_h);
+        assert!(out.keymap_c.contains("combo_t key_combos[COMBO_COUNT]"));
+    }
+
     #[test]
     fn write_if_changed_leaves_identical_files_untouched() {
         let dir = std::env::temp_dir().join("qmk-flasher-write-if-changed-test");
