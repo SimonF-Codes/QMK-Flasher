@@ -2,7 +2,8 @@
 name = "qmk-flasher"
 version = "0.3.0"
 description = "A Tauri App"
-authors = ["you"]
+authors = ["Simon Fridlyand"]
+license = "GPL-2.0-or-later"
 edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html

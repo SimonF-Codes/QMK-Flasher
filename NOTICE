@@ -1,0 +1,47 @@
+QMK-Flasher
+Copyright (C) 2026 Simon Fridlyand
+
+This program is free software; you can redistribute it and/or modify it
+under the terms of the GNU General Public License as published by the Free
+Software Foundation; either version 2 of the License, or (at your option)
+any later version.
+
+This program is distributed in the hope that it will be useful, but WITHOUT
+ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
+FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License for
+more details. A copy is in LICENSE.
+
+
+Third-party material
+--------------------
+
+This project is a tool for QMK firmware and carries material derived from
+it. QMK is GPL-2.0, which is why this project is too.
+
+* QMK Firmware — https://github.com/qmk/qmk_firmware — GPL-2.0
+  Copyright the QMK contributors.
+
+  - `shared/moonlander_geometry.json` is extracted mechanically from
+    `keyboards/zsa/moonlander/revb/keyboard.json` by
+    `scripts/extract-geometry.mjs` (key positions, matrix addresses and the
+    LED map).
+  - `shared/keycodes.json` uses QMK keycode names and aliases.
+  - The firmware this app generates targets QMK and uses its keymap,
+    combo, tap-dance and `SEND_STRING` constructs. Behavioural claims in
+    the code and in `docs/CONTRACT.md` cite QMK source locations, notably
+    `quantum/keycode_config.c` (the Ctrl<->Cmd magic swap),
+    `quantum/quantum.c` (`register_code16`) and `quantum/os_detection.c`.
+
+* ZSA Moonlander / Oryx — https://www.zsa.io — ZSA Technology Labs
+  The Moonlander keyboard definition in QMK is maintained by ZSA. Layouts
+  are seeded from Oryx, ZSA's layout configurator, and the generated
+  firmware reproduces the `zsa/oryx` community-module constructs
+  (`DUAL_FUNC_n`, `ST_MACRO_n`, `HSV_h_s_v`) so that a layout authored in
+  Oryx keeps behaving the same way once this app owns it.
+
+  - `shared/fixtures/reference_keymap.c` and `reference_config.h` are Oryx
+    output, kept as the golden reference the code generator is tested
+    against.
+
+Dependencies are declared in `package.json` and `src-tauri/Cargo.toml` and
+are not vendored here; their licences are their own.
