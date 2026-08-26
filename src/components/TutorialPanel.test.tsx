@@ -72,7 +72,7 @@ describe("TutorialCard", () => {
       combos: [],
     };
     const html = renderStep("osMacro", blank);
-    expect(html).toContain("Nothing to point at");
+    expect(html).toContain("Not in this layout");
     expect(html).toContain("no OS macros");
   });
 

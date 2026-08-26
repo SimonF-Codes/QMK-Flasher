@@ -102,18 +102,25 @@ function OsSplit({ os }: { os: NonNullable<TutorialStep["example"]>["os"] }) {
   );
 }
 
-/** What the step is pointing at, and where it is. */
+/**
+ * What the step is pointing at, and where it is.
+ *
+ * Null for a step that is about a tool rather than a key — those have nothing
+ * to say in this column, and an empty panel saying so reads as a fault. A step
+ * whose feature IS a key but is absent from the layout is the opposite case:
+ * saying so is the honest thing, and it gets the column.
+ */
 function Example({ step }: { step: TutorialStep }) {
   const e = step.example;
   if (!e) {
+    if (!step.missing) return null;
     return (
       <div className="rounded-lg border border-dashed border-zinc-800 bg-zinc-950/60 p-3">
         <p className="text-xs font-medium uppercase tracking-wide text-zinc-500">
-          Nothing to point at
+          Not in this layout
         </p>
         <p className="mt-1 text-[13px] leading-relaxed text-zinc-400">
-          {step.missing ??
-            "This part of the app has no example inside the layout — it is a tool rather than a key."}
+          {step.missing}
         </p>
       </div>
     );
@@ -167,9 +174,12 @@ export function TutorialCard({
   const last = step.number >= total;
 
   return (
+    // Height-capped so the board it is pointing at keeps most of the window:
+    // the wordiest steps scroll inside the bar rather than squeezing the
+    // keyboard down to a thumbnail.
     <section
       aria-label="Tutorial"
-      className="flex max-h-[42vh] shrink-0 flex-col border-t border-violet-900/70 bg-zinc-950"
+      className="flex max-h-[34vh] shrink-0 flex-col border-t border-violet-900/70 bg-zinc-950"
     >
       <header className="flex flex-wrap items-center gap-x-3 gap-y-2 border-b border-zinc-800 px-4 py-2">
         <span className="rounded bg-violet-900/60 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-violet-200">
@@ -225,7 +235,13 @@ export function TutorialCard({
         </div>
       </header>
 
-      <div className="grid min-h-0 flex-1 gap-4 overflow-y-auto px-4 py-3 md:grid-cols-[1.5fr_1fr]">
+      <div
+        className={`grid min-h-0 flex-1 gap-4 overflow-y-auto px-4 py-3 ${
+          // A step about a tool has no second column, so the prose gets the
+          // width instead of sitting beside a hole.
+          step.example || step.missing ? "md:grid-cols-[1.5fr_1fr]" : ""
+        }`}
+      >
         <div>
           <p className="text-[13px] leading-relaxed text-zinc-200">{step.why}</p>
           {step.body.length > 0 && (

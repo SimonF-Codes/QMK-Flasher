@@ -304,9 +304,9 @@ const TOPICS: readonly TopicSpec[] = [
           : `No OS-mode key is assigned and host detection is off, so this board can only ever be in ${OS_NAME[os.authoredOs]} mode. Everything below is theory until you assign one.`,
         "The swap has two limits that matter more than the feature does. It only moves a lone Ctrl or a lone Cmd, so a chord carrying both is left alone. And it only reaches keycodes that pass through QMK's modifier rewriting at all — macros, dual-function keys and tap dances are sent from firmware code that runs afterwards, so it never touches them.",
         os.counts.swapped > 0 &&
-          `${count(os.counts.swapped, "key")} in this layout really is rewritten in ${OS_NAME[os.otherOs]} mode.`,
+          `${count(os.counts.swapped, "key")} in this layout really ${os.counts.swapped === 1 ? "is" : "are"} rewritten in ${OS_NAME[os.otherOs]} mode.`,
         os.counts.bypassed > 0 &&
-          `${count(os.counts.bypassed, "key")} carries Ctrl or Cmd somewhere the swap cannot reach${warn ? `, and ${warn.title} is the one to look at — it spells a shortcut the swap was expected to fix, and will not.` : "."}`,
+          `${count(os.counts.bypassed, "key")} ${os.counts.bypassed === 1 ? "carries" : "carry"} Ctrl or Cmd somewhere the swap cannot reach${warn ? `, and ${warn.title} is the one to look at — it spells a shortcut the swap was expected to fix, and will not.` : "."}`,
       ];
     },
   },
