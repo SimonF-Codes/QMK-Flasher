@@ -2,6 +2,85 @@
 
 ## Unreleased
 
+### Lighting that reacts and moves
+
+The LEDs have only ever been able to hold still: a colour per layer, a colour
+per key, and nothing that answers a keystroke. QMK's RGB Matrix has shipped
+forty-odd animations and a dozen key-reactive effects the whole time; the
+firmware this app generates simply never asked for any of them. It does now.
+
+`settings.lighting` picks the effects to compile in, which one the board boots
+into, and its starting hue, saturation, brightness and speed. **Schema v4**:
+the field is optional and absent by default, and absent means *this layout does
+not configure RGB Matrix at all* — which is what a layout seeded from Oryx
+means, and why one still generates exactly the `config.h` it did before.
+`migrate()` gained a v3→v4 arm; layouts already on disk open unchanged.
+
+**One board, two painters, and only one of them can win.** The generated
+`rgb_matrix_indicators_user()` runs *after* the active effect has drawn its
+frame and repaints every LED from the ledmap, so an effect under the per-layer
+colours is not dimmed — it is invisible. That is a real constraint, not a
+policy, so it is a choice rather than a silent winner: `ledmap` mode keeps
+today's behaviour exactly (the effect is compiled in and a `TOGGLE_LAYER_COLOR`
+key reveals it at runtime), and `effect` mode generates no ledmap at all. The
+layer colours stay in the layout and come back when the mode does.
+
+**The costs are said out loud, before the build.** Reactive effects live behind
+`RGB_MATRIX_KEYPRESSES`, which makes the matrix scan record which key was hit
+and when; the two framebuffer effects need a per-LED buffer kept between
+frames. Both defines are *derived from the chosen effect set* rather than
+stored — the same rule as `TAP_DANCE_ENABLE` and `COMBO_ENABLE`, and for the
+same reason — so the panel's warning and the emitted define come from one
+derivation and cannot disagree.
+
+**Sizes, measured.** Five real MSYS builds of `zsa/moonlander/revb`, the demo
+layout in each:
+
+| Build | Bytes | vs. baseline |
+|---|---|---|
+| Before this feature (the board's own 48 effects, none reactive) | 73,820 | — |
+| Breathing only, ledmap mode | 60,892 | −12,928 |
+| Reactive (simple) only, ledmap mode | 61,248 | −12,572 |
+| **The demo layout as it now ships** (3 effects, one reactive, ledmap mode) | **62,096** | **−11,724** |
+| Same three effects, effect mode (no ledmap generated) | 59,980 | −13,840 |
+
+Turning on tap-reactive lighting makes the firmware ~11.7 KB **smaller**, which
+is the opposite of what the feature sounds like it should do. The reason is the
+lever that makes reactive effects affordable in the first place: the
+Moonlander's own `keyboard.json` enables 48 effects, and QMK `-include`s that
+generated header *before* the keymap's `config.h`, so the generated file is the
+last word and `#undef` genuinely removes one. Picking an explicit set trims 47
+effects out of the image; against that, the reactive machinery costs 356 bytes
+(compare the two single-effect rows, which differ only in whether the effect is
+reactive). Without the trimming it would not be a bargain: the twelve reactive
+effects are all already `ENABLE_`d, so `RGB_MATRIX_KEYPRESSES` compiles in all
+twelve at once.
+
+Three things in QMK's source turned out not to match how the feature was
+described, and the code follows the source:
+
+- **`RGB_MATRIX_STARTUP_SPD` does not exist.** The app has emitted it since the
+  beginning as its one dynamic lighting knob, and it appears nowhere in
+  `qmk_firmware` — the name is `RGB_MATRIX_DEFAULT_SPD`. `settings.rgbStartupSpeed`
+  has therefore never reached the board. The line is still emitted verbatim,
+  because it is part of the byte-for-byte parity with real Oryx output that the
+  golden fixture exists to prove, and `config_h.rs` now says so where it is
+  written. `lighting.speed` is the knob that works.
+- **Choosing effects is subtraction, not addition.** Every effect the board can
+  run is already compiled in; the interesting act is removing the ones nobody
+  asked for.
+- **Hue and speed are not universal.** `SOLID_REACTIVE*` assigns its hue from
+  the timer and throws the configured one away; `TYPING_HEATMAP` and
+  `DIGITAL_RAIN` read neither hue nor speed. `shared/rgb_effects.json` records
+  this per effect and the panel disables the sliders that would not move,
+  instead of offering controls that quietly do nothing.
+
+The demo layout now carries a live example — a reactive effect compiled in,
+booting in ledmap mode so the board still looks like the layout being taught,
+with the existing `TOGGLE_LAYER_COLOR` key as the switch that reveals it. The
+tutorial gained a step that reads the whole thing back out of whatever layout
+is open, including what it is costing.
+
 ### A demo layout that shows the whole app
 
 A fresh install now starts on a layout that already uses every advanced

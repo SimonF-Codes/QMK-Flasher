@@ -25,12 +25,12 @@ Worker modules expose plain functions taking `FnMut` callbacks for
 progress/logs — they never touch `AppHandle`; the command layer forwards
 callbacks to the webview as events. Keep that pattern.
 
-## Layout schema (v3)
+## Layout schema (v4)
 
 Source of truth: **`src-tauri/src/layout/schema.rs`** (serde). Mirrors:
 **`src/lib/types.ts`** (zod), **`shared/layout.schema.json`** (generated —
 regenerate with `REGEN_SCHEMA=1 cargo test json_schema`; a test fails if
-stale). `SCHEMA_VERSION` = **2**. All JSON is camelCase.
+stale). `SCHEMA_VERSION` = **4**. All JSON is camelCase.
 
 ```
 LayoutFile { schemaVersion, meta { name, geometry,
@@ -39,8 +39,16 @@ LayoutFile { schemaVersion, meta { name, geometry,
 Layer      { title, color: "#rrggbb", keys: KeyAction[72] }   // LAYOUT-arg order
 Combo      { name, keys: number[] /* LAYOUT-arg indices */, layer, action: KeyAction }
 settings   { autoShift, capsWord, tapDance, combos, keyLock: true (always),
-             oryx, rgbMatrixCustom, layerState8bit, serialNumber, rgbStartupSpeed }
+             oryx, rgbMatrixCustom, layerState8bit, serialNumber, rgbStartupSpeed,
+             osDetection, osDefault, lighting? }
 ```
+
+Every version so far has been **additive**: every field added since v1 is
+`serde(default)` / zod-`optional`, so serde has already filled it in by the
+time `migrate()` runs and each arm only moves the version stamp. The arms are
+written as a **ladder** rather than a match — v2 walks 2→3→4 — so the first
+non-trivial step lands in the right order. `v2_layout_migrates_to_current_schema`
+and `v3_layout_migrates_to_current_schema` are the pattern to copy.
 
 `KeyAction` is a tagged union on `kind`, every variant with optional
 `glow: "#rrggbb"`:
@@ -104,6 +112,81 @@ redundant edit never marks the layout dirty. UI: `LedPanel` (layer base color +
 bulk operations) in the layer tab bar, `KeyGlowEditor` (per-key override) in
 the key picker, and `Keyboard` passes each key its resolved color so the board
 previews the ledmap — inherited colors render faded, explicit glows solid.
+
+### RGB Matrix effects (added 2026-08-26, additive)
+
+Reactive and animated lighting, via `settings.lighting` — **optional**, absent
+by default. Absent means *this layout does not configure RGB Matrix at all*,
+which is what every Oryx-seeded layout means and what keeps the generated
+`config.h` byte-identical to `shared/fixtures/reference_config.h`. It is not
+the same as "an effect set to nothing".
+
+```
+lighting? { mode: "ledmap" | "effect",
+            effect: string,            // RGB_MATRIX_DEFAULT_MODE
+            extraEffects: string[],    // also compiled in, for RGB_MOD
+            hue, sat, val, speed: u8 } // RGB_MATRIX_DEFAULT_{HUE,SAT,VAL,SPD}
+```
+
+`effect` / `extraEffects` name QMK effects from **`shared/rgb_effects.json`**
+(mirrors: `src-tauri/src/rgb_effects.rs` serde + `types.ts` zod). Each entry is
+`{qmk, label, blurb, reactive, framebuffer, hue, speed, alwaysCompiled}`, read
+out of `quantum/rgb_matrix/animations/*.h`: `qmk` is the suffix shared by the
+effect's `RGB_MATRIX_EFFECT(NAME)` declaration, its `ENABLE_RGB_MATRIX_NAME`
+switch and its `RGB_MATRIX_NAME` mode constant. `validate()` rejects a name the
+catalog does not have, because codegen pastes it straight into both.
+
+**The two painters cannot share the board.** The generated
+`rgb_matrix_indicators_user()` runs *after* the active effect has drawn its
+frame and `set_layer_color()` overwrites every LED, so under the ledmap an
+effect is not dimmed — it is invisible. `mode` therefore decides, rather than
+one silently winning:
+
+- `ledmap` — today's behavior exactly. The effect is compiled in and
+  configured; ZSA's `TOGGLE_LAYER_COLOR` (`keyboard_config.disable_layer_led`)
+  stops the repaint at runtime and reveals it. `keymap.c` is byte-identical to
+  what a layout with no `lighting` generates.
+- `effect` — `ledmap[]`, `set_layer_color`, `rgb_matrix_indicators_user` and
+  `hsv_to_rgb_with_value` are **not emitted**. The layer/key colors stay in the
+  layout and come back when the mode does. `codegen::keymap_c::emits_ledmap`
+  is the predicate; `src/lib/rgbEffects.ts#paintedBy` mirrors it.
+
+**Derived, never stored** (same rule as `TAP_DANCE_ENABLE` / `COMBO_ENABLE`):
+`RGB_MATRIX_KEYPRESSES` iff some compiled-in effect is `reactive`,
+`RGB_MATRIX_FRAMEBUFFER_EFFECTS` iff some is `framebuffer`. A stored flag would
+drift into compiling an effect that can never render, or paying scan time for
+nothing. `Lighting::needs_keypresses` / `needs_framebuffer` in Rust,
+`costs()` in `rgbEffects.ts` — the UI's warning and the emitted define come
+from the same derivation.
+
+**The effect set is trimmed with `#undef`, and that is load-bearing.** The
+Moonlander's `keyboard.json` already `ENABLE_`s 48 effects into the generated
+`info_config.h`, which the build `-include`s *before* the keymap's `config.h`
+(`build_keyboard.mk:430` vs `:508`, ordered into `-include` flags by
+`common_rules.mk:275`). So the keymap file is the last word: `#undef` genuinely
+removes an effect. This matters because the twelve reactive effects are all
+already `ENABLE_`d and are compiled out only for want of
+`RGB_MATRIX_KEYPRESSES` — turning that on unlocks all twelve at once. Trimming
+is how it is paid for, and it pays for far more than that: see the measured
+sizes in `CHANGELOG.md`. `SOLID_COLOR` is never `#undef`ed or `#define`d — it
+is the one effect QMK compiles in unguarded (`solid_color_anim.h:1`) and the
+floor everything else leans on.
+
+**`RGB_MATRIX_STARTUP_SPD` is dead and stays.** It appears nowhere in
+`qmk_firmware`; the real name is `RGB_MATRIX_DEFAULT_SPD`. `settings.rgbStartupSpeed`
+has therefore never reached the board. The line is still emitted verbatim
+because it is part of the Oryx golden parity, and `config_h.rs` says so at the
+point of emission. `lighting.speed` is the knob that works.
+
+`lighting.val` is also the ledmap's master brightness: the generated
+`hsv_to_rgb_with_value()` scales every ledmap color by `rgb_matrix_config.hsv.v`,
+so it dims both modes.
+
+Editing follows the `led.ts` contract — every transform in `rgbEffects.ts`
+(`setLighting`, `patchLighting`, `setBootEffect`, `toggleExtraEffect`) returns
+the **input layout unchanged** on a no-op, and `layoutStore` keys off that
+identity for dirty tracking. UI: `LightingPanel` in the layer tab bar, beside
+`LedPanel`.
 
 ### Multi-layout storage + keyboard registry (added 2026-07-19, additive)
 
@@ -249,7 +332,7 @@ at once, printable), the tour is the tour (one thing at a time, in order).
 
 Invariants worth keeping, each pinned by a test in `tutorial.test.ts`:
 
-- The tour is **the same length whatever the layout**, so "step 7 of 15" means
+- The tour is **the same length whatever the layout**, so "step 7 of 16" means
   something. A feature the layout lacks still gets its step and explains
   itself; it just says so instead of pointing.
 - A step **never carries both an example and a missing-note**.
@@ -504,6 +587,18 @@ for parity: there is no Oryx rendering of it to compare against.
 - **`moonlander_geometry.json`** — 72 keys (x/y/w/h/r/rx/ry, matrix, led) in
   LAYOUT-arg order, generated by `scripts/extract-geometry.mjs` from QMK's
   `revb/keyboard.json`. Regenerate, don't hand-edit.
+- **`rgb_effects.json`** — 50 entries `{qmk, label, blurb, reactive,
+  framebuffer, hue, speed, alwaysCompiled}` in QMK's own enum order
+  (`rgb_matrix_effects.inc`), i.e. the order `RGB_MOD` cycles through. Read out
+  of `quantum/rgb_matrix/animations/*.h`; `settings.lighting` names entries from
+  here and `validate()` rejects anything else. `hue`/`speed` are per-effect
+  because they really are: `SOLID_REACTIVE*` assigns `hsv.h` from the timer and
+  discards the configured hue, `TYPING_HEATMAP` and `DIGITAL_RAIN` read neither,
+  and the panel greys out a slider that would do nothing rather than showing one
+  that lies. To re-derive after a QMK bump, grep the animation headers for
+  `RGB_MATRIX_EFFECT(` (the set), `RGB_MATRIX_KEYREACTIVE_ENABLED` /
+  `RGB_MATRIX_FRAMEBUFFER_EFFECTS` (the gates), and a bare `hsv.h =` assignment
+  with no `hsv.h` on the right (hue discarded).
 - **`layout.schema.json`** — JSON Schema generated from schema.rs.
 
 ## Build/infra notes

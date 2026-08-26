@@ -11,7 +11,12 @@ import {
   swapLayers,
   transposeIndex,
 } from "./layers";
-import { LayoutFileSchema, type KeyAction, type LayoutFile } from "./types";
+import {
+  LayoutFileSchema,
+  SCHEMA_VERSION,
+  type KeyAction,
+  type LayoutFile,
+} from "./types";
 
 const fixture = () => LayoutFileSchema.parse(fixtureJson);
 
@@ -25,7 +30,7 @@ function tinyLayout(): LayoutFile {
     keys,
   });
   return {
-    schemaVersion: 3,
+    schemaVersion: SCHEMA_VERSION,
     meta: {
       name: "T",
       geometry: "moonlander",

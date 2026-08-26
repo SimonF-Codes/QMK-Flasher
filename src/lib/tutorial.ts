@@ -26,6 +26,7 @@
  * means.
  */
 import { authoredOs, type FriendlyOs } from "./osSwap";
+import { compiledEffects, costs, effectLabel } from "./rgbEffects";
 import {
   OS_NAME,
   buildToolGuide,
@@ -53,6 +54,7 @@ export type TutorialTopicId =
   | "osSwap"
   | "osMacro"
   | "lighting"
+  | "effects"
   | "live"
   | "versions"
   | "guide"
@@ -87,7 +89,7 @@ export interface TutorialExample {
 
 export interface TutorialStep {
   id: TutorialTopicId;
-  /** 1-based, for "step 4 of 15". */
+  /** 1-based, for "step 4 of 16". */
   number: number;
   title: string;
   /**
@@ -356,6 +358,34 @@ const TOPICS: readonly TopicSpec[] = [
     ],
   },
   {
+    id: "effects",
+    title: "Effects that move",
+    why: "Everything in the last step is still. QMK's RGB Matrix also ships forty-odd animations, and a dozen of them react to typing — the key you strike flares and fades, or throws a ring across the board. They are already in the firmware source; what decides whether you get them is what the generated config.h says.",
+    pointer: "The ✨ Effects panel, beside the LED panel above the board.",
+    body: (c) => {
+      const lighting = c.layout?.settings.lighting;
+      if (!lighting) {
+        return [
+          "This layout does not configure RGB Matrix at all, which is what a layout seeded from Oryx looks like — Oryx has no way to express an effect, so the firmware says nothing about them and the layer colours are the whole story.",
+          "Turning it on in the Effects panel changes nothing you can see until you also hand the LEDs over, so it is safe to look.",
+          "Worth knowing before you do: the two cannot share the board. The generated indicator repaints every LED from your layer colours after the effect has drawn its frame, so an effect underneath them is not dimmed, it is invisible. The panel makes that a choice rather than a surprise.",
+        ];
+      }
+      const chosen = compiledEffects(lighting);
+      const cost = costs(lighting);
+      return [
+        `This layout compiles in ${count(chosen.length, "effect")} — ${chosen.map(effectLabel).join(", ")} — and boots into ${effectLabel(lighting.effect)}.`,
+        lighting.mode === "ledmap"
+          ? "It boots in layer-colour mode, so the board looks exactly as the last step described it and the effect is sitting underneath, invisible. A TOGGLE_LAYER_COLOR key stops the repaint and reveals it — that is the switch worth pressing once, to see what is already in your firmware."
+          : "The effect owns the board, so this layout's per-layer and per-key colours are not generated into the firmware at all. They are still in the layout; switching back in the Effects panel brings them to the board again.",
+        cost.keypresses
+          ? `${cost.reactiveEffects.map(effectLabel).join(", ")} ${cost.reactiveEffects.length === 1 ? "is" : "are"} key-reactive, so the firmware compiles in RGB_MATRIX_KEYPRESSES and the matrix scan records which key was hit and when. That is a real cost in firmware size and scan time, paid on every scan whether or not the reactive effect is the one running — the panel says so before a build, rather than leaving it to a build that stops fitting.`
+          : "Nothing here is key-reactive, so the matrix scan is untouched. The reactive effects are the ones marked in the panel; picking one is what turns that tracking on.",
+        "The effects you did not pick are actively removed from the build. The Moonlander's own board definition turns on forty-eight of them, so an explicit set is how the reactive ones get paid for.",
+      ];
+    },
+  },
+  {
     id: "live",
     title: "Live view and the trainer",
     why: "The firmware reports every switch it sees over raw HID, so the app can show you what the board thinks you pressed and which layer it resolved on. That is the only way to tell a layout mistake from a typing mistake. The trainer turns the same channel into a drill: it names a key, you press it, and it weights what it asks next by what you keep getting wrong.",
@@ -478,7 +508,7 @@ function plainKeyExample(
  * The whole tour for a layout. Every step is always present: a step whose
  * feature this layout does not use still explains the feature and says so,
  * which is the honest thing to show and keeps the numbering stable, so
- * "step 9 of 15" means the same thing to two people with different layouts.
+ * "step 9 of 16" means the same thing to two people with different layouts.
  *
  * `layerNames` overrides the layers' own titles exactly as the guide takes
  * them, so the tour and the guide name a layer identically.

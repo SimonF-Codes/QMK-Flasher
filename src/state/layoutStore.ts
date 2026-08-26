@@ -21,6 +21,13 @@ import {
   setLayerColor as setLayerColorInLayout,
 } from "../lib/led";
 import {
+  DEFAULT_LIGHTING,
+  patchLighting as patchLightingInLayout,
+  setBootEffect as setBootEffectInLayout,
+  setLighting,
+  toggleExtraEffect as toggleExtraEffectInLayout,
+} from "../lib/rgbEffects";
+import {
   addLayer as addLayerToLayout,
   deleteLayer as deleteLayerFromLayout,
   findLayerReferences,
@@ -37,6 +44,7 @@ import type {
   LayoutFile,
   LayoutSummary,
   LayoutVersionSummary,
+  Lighting,
   OsTarget,
 } from "../lib/types";
 
@@ -200,6 +208,19 @@ interface LayoutState {
   setOsDetection(enabled: boolean): void;
   /** The OS assumed before detection answers, and what plain mods mean. */
   setOsDefault(os: OsTarget): void;
+
+  // ---- RGB Matrix lighting ----
+  /**
+   * Turn RGB Matrix configuration on (at `DEFAULT_LIGHTING`) or off. Off means
+   * the layout says nothing about RGB Matrix — not "an effect set to nothing".
+   */
+  setLightingEnabled(enabled: boolean): void;
+  /** Change one field of `settings.lighting`; no-op when it is off. */
+  patchLighting(patch: Partial<Lighting>): void;
+  /** Make an effect the one the board boots into. */
+  setBootEffect(qmk: string): void;
+  /** Add or remove an effect from the set RGB_MOD can reach. */
+  toggleExtraEffect(qmk: string): void;
 
   isDirty(): boolean;
 }
@@ -706,6 +727,48 @@ export const useLayoutStore = create<LayoutState>()((set, get) => ({
     set({
       layout: { ...layout, settings: { ...layout.settings, osDefault: os } },
     });
+  },
+
+  // ---- RGB Matrix lighting ----
+  //
+  // Each of these delegates to a pure transform in `lib/rgbEffects.ts` that
+  // returns the input layout unchanged when the edit is a no-op, and the
+  // identity check below is what keeps a redundant click from marking the
+  // layout dirty. Same contract as the LED editors.
+
+  setLightingEnabled(enabled) {
+    const { layout } = get();
+    if (!layout) return;
+    const next = setLighting(
+      layout,
+      enabled ? (layout.settings.lighting ?? DEFAULT_LIGHTING) : null,
+    );
+    if (next === layout) return;
+    set({ layout: next });
+  },
+
+  patchLighting(patch) {
+    const { layout } = get();
+    if (!layout) return;
+    const next = patchLightingInLayout(layout, patch);
+    if (next === layout) return;
+    set({ layout: next });
+  },
+
+  setBootEffect(qmk) {
+    const { layout } = get();
+    if (!layout) return;
+    const next = setBootEffectInLayout(layout, qmk);
+    if (next === layout) return;
+    set({ layout: next });
+  },
+
+  toggleExtraEffect(qmk) {
+    const { layout } = get();
+    if (!layout) return;
+    const next = toggleExtraEffectInLayout(layout, qmk);
+    if (next === layout) return;
+    set({ layout: next });
   },
 
   isDirty() {

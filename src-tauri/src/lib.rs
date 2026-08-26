@@ -10,6 +10,7 @@ pub mod keyboards;
 pub mod keyreport;
 pub mod layout;
 pub mod oryx;
+pub mod rgb_effects;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {

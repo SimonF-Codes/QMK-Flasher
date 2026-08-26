@@ -4,7 +4,7 @@
 
 use crate::error::AppError;
 use crate::layout::schema::{
-    KeyAction, LayoutFile, MacroStep, OsModeAction, OsTarget, TapSpec,
+    KeyAction, LayoutFile, LightingMode, MacroStep, OsModeAction, OsTarget, TapSpec,
 };
 
 /// Numbering plan for the custom constructs a layout uses, in first-occurrence
@@ -422,9 +422,42 @@ fn combos(layout: &LayoutFile, plan: &RenderPlan) -> Result<String, AppError> {
     Ok(out)
 }
 
+/// True when the per-layer ledmap is what paints the board.
+///
+/// `settings.rgbMatrixCustom` says the layout carries LED data at all;
+/// `lighting.mode` says whether that data is what the board shows. In
+/// [`LightingMode::Effect`] the ledmap is not emitted — and that is a real
+/// removal, not a suppression: `rgb_matrix_indicators_user()` runs after the
+/// active effect has drawn its frame and `set_layer_color()` rewrites every
+/// LED, so leaving the ledmap in would make the effect literally invisible.
+pub fn emits_ledmap(layout: &LayoutFile) -> bool {
+    layout.settings.rgb_matrix_custom
+        && !matches!(
+            layout.settings.lighting.as_ref().map(|l| l.mode),
+            Some(LightingMode::Effect)
+        )
+}
+
+/// `keyboard_post_init_user` on its own, for effect mode: the board still has
+/// to turn the matrix on, it just has no ledmap to paint with afterwards.
+/// Everything else `ledmap_section` emits — `hsv_to_rgb_with_value`, the
+/// `ledmap[]` table, `set_layer_color`, `rgb_matrix_indicators_user` — exists
+/// only to serve that table and goes with it.
+fn effect_section(uses_os: bool) -> String {
+    let mut out = String::from(
+        "\n\n\n/* mode: effect — the RGB Matrix effect chosen in config.h owns the LEDs.\n * No ledmap is emitted, so nothing repaints over it. */\n",
+    );
+    out.push_str(if uses_os {
+        "void keyboard_post_init_user(void) {\n  rgb_matrix_enable();\n  qf_os_apply();\n}\n"
+    } else {
+        "void keyboard_post_init_user(void) {\n  rgb_matrix_enable();\n}\n"
+    });
+    out
+}
+
 /// `uses_os` adds the boot-time OS-mode apply to `keyboard_post_init_user`,
 /// which this section owns; `os_section` emits its own copy of that function
-/// when the ledmap section is not emitted at all.
+/// when neither this section nor [`effect_section`] is emitted at all.
 fn ledmap_section(layout: &LayoutFile, uses_os: bool) -> Result<String, AppError> {
     let mut out = String::from(
         "\n\n\nextern rgb_config_t rgb_matrix_config;\n\nRGB hsv_to_rgb_with_value(HSV hsv) {\n  RGB rgb = hsv_to_rgb( hsv );\n  float f = (float)rgb_matrix_config.hsv.v / UINT8_MAX;\n  return (RGB){ f * rgb.r, f * rgb.g, f * rgb.b };\n}\n\n",
@@ -667,8 +700,10 @@ pub fn render(layout: &LayoutFile) -> Result<String, AppError> {
     }
     out.push_str(&keymaps(layout, &plan)?);
     out.push_str(&combos(layout, &plan)?);
-    if layout.settings.rgb_matrix_custom {
+    if emits_ledmap(layout) {
         out.push_str(&ledmap_section(layout, uses_os)?);
+    } else if layout.settings.rgb_matrix_custom {
+        out.push_str(&effect_section(uses_os));
     }
     out.push_str(&dance_section(&plan));
     out.push_str(&process_record_user(layout, &plan)?);

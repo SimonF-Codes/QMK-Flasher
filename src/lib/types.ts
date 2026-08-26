@@ -11,7 +11,7 @@
 import { z } from "zod";
 
 /** Current version of the layout-file schema. */
-export const SCHEMA_VERSION = 3;
+export const SCHEMA_VERSION = 4;
 /** Keys per layer in LAYOUT_moonlander argument order. */
 export const MOONLANDER_KEY_COUNT = 72;
 
@@ -130,6 +130,42 @@ export const ComboSchema = z.object({
   action: KeyActionSchema,
 });
 
+/**
+ * Which painter owns the LEDs. Not a preference — the generated
+ * `rgb_matrix_indicators_user()` repaints every LED from the ledmap *after*
+ * the active effect has drawn its frame, so with the ledmap emitted no
+ * animation is ever visible. The layout picks rather than one silently winning.
+ */
+export const LightingModeSchema = z.enum(["ledmap", "effect"]);
+export type LightingMode = z.infer<typeof LightingModeSchema>;
+
+const byte = z.number().int().min(0).max(255);
+
+/**
+ * RGB Matrix configuration: the effects compiled in, which one boots, and the
+ * HSV/speed the board starts at. Names are QMK's own — see
+ * `shared/rgb_effects.json`.
+ *
+ * `RGB_MATRIX_KEYPRESSES` and `RGB_MATRIX_FRAMEBUFFER_EFFECTS` are deliberately
+ * absent: they are DERIVED from the effect set by codegen (and by
+ * `src/lib/rgbEffects.ts` for the UI's cost warning), the same way
+ * `TAP_DANCE_ENABLE` is derived from the layout's actual tap dances. A stored
+ * flag drifts from the thing it describes.
+ */
+export const LightingSchema = z.object({
+  mode: LightingModeSchema,
+  /** RGB_MATRIX_DEFAULT_MODE — the effect the board boots into. */
+  effect: z.string().min(1),
+  /** Also compiled in, so RGB_MOD can reach them. Each one costs flash. */
+  extraEffects: z.array(z.string().min(1)).default([]),
+  hue: byte,
+  sat: byte,
+  val: byte,
+  speed: byte,
+});
+
+export type Lighting = z.infer<typeof LightingSchema>;
+
 export const SettingsSchema = z.object({
   autoShift: z.boolean(),
   capsWord: z.boolean(),
@@ -146,6 +182,12 @@ export const SettingsSchema = z.object({
   osDetection: z.boolean().default(false),
   /** OS assumed before detection answers, and what plain Ctrl/Gui mods mean. */
   osDefault: OsTargetSchema.default("windows"),
+  /**
+   * Reactive / animated RGB Matrix lighting, or absent for "this layout does
+   * not configure RGB Matrix at all" — which is what every Oryx-seeded layout
+   * means, and what keeps codegen emitting the exact config.h Oryx would.
+   */
+  lighting: LightingSchema.optional(),
 });
 
 export const SeededFromSchema = z.object({
@@ -405,3 +447,31 @@ export const KeycodeEntrySchema = z.object({
 });
 
 export type KeycodeEntry = z.infer<typeof KeycodeEntrySchema>;
+
+// ---- RGB Matrix effect catalog (shared/rgb_effects.json) ----
+
+/**
+ * One QMK RGB Matrix effect. Mirrors `src-tauri/src/rgb_effects.rs`; the data
+ * is read out of `quantum/rgb_matrix/animations/*.h`, so `qmk` is the suffix
+ * shared by the effect's `RGB_MATRIX_EFFECT(NAME)` declaration, its
+ * `ENABLE_RGB_MATRIX_NAME` compile switch and its `RGB_MATRIX_NAME` mode
+ * constant.
+ */
+export const RgbEffectSchema = z.object({
+  /** QMK's name, unprefixed — e.g. "SOLID_REACTIVE_SIMPLE". */
+  qmk: z.string().min(1),
+  label: z.string().min(1),
+  blurb: z.string().min(1),
+  /** Needs RGB_MATRIX_KEYPRESSES; compiled out entirely without it. */
+  reactive: z.boolean(),
+  /** Needs RGB_MATRIX_FRAMEBUFFER_EFFECTS. */
+  framebuffer: z.boolean(),
+  /** The configured hue changes what this effect draws. */
+  hue: z.boolean(),
+  /** The configured speed changes what this effect draws. */
+  speed: z.boolean(),
+  /** Compiled in unconditionally — no ENABLE_RGB_MATRIX_* switch exists. */
+  alwaysCompiled: z.boolean(),
+});
+
+export type RgbEffect = z.infer<typeof RgbEffectSchema>;

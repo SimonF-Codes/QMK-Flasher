@@ -179,6 +179,7 @@ pub fn write_sources(layout: &LayoutFile, cfg: &AppConfig) -> Result<PathBuf, Ap
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::layout::schema::{Lighting, LightingMode};
     use similar::TextDiff;
 
     /// The committed seeded fixture — NOT `store::load()`, which reads the
@@ -717,21 +718,94 @@ mod tests {
     /// own only when that section is absent. Two definitions would not link.
     #[test]
     fn keyboard_post_init_user_is_defined_exactly_once() {
-        for rgb_matrix_custom in [true, false] {
+        // Three shapes emit that function and each one must be the only one:
+        // the ledmap section, the effect-mode section, and — when the layout
+        // carries no LED data at all — the OS section.
+        for (rgb_matrix_custom, lighting) in [
+            (true, None),
+            (false, None),
+            (true, Some(effect_lighting(LightingMode::Ledmap))),
+            (true, Some(effect_lighting(LightingMode::Effect))),
+            (false, Some(effect_lighting(LightingMode::Effect))),
+        ] {
             let mut layout = fixture();
             layout.settings.rgb_matrix_custom = rgb_matrix_custom;
+            layout.settings.lighting = lighting.clone();
             layout.layers[0].keys[0] = desktop_right();
             let c = generate(&layout).unwrap().keymap_c;
+            let case = format!("rgb_matrix_custom={rgb_matrix_custom} lighting={lighting:?}");
             assert_eq!(
                 c.matches("void keyboard_post_init_user(void) {").count(),
                 1,
-                "rgb_matrix_custom={rgb_matrix_custom}:\n{c}"
+                "{case}:\n{c}"
             );
             assert!(
                 c.contains("  qf_os_apply();\n}"),
-                "the OS mode must be applied at boot (rgb_matrix_custom={rgb_matrix_custom}):\n{c}"
+                "the OS mode must be applied at boot ({case}):\n{c}"
             );
         }
+    }
+
+    fn effect_lighting(mode: LightingMode) -> Lighting {
+        Lighting {
+            mode,
+            effect: "SOLID_REACTIVE_SIMPLE".into(),
+            extra_effects: vec![],
+            hue: 0,
+            sat: 255,
+            val: 175,
+            speed: 128,
+        }
+    }
+
+    /// The constraint the UI models as a choice, checked where it is real. In
+    /// effect mode the ledmap is not merely overdrawn — it is absent from the
+    /// firmware, along with the three functions that exist to serve it.
+    #[test]
+    fn effect_mode_emits_no_ledmap_at_all() {
+        let mut layout = fixture();
+        layout.settings.lighting = Some(effect_lighting(LightingMode::Effect));
+        let c = generate(&layout).unwrap().keymap_c;
+        for absent in [
+            "ledmap[]",
+            "set_layer_color",
+            "rgb_matrix_indicators_user",
+            "hsv_to_rgb_with_value",
+        ] {
+            assert!(!c.contains(absent), "effect mode still emits {absent}:\n{c}");
+        }
+        // The matrix itself still has to be switched on, or the board boots dark.
+        assert!(c.contains("rgb_matrix_enable();"));
+    }
+
+    /// The other half of the same claim: ledmap mode is untouched by this
+    /// feature. A layout that picks an effect but leaves the ledmap in charge
+    /// generates exactly the keymap.c it generated before — the effect is
+    /// configured in config.h and reachable with TOGGLE_LAYER_COLOR, and that
+    /// is the whole difference.
+    #[test]
+    fn ledmap_mode_generates_the_same_keymap_as_no_lighting_at_all() {
+        let base = generate(&fixture()).unwrap().keymap_c;
+        let mut layout = fixture();
+        layout.settings.lighting = Some(effect_lighting(LightingMode::Ledmap));
+        assert_eq!(generate(&layout).unwrap().keymap_c, base);
+        // ...and the difference really is in config.h.
+        assert_ne!(
+            generate(&layout).unwrap().config_h,
+            generate(&fixture()).unwrap().config_h
+        );
+    }
+
+    /// A layout with no LED data has nothing to choose between, so effect mode
+    /// must not conjure a second `keyboard_post_init_user` or a ledmap.
+    #[test]
+    fn effect_mode_without_rgb_matrix_custom_emits_no_led_code() {
+        let mut layout = fixture();
+        layout.settings.rgb_matrix_custom = false;
+        layout.settings.lighting = Some(effect_lighting(LightingMode::Effect));
+        let c = generate(&layout).unwrap().keymap_c;
+        assert!(!c.contains("ledmap[]"));
+        assert!(!c.contains("rgb_matrix_enable();"));
     }
 
     #[test]

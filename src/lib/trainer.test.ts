@@ -19,6 +19,7 @@ import {
   type StatsMap,
   type TrainerTarget,
 } from "./trainer";
+import { SCHEMA_VERSION } from "./types";
 import type { KeyAction, Layer, LayoutFile } from "./types";
 
 /** A layer of `none` keys with the given positions overridden. */
@@ -32,7 +33,7 @@ function layerWith(overrides: Record<number, KeyAction>, title = "L"): Layer {
 
 function makeLayout(layers: Layer[]): LayoutFile {
   return {
-    schemaVersion: 3,
+    schemaVersion: SCHEMA_VERSION,
     meta: {
       name: "test",
       geometry: "moonlander",

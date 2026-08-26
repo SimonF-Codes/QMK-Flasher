@@ -6,6 +6,7 @@ import {
   qmkForEventCode,
   resolvedAction,
 } from "./liveKeys";
+import { SCHEMA_VERSION } from "./types";
 import type { KeyAction, Layer, LayoutFile } from "./types";
 
 /** A layer of `none` keys with the given positions overridden. */
@@ -92,7 +93,7 @@ describe("emittedTapCode", () => {
 describe("resolvedAction", () => {
   function makeLayout(layers: Layer[]): LayoutFile {
     return {
-      schemaVersion: 3,
+      schemaVersion: SCHEMA_VERSION,
       meta: {
         name: "test",
         geometry: "moonlander",

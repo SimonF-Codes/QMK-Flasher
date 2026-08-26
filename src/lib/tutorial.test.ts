@@ -17,7 +17,7 @@ import {
   buildTutorial,
   type TutorialTopicId,
 } from "./tutorial";
-import { LayoutFileSchema, MOONLANDER_KEY_COUNT } from "./types";
+import { LayoutFileSchema, MOONLANDER_KEY_COUNT, SCHEMA_VERSION } from "./types";
 import type { Combo, KeyAction, LayoutFile, Settings } from "./types";
 
 // ---- Fixtures ----
@@ -49,7 +49,7 @@ function layoutWith(
 ): LayoutFile {
   const titles = opts.layerTitles ?? ["Layer"];
   return {
-    schemaVersion: 3,
+    schemaVersion: SCHEMA_VERSION,
     meta: {
       name: "Test layout",
       geometry: "moonlander",
@@ -281,6 +281,68 @@ describe("a layout that does not use a feature", () => {
         expect(s.missing).toBeTruthy();
       }
     }
+  });
+
+  /**
+   * The effects step has no key to point at — RGB Matrix is configured in
+   * settings, not bound to a position — so it must teach entirely from what the
+   * layout's `lighting` actually says, and say something true when it says
+   * nothing at all.
+   */
+  describe("the effects step", () => {
+    it("describes an unconfigured layout as unconfigured, not as broken", () => {
+      const body = step(EMPTY, "effects").body.join(" ");
+      expect(body).toContain("does not configure RGB Matrix");
+      expect(body).toContain("Oryx");
+      // The constraint still gets explained, because it is what makes the
+      // choice a choice.
+      expect(body).toContain("invisible");
+    });
+
+    it("names the effects this layout compiles in, and which one boots", () => {
+      const l = layoutWith([], {
+        settings: {
+          lighting: {
+            mode: "ledmap",
+            effect: "SOLID_REACTIVE_SIMPLE",
+            extraEffects: ["BREATHING"],
+            hue: 0,
+            sat: 255,
+            val: 175,
+            speed: 128,
+          },
+        },
+      });
+      const body = step(l, "effects").body.join(" ");
+      expect(body).toContain("2 effects");
+      expect(body).toContain("Reactive - simple");
+      expect(body).toContain("Breathing");
+      // Ledmap mode: the honest thing to say is that you cannot see it yet.
+      expect(body).toContain("TOGGLE_LAYER_COLOR");
+      // And the cost, because it is the surprise this feature must not spring.
+      expect(body).toContain("RGB_MATRIX_KEYPRESSES");
+    });
+
+    it("says the layer colours are gone when the effect owns the board", () => {
+      const l = layoutWith([], {
+        settings: {
+          lighting: {
+            mode: "effect",
+            effect: "BREATHING",
+            extraEffects: [],
+            hue: 0,
+            sat: 255,
+            val: 175,
+            speed: 128,
+          },
+        },
+      });
+      const body = step(l, "effects").body.join(" ");
+      expect(body).toContain("not generated into the firmware");
+      // Nothing reactive here, so it must not claim a cost it is not paying.
+      expect(body).not.toContain("RGB_MATRIX_KEYPRESSES");
+      expect(body).toContain("matrix scan is untouched");
+    });
   });
 
   it("tells a new user with no layout at all that there is nothing to point at", () => {

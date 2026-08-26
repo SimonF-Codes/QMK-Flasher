@@ -1,0 +1,502 @@
+[
+  {
+    "qmk": "SOLID_COLOR",
+    "label": "Solid color",
+    "blurb": "Every LED holds the configured hue. The one effect QMK compiles in unconditionally.",
+    "reactive": false,
+    "framebuffer": false,
+    "hue": true,
+    "speed": false,
+    "alwaysCompiled": true
+  },
+  {
+    "qmk": "ALPHAS_MODS",
+    "label": "Alphas / mods",
+    "blurb": "Letters in the configured hue, modifiers in a second hue that drifts with speed.",
+    "reactive": false,
+    "framebuffer": false,
+    "hue": true,
+    "speed": true,
+    "alwaysCompiled": false
+  },
+  {
+    "qmk": "GRADIENT_UP_DOWN",
+    "label": "Gradient up/down",
+    "blurb": "A still hue ramp from the top row to the bottom.",
+    "reactive": false,
+    "framebuffer": false,
+    "hue": true,
+    "speed": true,
+    "alwaysCompiled": false
+  },
+  {
+    "qmk": "GRADIENT_LEFT_RIGHT",
+    "label": "Gradient left/right",
+    "blurb": "A still hue ramp across the board.",
+    "reactive": false,
+    "framebuffer": false,
+    "hue": true,
+    "speed": true,
+    "alwaysCompiled": false
+  },
+  {
+    "qmk": "BREATHING",
+    "label": "Breathing",
+    "blurb": "The whole board fades in and out on one hue.",
+    "reactive": false,
+    "framebuffer": false,
+    "hue": true,
+    "speed": true,
+    "alwaysCompiled": false
+  },
+  {
+    "qmk": "BAND_SAT",
+    "label": "Band (saturation)",
+    "blurb": "A saturated band sweeps across a washed-out board.",
+    "reactive": false,
+    "framebuffer": false,
+    "hue": true,
+    "speed": true,
+    "alwaysCompiled": false
+  },
+  {
+    "qmk": "BAND_VAL",
+    "label": "Band (brightness)",
+    "blurb": "A bright band sweeps across a dim board.",
+    "reactive": false,
+    "framebuffer": false,
+    "hue": true,
+    "speed": true,
+    "alwaysCompiled": false
+  },
+  {
+    "qmk": "BAND_PINWHEEL_SAT",
+    "label": "Pinwheel band (saturation)",
+    "blurb": "The saturation band sweeps around the board's center instead of across it.",
+    "reactive": false,
+    "framebuffer": false,
+    "hue": true,
+    "speed": true,
+    "alwaysCompiled": false
+  },
+  {
+    "qmk": "BAND_PINWHEEL_VAL",
+    "label": "Pinwheel band (brightness)",
+    "blurb": "The brightness band sweeps around the board's center.",
+    "reactive": false,
+    "framebuffer": false,
+    "hue": true,
+    "speed": true,
+    "alwaysCompiled": false
+  },
+  {
+    "qmk": "BAND_SPIRAL_SAT",
+    "label": "Spiral band (saturation)",
+    "blurb": "The saturation band winds outward as it turns.",
+    "reactive": false,
+    "framebuffer": false,
+    "hue": true,
+    "speed": true,
+    "alwaysCompiled": false
+  },
+  {
+    "qmk": "BAND_SPIRAL_VAL",
+    "label": "Spiral band (brightness)",
+    "blurb": "The brightness band winds outward as it turns.",
+    "reactive": false,
+    "framebuffer": false,
+    "hue": true,
+    "speed": true,
+    "alwaysCompiled": false
+  },
+  {
+    "qmk": "CYCLE_ALL",
+    "label": "Cycle all",
+    "blurb": "The whole board moves through the spectrum together.",
+    "reactive": false,
+    "framebuffer": false,
+    "hue": false,
+    "speed": true,
+    "alwaysCompiled": false
+  },
+  {
+    "qmk": "CYCLE_LEFT_RIGHT",
+    "label": "Cycle left/right",
+    "blurb": "A rainbow scrolls across the board. QMK's own fallback default.",
+    "reactive": false,
+    "framebuffer": false,
+    "hue": false,
+    "speed": true,
+    "alwaysCompiled": false
+  },
+  {
+    "qmk": "CYCLE_UP_DOWN",
+    "label": "Cycle up/down",
+    "blurb": "A rainbow scrolls from the top row to the bottom.",
+    "reactive": false,
+    "framebuffer": false,
+    "hue": false,
+    "speed": true,
+    "alwaysCompiled": false
+  },
+  {
+    "qmk": "RAINBOW_MOVING_CHEVRON",
+    "label": "Moving chevron",
+    "blurb": "A rainbow chevron marches across the board.",
+    "reactive": false,
+    "framebuffer": false,
+    "hue": true,
+    "speed": true,
+    "alwaysCompiled": false
+  },
+  {
+    "qmk": "CYCLE_OUT_IN",
+    "label": "Cycle out/in",
+    "blurb": "A rainbow collapses toward the board's center.",
+    "reactive": false,
+    "framebuffer": false,
+    "hue": false,
+    "speed": true,
+    "alwaysCompiled": false
+  },
+  {
+    "qmk": "CYCLE_OUT_IN_DUAL",
+    "label": "Cycle out/in (dual)",
+    "blurb": "The same collapse, run from each half's own center.",
+    "reactive": false,
+    "framebuffer": false,
+    "hue": false,
+    "speed": true,
+    "alwaysCompiled": false
+  },
+  {
+    "qmk": "CYCLE_PINWHEEL",
+    "label": "Cycle pinwheel",
+    "blurb": "A rainbow turns around the board's center.",
+    "reactive": false,
+    "framebuffer": false,
+    "hue": false,
+    "speed": true,
+    "alwaysCompiled": false
+  },
+  {
+    "qmk": "CYCLE_SPIRAL",
+    "label": "Cycle spiral",
+    "blurb": "A rainbow spirals outward from the center.",
+    "reactive": false,
+    "framebuffer": false,
+    "hue": false,
+    "speed": true,
+    "alwaysCompiled": false
+  },
+  {
+    "qmk": "DUAL_BEACON",
+    "label": "Dual beacon",
+    "blurb": "Two hue arms sweep around the center like a lighthouse.",
+    "reactive": false,
+    "framebuffer": false,
+    "hue": true,
+    "speed": true,
+    "alwaysCompiled": false
+  },
+  {
+    "qmk": "RAINBOW_BEACON",
+    "label": "Rainbow beacon",
+    "blurb": "The beacon sweep, widened into a full rainbow.",
+    "reactive": false,
+    "framebuffer": false,
+    "hue": true,
+    "speed": true,
+    "alwaysCompiled": false
+  },
+  {
+    "qmk": "RAINBOW_PINWHEELS",
+    "label": "Rainbow pinwheels",
+    "blurb": "Two rainbow arms turning in opposite directions.",
+    "reactive": false,
+    "framebuffer": false,
+    "hue": true,
+    "speed": true,
+    "alwaysCompiled": false
+  },
+  {
+    "qmk": "FLOWER_BLOOMING",
+    "label": "Flower blooming",
+    "blurb": "Diagonal rainbow petals that open and close.",
+    "reactive": false,
+    "framebuffer": false,
+    "hue": false,
+    "speed": true,
+    "alwaysCompiled": false
+  },
+  {
+    "qmk": "RAINDROPS",
+    "label": "Raindrops",
+    "blurb": "Single keys light at random, in hues near the configured one.",
+    "reactive": false,
+    "framebuffer": false,
+    "hue": true,
+    "speed": true,
+    "alwaysCompiled": false
+  },
+  {
+    "qmk": "JELLYBEAN_RAINDROPS",
+    "label": "Jellybean raindrops",
+    "blurb": "Raindrops in fully random hues.",
+    "reactive": false,
+    "framebuffer": false,
+    "hue": false,
+    "speed": true,
+    "alwaysCompiled": false
+  },
+  {
+    "qmk": "HUE_BREATHING",
+    "label": "Hue breathing",
+    "blurb": "Brightness holds; the hue swings around the configured one.",
+    "reactive": false,
+    "framebuffer": false,
+    "hue": true,
+    "speed": true,
+    "alwaysCompiled": false
+  },
+  {
+    "qmk": "HUE_PENDULUM",
+    "label": "Hue pendulum",
+    "blurb": "The hue swing sweeps across the board like a pendulum.",
+    "reactive": false,
+    "framebuffer": false,
+    "hue": true,
+    "speed": true,
+    "alwaysCompiled": false
+  },
+  {
+    "qmk": "HUE_WAVE",
+    "label": "Hue wave",
+    "blurb": "The hue swing travels across the board as a wave.",
+    "reactive": false,
+    "framebuffer": false,
+    "hue": true,
+    "speed": true,
+    "alwaysCompiled": false
+  },
+  {
+    "qmk": "PIXEL_RAIN",
+    "label": "Pixel rain",
+    "blurb": "Random keys blink on and off in random hues.",
+    "reactive": false,
+    "framebuffer": false,
+    "hue": false,
+    "speed": true,
+    "alwaysCompiled": false
+  },
+  {
+    "qmk": "PIXEL_FLOW",
+    "label": "Pixel flow",
+    "blurb": "Random-hue pixels stream along the LED chain.",
+    "reactive": false,
+    "framebuffer": false,
+    "hue": false,
+    "speed": true,
+    "alwaysCompiled": false
+  },
+  {
+    "qmk": "PIXEL_FRACTAL",
+    "label": "Pixel fractal",
+    "blurb": "A mirrored fractal pattern grows out from the middle columns.",
+    "reactive": false,
+    "framebuffer": false,
+    "hue": true,
+    "speed": true,
+    "alwaysCompiled": false
+  },
+  {
+    "qmk": "TYPING_HEATMAP",
+    "label": "Typing heatmap",
+    "blurb": "Keys warm from blue to red as you type them, and cool back down. Needs the framebuffer.",
+    "reactive": false,
+    "framebuffer": true,
+    "hue": false,
+    "speed": false,
+    "alwaysCompiled": false
+  },
+  {
+    "qmk": "DIGITAL_RAIN",
+    "label": "Digital rain",
+    "blurb": "Green columns fall down the board. Needs the framebuffer.",
+    "reactive": false,
+    "framebuffer": true,
+    "hue": false,
+    "speed": false,
+    "alwaysCompiled": false
+  },
+  {
+    "qmk": "SOLID_REACTIVE_SIMPLE",
+    "label": "Reactive - simple",
+    "blurb": "The key you press flares and fades. The plainest tap-reactive effect.",
+    "reactive": true,
+    "framebuffer": false,
+    "hue": false,
+    "speed": true,
+    "alwaysCompiled": false
+  },
+  {
+    "qmk": "SOLID_REACTIVE",
+    "label": "Reactive",
+    "blurb": "The key you press flares and fades, shifting hue as it goes.",
+    "reactive": true,
+    "framebuffer": false,
+    "hue": false,
+    "speed": true,
+    "alwaysCompiled": false
+  },
+  {
+    "qmk": "SOLID_REACTIVE_WIDE",
+    "label": "Reactive - wide",
+    "blurb": "The flare spreads to the keys around the one you pressed.",
+    "reactive": true,
+    "framebuffer": false,
+    "hue": false,
+    "speed": true,
+    "alwaysCompiled": false
+  },
+  {
+    "qmk": "SOLID_REACTIVE_MULTIWIDE",
+    "label": "Reactive - wide (multi)",
+    "blurb": "Wide flares from several recent keys at once.",
+    "reactive": true,
+    "framebuffer": false,
+    "hue": false,
+    "speed": true,
+    "alwaysCompiled": false
+  },
+  {
+    "qmk": "SOLID_REACTIVE_CROSS",
+    "label": "Reactive - cross",
+    "blurb": "The flare runs down the row and column of the key you pressed.",
+    "reactive": true,
+    "framebuffer": false,
+    "hue": false,
+    "speed": true,
+    "alwaysCompiled": false
+  },
+  {
+    "qmk": "SOLID_REACTIVE_MULTICROSS",
+    "label": "Reactive - cross (multi)",
+    "blurb": "Crosses from several recent keys at once.",
+    "reactive": true,
+    "framebuffer": false,
+    "hue": false,
+    "speed": true,
+    "alwaysCompiled": false
+  },
+  {
+    "qmk": "SOLID_REACTIVE_NEXUS",
+    "label": "Reactive - nexus",
+    "blurb": "A cross that trails behind the key rather than centering on it.",
+    "reactive": true,
+    "framebuffer": false,
+    "hue": false,
+    "speed": true,
+    "alwaysCompiled": false
+  },
+  {
+    "qmk": "SOLID_REACTIVE_MULTINEXUS",
+    "label": "Reactive - nexus (multi)",
+    "blurb": "Nexus trails from several recent keys at once.",
+    "reactive": true,
+    "framebuffer": false,
+    "hue": false,
+    "speed": true,
+    "alwaysCompiled": false
+  },
+  {
+    "qmk": "SPLASH",
+    "label": "Splash",
+    "blurb": "A rainbow ring expands out from the key you pressed.",
+    "reactive": true,
+    "framebuffer": false,
+    "hue": true,
+    "speed": true,
+    "alwaysCompiled": false
+  },
+  {
+    "qmk": "MULTISPLASH",
+    "label": "Splash (multi)",
+    "blurb": "Rings from several recent keys at once.",
+    "reactive": true,
+    "framebuffer": false,
+    "hue": true,
+    "speed": true,
+    "alwaysCompiled": false
+  },
+  {
+    "qmk": "SOLID_SPLASH",
+    "label": "Splash - one hue",
+    "blurb": "The expanding ring, in the configured hue instead of a rainbow.",
+    "reactive": true,
+    "framebuffer": false,
+    "hue": true,
+    "speed": true,
+    "alwaysCompiled": false
+  },
+  {
+    "qmk": "SOLID_MULTISPLASH",
+    "label": "Splash - one hue (multi)",
+    "blurb": "Single-hue rings from several recent keys at once.",
+    "reactive": true,
+    "framebuffer": false,
+    "hue": true,
+    "speed": true,
+    "alwaysCompiled": false
+  },
+  {
+    "qmk": "STARLIGHT_SMOOTH",
+    "label": "Starlight - smooth",
+    "blurb": "Every key breathes on its own phase, so the board shimmers.",
+    "reactive": false,
+    "framebuffer": false,
+    "hue": true,
+    "speed": true,
+    "alwaysCompiled": false
+  },
+  {
+    "qmk": "STARLIGHT",
+    "label": "Starlight",
+    "blurb": "Random keys twinkle at the configured hue.",
+    "reactive": false,
+    "framebuffer": false,
+    "hue": true,
+    "speed": true,
+    "alwaysCompiled": false
+  },
+  {
+    "qmk": "STARLIGHT_DUAL_SAT",
+    "label": "Starlight - dual saturation",
+    "blurb": "Twinkles vary in saturation around the configured color.",
+    "reactive": false,
+    "framebuffer": false,
+    "hue": true,
+    "speed": true,
+    "alwaysCompiled": false
+  },
+  {
+    "qmk": "STARLIGHT_DUAL_HUE",
+    "label": "Starlight - dual hue",
+    "blurb": "Twinkles vary in hue around the configured color.",
+    "reactive": false,
+    "framebuffer": false,
+    "hue": true,
+    "speed": true,
+    "alwaysCompiled": false
+  },
+  {
+    "qmk": "RIVERFLOW",
+    "label": "Riverflow",
+    "blurb": "A slow brightness ripple travels along the LED chain.",
+    "reactive": false,
+    "framebuffer": false,
+    "hue": true,
+    "speed": true,
+    "alwaysCompiled": false
+  }
+]

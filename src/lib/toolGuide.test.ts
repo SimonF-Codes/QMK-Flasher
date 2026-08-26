@@ -9,7 +9,7 @@ import {
   groupFor,
   toolGuideMarkdown,
 } from "./toolGuide";
-import { LayoutFileSchema, MOONLANDER_KEY_COUNT } from "./types";
+import { LayoutFileSchema, MOONLANDER_KEY_COUNT, SCHEMA_VERSION } from "./types";
 import type { KeyAction, LayoutFile, Combo, Settings } from "./types";
 
 // ---- Fixtures ----
@@ -40,7 +40,7 @@ function layoutWith(
 ): LayoutFile {
   const titles = opts.layerTitles ?? ["Layer"];
   return {
-    schemaVersion: 3,
+    schemaVersion: SCHEMA_VERSION,
     meta: {
       name: "Test layout",
       geometry: "moonlander",
