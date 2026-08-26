@@ -598,6 +598,9 @@ fn blank_layout(name: &str, kb: &crate::keyboards::KeyboardInfo) -> LayoutFile {
             rgb_startup_speed: 60,
             os_detection: false,
             os_default: Default::default(),
+            // A blank layout configures no RGB Matrix effect, exactly as a
+            // seeded one does: the ledmap is the only thing lighting it.
+            lighting: None,
         },
     }
 }
@@ -814,6 +817,33 @@ mod tests {
                 _ => {}
             }
         }
+
+        // RGB Matrix lighting, and specifically a *reactive* effect: a demo
+        // that only picked an animation would teach the easy half.
+        let lighting = demo
+            .settings
+            .lighting
+            .as_ref()
+            .expect("the demo layout configures RGB Matrix lighting");
+        assert!(
+            lighting.needs_keypresses(),
+            "the demo layout must compile in a reactive effect — that is the half \
+             of this feature a user cannot discover from the LED panel"
+        );
+
+        // Boots in ledmap mode, so the demo still looks like the layout it is
+        // teaching, and TOGGLE_LAYER_COLOR is what reveals the effect
+        // underneath. Without that key the reactive effect is compiled in and
+        // permanently invisible, which teaches the opposite of the lesson.
+        assert_eq!(
+            lighting.mode,
+            crate::layout::schema::LightingMode::Ledmap,
+            "the demo must not hand the board to the effect at boot"
+        );
+        assert!(
+            has(&|k: &K| matches!(k, K::Special { code, .. } if code == "TOGGLE_LAYER_COLOR")),
+            "the demo layout needs a TOGGLE_LAYER_COLOR key to reveal the effect"
+        );
     }
 
     /// The Demo layer has to be reachable, or none of the above is discoverable.

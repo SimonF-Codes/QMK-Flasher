@@ -7,6 +7,7 @@
  */
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { TUTORIAL_LENGTH } from "../lib/tutorial";
+import { SCHEMA_VERSION } from "../lib/types";
 import type { KeyAction, Layer, LayoutFile } from "../lib/types";
 import { useLayoutStore } from "./layoutStore";
 import { tutorialHighlight, useTutorialStore } from "./tutorialStore";
@@ -23,7 +24,7 @@ function layerWith(overrides: Record<number, KeyAction>, title: string): Layer {
 
 function makeLayout(layers: Layer[]): LayoutFile {
   return {
-    schemaVersion: 3,
+    schemaVersion: SCHEMA_VERSION,
     meta: {
       name: "test",
       geometry: "moonlander",

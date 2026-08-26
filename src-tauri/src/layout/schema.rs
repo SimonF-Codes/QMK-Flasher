@@ -10,7 +10,7 @@ use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
 /// Current version of the layout-file schema.
-pub const SCHEMA_VERSION: u32 = 3;
+pub const SCHEMA_VERSION: u32 = 4;
 
 /// Keys per layer in `LAYOUT_moonlander` argument order.
 pub const MOONLANDER_KEY_COUNT: usize = 72;
@@ -275,6 +275,100 @@ pub struct Settings {
     /// mods were authored against, so it decides which way the swap runs.
     #[serde(default)]
     pub os_default: OsTarget,
+    /// Reactive / animated RGB Matrix lighting, or `None` for "this layout does
+    /// not configure RGB Matrix at all".
+    ///
+    /// `None` is deliberately the default and deliberately not the same as
+    /// "solid color": a layout seeded from Oryx says nothing about RGB Matrix,
+    /// so codegen must say nothing either — that is what keeps
+    /// `shared/fixtures/reference_config.h` a frozen record of real Oryx output
+    /// rather than a file we edited to match ourselves. See [`Lighting`].
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub lighting: Option<Lighting>,
+}
+
+/// Which painter owns the LEDs.
+///
+/// The two cannot share the board, and this is not a policy choice — it falls
+/// out of the generated firmware. `rgb_matrix_indicators_user()` runs *after*
+/// the active effect has rendered a frame and `set_layer_color()` overwrites
+/// every LED from the ledmap, so with the ledmap emitted no animation is ever
+/// visible. Rather than let one silently win, the layout picks.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub enum LightingMode {
+    /// Today's behavior: the per-layer ledmap repaints every LED every frame.
+    /// The effect below is still compiled in and still configured — ZSA's
+    /// `TOGGLE_LAYER_COLOR` keycode stops the repaint at runtime and reveals it.
+    #[default]
+    Ledmap,
+    /// The chosen effect owns the board. `ledmap[]`, `set_layer_color()` and
+    /// `rgb_matrix_indicators_user()` are not emitted at all, so the per-layer
+    /// colors are absent from the firmware rather than merely overdrawn.
+    Effect,
+}
+
+/// RGB Matrix configuration: which effects are compiled in, which one boots,
+/// and the HSV/speed the board starts at.
+///
+/// Names in `effect` / `extra_effects` are QMK's own, from
+/// `shared/rgb_effects.json` — `SOLID_REACTIVE_SIMPLE`, `SPLASH`, … The
+/// expensive switches (`RGB_MATRIX_KEYPRESSES`, `RGB_MATRIX_FRAMEBUFFER_EFFECTS`)
+/// are **derived** from that set by `codegen::config_h`, never stored, for the
+/// same reason `TAP_DANCE_ENABLE` is derived from the layout's actual tap
+/// dances: a stored flag drifts from the thing it describes, and here the drift
+/// compiles an effect that can never render or costs scan time nothing uses.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct Lighting {
+    pub mode: LightingMode,
+    /// `RGB_MATRIX_DEFAULT_MODE` — the effect the board boots into.
+    pub effect: String,
+    /// Also compiled in, so `RGB_MOD` can reach them. Every name here costs
+    /// flash, which is why the set is explicit instead of "all of them".
+    #[serde(default)]
+    pub extra_effects: Vec<String>,
+    /// `RGB_MATRIX_DEFAULT_HUE`.
+    pub hue: u8,
+    /// `RGB_MATRIX_DEFAULT_SAT`.
+    pub sat: u8,
+    /// `RGB_MATRIX_DEFAULT_VAL`. Also the ledmap's master brightness: the
+    /// generated `hsv_to_rgb_with_value()` scales every ledmap color by
+    /// `rgb_matrix_config.hsv.v`, so this dims both modes.
+    pub val: u8,
+    /// `RGB_MATRIX_DEFAULT_SPD`.
+    pub speed: u8,
+}
+
+impl Lighting {
+    /// Every effect this layout compiles in — the boot effect first, then the
+    /// extras, de-duplicated and in the order they were given.
+    pub fn effects(&self) -> Vec<&str> {
+        let mut out: Vec<&str> = vec![&self.effect];
+        for e in &self.extra_effects {
+            if !out.contains(&e.as_str()) {
+                out.push(e);
+            }
+        }
+        out
+    }
+
+    /// `RGB_MATRIX_KEYPRESSES` is needed iff some compiled-in effect is one of
+    /// QMK's key-reactive ones. Derived, never stored.
+    pub fn needs_keypresses(&self) -> bool {
+        self.effects()
+            .iter()
+            .filter_map(|n| crate::rgb_effects::find(n))
+            .any(|e| e.reactive)
+    }
+
+    /// Likewise `RGB_MATRIX_FRAMEBUFFER_EFFECTS`.
+    pub fn needs_framebuffer(&self) -> bool {
+        self.effects()
+            .iter()
+            .filter_map(|n| crate::rgb_effects::find(n))
+            .any(|e| e.framebuffer)
+    }
 }
 
 fn is_hex_color(s: &str) -> bool {
@@ -307,13 +401,25 @@ impl KeyAction {
 
 impl LayoutFile {
     /// Upgrade an older on-disk layout in place, so a file written by a
-    /// previous build still opens. v2→v3 added only `serde(default)` fields
-    /// (`settings.osDetection`, `settings.osDefault`), so serde has already
-    /// filled them in by the time this runs and the version stamp is all
-    /// that is left to move.
+    /// previous build still opens.
+    ///
+    /// Every arm so far has been an additive one: v2→v3 added
+    /// `settings.osDetection` / `settings.osDefault`, v3→v4 added
+    /// `settings.lighting`, and all three are `serde(default)`, so serde has
+    /// already filled them in by the time this runs and the version stamp is
+    /// all that is left to move. The arms are written as a **ladder**, not a
+    /// match: a v2 file has to walk 2→3→4, and the day one of these steps
+    /// stops being a no-op that ordering is what makes it correct.
     pub fn migrate(&mut self) {
         if self.schema_version == 2 {
             self.schema_version = 3;
+        }
+        if self.schema_version == 3 {
+            // `lighting` absent means "this layout does not configure RGB
+            // Matrix", which is exactly what every v3 layout meant. Nothing to
+            // synthesize: filling in a default here would start emitting RGB
+            // defines into firmware that never had them.
+            self.schema_version = 4;
         }
     }
 
@@ -330,6 +436,19 @@ impl LayoutFile {
         }
         if !self.settings.key_lock {
             return Err("settings.keyLock must always be true".into());
+        }
+        if let Some(lighting) = &self.settings.lighting {
+            // Every name has to be one QMK actually has, because codegen turns
+            // it straight into `RGB_MATRIX_<name>` / `ENABLE_RGB_MATRIX_<name>`
+            // — a typo here is a compile error two minutes into a build.
+            for name in lighting.effects() {
+                if crate::rgb_effects::find(name).is_none() {
+                    return Err(format!(
+                        "settings.lighting names {name:?}, which is not an effect in \
+                         shared/rgb_effects.json"
+                    ));
+                }
+            }
         }
         // Per-keyboard key count from the registry (`meta.geometry` is the
         // keyboard id; only the 72-key Moonlander exists today).
@@ -459,6 +578,88 @@ mod tests {
         // The absent fields land on the documented defaults.
         assert!(!layout.settings.os_detection);
         assert_eq!(layout.settings.os_default, OsTarget::Windows);
+    }
+
+    /// The same promise one version on: a layout written before RGB Matrix
+    /// lighting existed must still open, and must still mean what it meant —
+    /// which is "no lighting configured", not "lighting at its defaults". The
+    /// difference is visible in the generated `config.h`, so it is not
+    /// cosmetic.
+    #[test]
+    fn v3_layout_migrates_to_current_schema() {
+        let mut doc: serde_json::Value = serde_json::from_str(FIXTURE).unwrap();
+        doc["schemaVersion"] = serde_json::json!(3);
+        doc["settings"].as_object_mut().unwrap().remove("lighting");
+
+        let mut layout: LayoutFile = serde_json::from_value(doc).expect("v3 must deserialize");
+        assert_eq!(layout.schema_version, 3);
+        layout.migrate();
+
+        assert_eq!(layout.schema_version, SCHEMA_VERSION);
+        layout.validate().expect("migrated layout must validate");
+        assert!(layout.settings.lighting.is_none());
+    }
+
+    /// A v2 file has to cross two arms to get here, so the ladder is walked
+    /// rather than matched on. Without that, the oldest layouts on disk — the
+    /// ones this whole mechanism exists for — would stop at v3 and be rejected.
+    #[test]
+    fn a_v2_layout_walks_every_arm_not_just_the_first() {
+        let mut doc: serde_json::Value = serde_json::from_str(FIXTURE).unwrap();
+        doc["schemaVersion"] = serde_json::json!(2);
+        let settings = doc["settings"].as_object_mut().unwrap();
+        settings.remove("osDetection");
+        settings.remove("osDefault");
+        settings.remove("lighting");
+
+        let mut layout: LayoutFile = serde_json::from_value(doc).unwrap();
+        layout.migrate();
+        assert_eq!(layout.schema_version, SCHEMA_VERSION);
+        layout.validate().expect("a v2 layout must reach the current schema");
+    }
+
+    /// `effect` and `extraEffects` are pasted into `RGB_MATRIX_<name>` by
+    /// codegen, so a name QMK does not have is a compile error minutes later.
+    /// Catch it where the layout is loaded instead.
+    #[test]
+    fn lighting_naming_an_unknown_effect_is_rejected() {
+        let mut layout = fixture();
+        layout.settings.lighting = Some(Lighting {
+            mode: LightingMode::Effect,
+            effect: "SPLASH_DELUXE".into(),
+            extra_effects: vec![],
+            hue: 0,
+            sat: 255,
+            val: 175,
+            speed: 128,
+        });
+        assert!(layout.validate().is_err());
+
+        let lighting = layout.settings.lighting.as_mut().unwrap();
+        lighting.effect = "SPLASH".into();
+        layout.validate().expect("a real effect name must be accepted");
+
+        // ...and the extras are checked too, not just the boot effect.
+        layout.settings.lighting.as_mut().unwrap().extra_effects =
+            vec!["NOT_AN_EFFECT".into()];
+        assert!(layout.validate().is_err());
+    }
+
+    /// The boot effect leads and repeats collapse, so `RGB_MATRIX_DEFAULT_MODE`
+    /// is never emitted twice and an effect listed in both places costs its
+    /// flash once.
+    #[test]
+    fn the_effect_set_leads_with_the_boot_effect_and_dedupes() {
+        let lighting = Lighting {
+            mode: LightingMode::Effect,
+            effect: "SPLASH".into(),
+            extra_effects: vec!["BREATHING".into(), "SPLASH".into(), "BREATHING".into()],
+            hue: 0,
+            sat: 255,
+            val: 175,
+            speed: 128,
+        };
+        assert_eq!(lighting.effects(), ["SPLASH", "BREATHING"]);
     }
 
     #[test]

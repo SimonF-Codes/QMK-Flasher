@@ -543,6 +543,78 @@
         "TT"
       ]
     },
+    "Lighting": {
+      "description": "RGB Matrix configuration: which effects are compiled in, which one boots,\nand the HSV/speed the board starts at.\n\nNames in `effect` / `extra_effects` are QMK's own, from\n`shared/rgb_effects.json` — `SOLID_REACTIVE_SIMPLE`, `SPLASH`, … The\nexpensive switches (`RGB_MATRIX_KEYPRESSES`, `RGB_MATRIX_FRAMEBUFFER_EFFECTS`)\nare **derived** from that set by `codegen::config_h`, never stored, for the\nsame reason `TAP_DANCE_ENABLE` is derived from the layout's actual tap\ndances: a stored flag drifts from the thing it describes, and here the drift\ncompiles an effect that can never render or costs scan time nothing uses.",
+      "type": "object",
+      "properties": {
+        "effect": {
+          "description": "`RGB_MATRIX_DEFAULT_MODE` — the effect the board boots into.",
+          "type": "string"
+        },
+        "extraEffects": {
+          "description": "Also compiled in, so `RGB_MOD` can reach them. Every name here costs\nflash, which is why the set is explicit instead of \"all of them\".",
+          "type": "array",
+          "default": [],
+          "items": {
+            "type": "string"
+          }
+        },
+        "hue": {
+          "description": "`RGB_MATRIX_DEFAULT_HUE`.",
+          "type": "integer",
+          "format": "uint8",
+          "maximum": 255,
+          "minimum": 0
+        },
+        "mode": {
+          "$ref": "#/$defs/LightingMode"
+        },
+        "sat": {
+          "description": "`RGB_MATRIX_DEFAULT_SAT`.",
+          "type": "integer",
+          "format": "uint8",
+          "maximum": 255,
+          "minimum": 0
+        },
+        "speed": {
+          "description": "`RGB_MATRIX_DEFAULT_SPD`.",
+          "type": "integer",
+          "format": "uint8",
+          "maximum": 255,
+          "minimum": 0
+        },
+        "val": {
+          "description": "`RGB_MATRIX_DEFAULT_VAL`. Also the ledmap's master brightness: the\ngenerated `hsv_to_rgb_with_value()` scales every ledmap color by\n`rgb_matrix_config.hsv.v`, so this dims both modes.",
+          "type": "integer",
+          "format": "uint8",
+          "maximum": 255,
+          "minimum": 0
+        }
+      },
+      "required": [
+        "mode",
+        "effect",
+        "hue",
+        "sat",
+        "val",
+        "speed"
+      ]
+    },
+    "LightingMode": {
+      "description": "Which painter owns the LEDs.\n\nThe two cannot share the board, and this is not a policy choice — it falls\nout of the generated firmware. `rgb_matrix_indicators_user()` runs *after*\nthe active effect has rendered a frame and `set_layer_color()` overwrites\nevery LED from the ledmap, so with the ledmap emitted no animation is ever\nvisible. Rather than let one silently win, the layout picks.",
+      "oneOf": [
+        {
+          "description": "Today's behavior: the per-layer ledmap repaints every LED every frame.\nThe effect below is still compiled in and still configured — ZSA's\n`TOGGLE_LAYER_COLOR` keycode stops the repaint at runtime and reveals it.",
+          "type": "string",
+          "const": "ledmap"
+        },
+        {
+          "description": "The chosen effect owns the board. `ledmap[]`, `set_layer_color()` and\n`rgb_matrix_indicators_user()` are not emitted at all, so the per-layer\ncolors are absent from the firmware rather than merely overdrawn.",
+          "type": "string",
+          "const": "effect"
+        }
+      ]
+    },
     "MacroStep": {
       "description": "One SEND_STRING step of a macro: tap `code` (with `mods` held), then wait\n`delay` ms before the next step.",
       "type": "object",
@@ -681,6 +753,17 @@
         },
         "layerState8bit": {
           "type": "boolean"
+        },
+        "lighting": {
+          "description": "Reactive / animated RGB Matrix lighting, or `None` for \"this layout does\nnot configure RGB Matrix at all\".\n\n`None` is deliberately the default and deliberately not the same as\n\"solid color\": a layout seeded from Oryx says nothing about RGB Matrix,\nso codegen must say nothing either — that is what keeps\n`shared/fixtures/reference_config.h` a frozen record of real Oryx output\nrather than a file we edited to match ourselves. See [`Lighting`].",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Lighting"
+            },
+            {
+              "type": "null"
+            }
+          ]
         },
         "oryx": {
           "type": "boolean"

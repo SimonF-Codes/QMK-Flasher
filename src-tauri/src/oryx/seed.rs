@@ -487,6 +487,10 @@ pub fn layout_from_snapshot(
         // app defaults and the user opts in from the OS panel.
         os_detection: false,
         os_default: OsTarget::default(),
+        // Oryx has no concept of an RGB Matrix effect either — it ships the
+        // ledmap and nothing else — so a seeded layout configures none, and
+        // codegen emits no RGB block at all.
+        lighting: None,
     };
 
     let layout = LayoutFile {

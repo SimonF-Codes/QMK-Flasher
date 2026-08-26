@@ -40,6 +40,7 @@ import {
   LayoutSummarySchema,
   LayoutVersionSummarySchema,
   PipelineStateSchema,
+  SCHEMA_VERSION,
   type AppConfig,
   type AppError,
   type BuildLog,
@@ -305,7 +306,7 @@ function slug(name: string): string {
 function mockBlankLayout(name: string, kb: KeyboardInfo): LayoutFile {
   const now = new Date().toISOString();
   return {
-    schemaVersion: 3,
+    schemaVersion: SCHEMA_VERSION,
     meta: {
       name,
       geometry: kb.id,

@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { GEOMETRY } from "../lib/geometry";
 import { mockControls, resetMockStore } from "../lib/ipc";
+import { SCHEMA_VERSION } from "../lib/types";
 import type { KeyAction, Layer, LayoutFile } from "../lib/types";
 import { useLayoutStore } from "./layoutStore";
 import { AFTERGLOW_MS, EMIT_WINDOW_MS, LOG_LIMIT, useLiveStore } from "./liveStore";
@@ -16,7 +17,7 @@ function layerWith(overrides: Record<number, KeyAction>, title: string): Layer {
 /** A deterministic layout so position assertions don't depend on the fixture. */
 function makeLayout(layers: Layer[]): LayoutFile {
   return {
-    schemaVersion: 3,
+    schemaVersion: SCHEMA_VERSION,
     meta: {
       name: "test",
       geometry: "moonlander",

@@ -1,5 +1,5 @@
 {
-  "schemaVersion": 3,
+  "schemaVersion": 4,
   "meta": {
     "name": "Arrows Together",
     "geometry": "moonlander",
@@ -2708,6 +2708,15 @@
     "serialNumber": "rddD7/QzpBEp",
     "rgbStartupSpeed": 60,
     "osDetection": true,
-    "osDefault": "windows"
+    "osDefault": "windows",
+    "lighting": {
+      "mode": "ledmap",
+      "effect": "SOLID_REACTIVE_SIMPLE",
+      "extraEffects": ["SOLID_SPLASH", "BREATHING"],
+      "hue": 170,
+      "sat": 255,
+      "val": 175,
+      "speed": 150
+    }
   }
 }
