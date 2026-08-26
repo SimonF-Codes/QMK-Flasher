@@ -8,6 +8,7 @@
  * an empty position.
  */
 import { describe, expect, it } from "vitest";
+import shippedRaw from "../../shared/default_layout.json";
 import seededRaw from "../../shared/fixtures/seeded_layout.json";
 import { buildToolGuide } from "./toolGuide";
 import {
@@ -77,7 +78,11 @@ function layoutWith(
 /** A layout with no key that needs explaining, and nothing plain either. */
 const EMPTY = layoutWith([]);
 
+/** The Oryx golden fixture — no osMacro/osMode by construction. */
 const seeded = LayoutFileSchema.parse(seededRaw);
+
+/** What a fresh install materializes: the above plus the Demo layer. */
+const shipped = LayoutFileSchema.parse(shippedRaw);
 
 const MACRO: KeyAction = {
   kind: "macro",
@@ -220,6 +225,37 @@ describe("pointing at real keys", () => {
     expect(buildTutorial(null).examples).toBe(0);
     expect(buildTutorial(EMPTY).examples).toBe(0);
     expect(buildTutorial(seeded).examples).toBeGreaterThan(4);
+  });
+});
+
+// ---- The layout a new user actually gets ----
+
+describe("the shipped default layout", () => {
+  it("gives every layout-derived step a live example", () => {
+    // The Demo layer exists so the tour has something real to point at (see
+    // `store::DEFAULT_LAYOUT`). This is the contract between that asset and
+    // this file: if the layer ever loses a feature, the tour silently starts
+    // saying "not in this layout" and only this test notices.
+    const degraded = buildTutorial(shipped)
+      .steps.filter((s) => !s.example && s.missing)
+      .map((s) => s.id);
+    expect(degraded).toEqual([]);
+  });
+
+  it("has a real OS macro to teach the OS-macro step from", () => {
+    const s = step(shipped, "osMacro");
+    expect(s.example!.os!.relation).toBe("osAware");
+    // Both halves, and they are not the same shortcut — the whole argument.
+    expect(s.example!.detail).toHaveLength(2);
+    expect(s.example!.os!.mac).not.toBe(s.example!.os!.windows);
+  });
+
+  it("can reach the other OS, so the swap step is not describing theory", () => {
+    const { os } = buildToolGuide(shipped);
+    expect(os.reachable).toBe(true);
+    expect(step(shipped, "osSwap").body.join(" ")).not.toContain(
+      "No OS-mode key is assigned",
+    );
   });
 });
 

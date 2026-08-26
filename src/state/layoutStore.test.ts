@@ -210,12 +210,15 @@ describe("layoutStore swap layers (mock IPC)", () => {
 
   it("swaps layer content, remaps combo references, and dirties", () => {
     const s = useLayoutStore.getState();
-    // Fixture combos fire TG(5); swapping 2<->5 must retarget them to 2.
-    expect(
-      s.layout!.combos.every(
-        (c) => (c.action as { layer?: number }).layer === 5,
-      ),
-    ).toBe(true);
+    const layerOf = (c: { action: unknown }) =>
+      (c.action as { layer?: number }).layer;
+
+    // Whichever combos fire at 5 must come out firing at 2 and vice versa,
+    // and every other combo must come out untouched. Taken from the layout
+    // rather than assumed of it: the shipped default gained combos that fire
+    // at neither layer, and "they all point at 5" was never the claim.
+    const before = s.layout!.combos.map(layerOf);
+    expect(before.filter((l) => l === 5).length).toBeGreaterThan(0);
     const l2Title = s.layout!.layers[2].title;
     const l5Title = s.layout!.layers[5].title;
 
@@ -224,11 +227,9 @@ describe("layoutStore swap layers (mock IPC)", () => {
     const after = useLayoutStore.getState();
     expect(after.layout!.layers[2].title).toBe(l5Title);
     expect(after.layout!.layers[5].title).toBe(l2Title);
-    expect(
-      after.layout!.combos.every(
-        (c) => (c.action as { layer?: number }).layer === 2,
-      ),
-    ).toBe(true);
+    expect(after.layout!.combos.map(layerOf)).toEqual(
+      before.map((l) => (l === 5 ? 2 : l === 2 ? 5 : l)),
+    );
     expect(after.isDirty()).toBe(true);
   });
 

@@ -299,9 +299,18 @@ const TOPICS: readonly TopicSpec[] = [
       return [
         os.reachable
           ? os.switches.length > 0
-            ? `This board can reach ${OS_NAME[os.otherOs]} mode: ${os.switches.join("; ")}.`
+            ? // One key named in full, the rest counted. A tour shows you one
+              // thing; the guide is where the whole list belongs.
+              `This board can reach ${OS_NAME[os.otherOs]} mode: ${os.switches[0]}${
+                os.switches.length > 1
+                  ? `, and ${count(os.switches.length - 1, "other OS-mode key")}`
+                  : ""
+              }.`
             : `This board reaches ${OS_NAME[os.otherOs]} mode through host detection — it asks the machine what it is when it is plugged in.`
           : `No OS-mode key is assigned and host detection is off, so this board can only ever be in ${OS_NAME[os.authoredOs]} mode. Everything below is theory until you assign one.`,
+        os.reachable &&
+          os.detection &&
+          "Host detection is on as well, so the board starts in whatever mode the machine reports and the keys above are the manual override.",
         "The swap has two limits that matter more than the feature does. It only moves a lone Ctrl or a lone Cmd, so a chord carrying both is left alone. And it only reaches keycodes that pass through QMK's modifier rewriting at all — macros, dual-function keys and tap dances are sent from firmware code that runs afterwards, so it never touches them.",
         os.counts.swapped > 0 &&
           `${count(os.counts.swapped, "key")} in this layout really ${os.counts.swapped === 1 ? "is" : "are"} rewritten in ${OS_NAME[os.otherOs]} mode.`,
