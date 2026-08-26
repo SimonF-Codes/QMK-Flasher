@@ -406,6 +406,45 @@ mod tests {
         KeyAction::OsMode { action, glow: None }
     }
 
+    /// The shipped default is the one layout we know every user will build, so
+    /// it gets generated in CI rather than only on someone's desk. This is NOT
+    /// a parity assertion — there is no Oryx output to compare it against, by
+    /// construction — it only pins that the demo layer's richer content still
+    /// renders and stays internally consistent.
+    #[test]
+    fn the_shipped_demo_layout_generates_consistent_sources() {
+        let demo: LayoutFile =
+            serde_json::from_str(crate::layout::store::DEFAULT_LAYOUT).unwrap();
+        let out = generate(&demo).expect("the shipped default layout must generate");
+
+        // The OS features the demo layer exists to show reach the firmware.
+        assert!(out.keymap_c.contains("OS_MACRO_0"), "no OS macro in keymap.c");
+        for code in ["QF_OS_TOGG", "QF_OS_MAC", "QF_OS_WIN", "QF_OS_AUTO"] {
+            assert!(out.keymap_c.contains(code), "{code} missing from keymap.c");
+        }
+        assert!(out.rules_mk.contains("OS_DETECTION_ENABLE = yes"));
+
+        // The two flags that fail the QMK build when keymap.c and rules.mk
+        // disagree, checked against what the layout actually binds.
+        assert_eq!(
+            out.rules_mk.contains("TAP_DANCE_ENABLE = yes"),
+            out.keymap_c.contains("tap_dance_actions"),
+            "tap dance must be on in both files or neither"
+        );
+        assert!(
+            out.config_h.contains(&format!("#define COMBO_COUNT {}", demo.combos.len())),
+            "COMBO_COUNT must match the layout's combo count:\n{}",
+            out.config_h
+        );
+
+        // One ledmap row per layer, including the demo layer.
+        assert_eq!(
+            out.keymap_c.matches("] = { {").count(),
+            demo.layers.len(),
+            "one ledmap row per layer"
+        );
+    }
+
     /// A layout with no OS tooling must be untouched by this feature — the
     /// golden test pins the bytes, this pins the reason.
     #[test]

@@ -8,7 +8,7 @@
 //! ```
 //!
 //! Invariant: after `ensure_initialized()` there is always ≥1 layout on disk
-//! and a valid active id (the checked-in seeded fixture is materialized as
+//! and a valid active id ([`DEFAULT_LAYOUT`] is materialized as
 //! `arrows-together` on a fresh install). `load`/`save` operate on the
 //! active layout — their contract signatures predate multi-layout and stay.
 
@@ -20,12 +20,27 @@ use serde::{Deserialize, Serialize};
 use crate::error::AppError;
 use crate::layout::LayoutFile;
 
+/// The frozen Oryx golden fixture. This is TEST MATERIAL, not the shipped
+/// default: it exists so codegen and the seeder can be proved to reproduce
+/// real Oryx output byte for byte, and nothing may be added to it that Oryx
+/// itself cannot emit. What a new user gets is [`DEFAULT_LAYOUT`].
 pub const FIXTURE_LAYOUT: &str = include_str!(concat!(
     env!("CARGO_MANIFEST_DIR"),
     "/../shared/fixtures/seeded_layout.json"
 ));
 
-/// The id the legacy single layout (and the fresh-install fixture) gets.
+/// The layout a fresh install materializes: the same Oryx-seeded content plus
+/// the "Demo" layer, which carries a live, labelled example of every advanced
+/// key kind (macro, osMacro, osMode, tap dance, dual-function, mod-tap,
+/// layer-tap, all four layer-switch flavours, Key Lock, RGB) so the tutorial
+/// has something real to point at. It is a SEPARATE asset from
+/// [`FIXTURE_LAYOUT`] on purpose — see `docs/CONTRACT.md`.
+pub const DEFAULT_LAYOUT: &str = include_str!(concat!(
+    env!("CARGO_MANIFEST_DIR"),
+    "/../shared/default_layout.json"
+));
+
+/// The id the legacy single layout (and the fresh-install default) gets.
 pub const DEFAULT_LAYOUT_ID: &str = "arrows-together";
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
@@ -194,7 +209,7 @@ impl Store {
             std::fs::rename(&legacy, &default).map_err(io_err(&legacy))?;
         }
         if self.ids()?.is_empty() {
-            atomic_write(&default, FIXTURE_LAYOUT)?;
+            atomic_write(&default, DEFAULT_LAYOUT)?;
         }
 
         let active = self.read_state()?.active_layout_id;
@@ -693,7 +708,7 @@ mod tests {
     }
 
     #[test]
-    fn fresh_install_materializes_fixture_as_default_layout() {
+    fn fresh_install_materializes_the_demo_layout_as_default() {
         let t = TempStore::new("fresh");
         let layout = t.store.load().unwrap();
         assert_eq!(layout.meta.name, "Arrows Together");
@@ -703,6 +718,163 @@ mod tests {
         assert_eq!(list[0].id, DEFAULT_LAYOUT_ID);
         assert_eq!(list[0].keyboard, "moonlander");
         assert!(!list[0].modified_at.is_empty());
+
+        // What lands on disk is the demo asset, not the golden fixture: the
+        // whole point of the split is that a new user gets the teaching layer.
+        let demo: LayoutFile = serde_json::from_str(DEFAULT_LAYOUT).unwrap();
+        assert_eq!(layout, demo);
+        assert!(
+            layout.layers.iter().any(|l| l.title == "Demo"),
+            "the shipped default carries the Demo layer"
+        );
+    }
+
+    /// The demo layout is the app's teaching material: the tutorial derives its
+    /// steps from features it can actually find, so a kind missing here becomes
+    /// a step that silently degrades to "your layout has none of these". Each
+    /// entry below is one thing a new user is promised a live example of.
+    #[test]
+    fn the_demo_layout_has_a_live_example_of_every_advanced_kind() {
+        use crate::layout::schema::{KeyAction as K, LayerSwitchAction as LS, OsModeAction as OM};
+
+        let demo: LayoutFile = serde_json::from_str(DEFAULT_LAYOUT).unwrap();
+        demo.validate().expect("the shipped default must be valid");
+
+        let keys: Vec<&K> = demo
+            .layers
+            .iter()
+            .flat_map(|l| &l.keys)
+            .chain(demo.combos.iter().map(|c| &c.action))
+            .collect();
+        let has = |p: &dyn Fn(&K) -> bool| keys.iter().any(|k| p(k));
+
+        let missing: Vec<&str> = [
+            ("macro", &(|k: &K| matches!(k, K::Macro { .. })) as &dyn Fn(&K) -> bool),
+            ("osMacro", &|k: &K| matches!(k, K::OsMacro { .. })),
+            ("osMode", &|k: &K| matches!(k, K::OsMode { .. })),
+            ("tapDance", &|k: &K| matches!(k, K::TapDance { .. })),
+            ("dualFunc", &|k: &K| matches!(k, K::DualFunc { .. })),
+            ("modTap", &|k: &K| matches!(k, K::ModTap { .. })),
+            ("layerTap", &|k: &K| matches!(k, K::LayerTap { .. })),
+            ("qkLock", &|k: &K| matches!(k, K::QkLock { .. })),
+            ("rgb", &|k: &K| matches!(k, K::Rgb { .. })),
+            ("rgbHsv", &|k: &K| matches!(k, K::RgbHsv { .. })),
+            ("special", &|k: &K| matches!(k, K::Special { .. })),
+            ("basic", &|k: &K| matches!(k, K::Basic { .. })),
+            ("layerSwitch MO", &|k: &K| {
+                matches!(k, K::LayerSwitch { action: LS::MO, .. })
+            }),
+            ("layerSwitch TG", &|k: &K| {
+                matches!(k, K::LayerSwitch { action: LS::TG, .. })
+            }),
+            ("layerSwitch TO", &|k: &K| {
+                matches!(k, K::LayerSwitch { action: LS::TO, .. })
+            }),
+            ("layerSwitch TT", &|k: &K| {
+                matches!(k, K::LayerSwitch { action: LS::TT, .. })
+            }),
+            ("osMode toggle", &|k: &K| {
+                matches!(k, K::OsMode { action: OM::Toggle, .. })
+            }),
+            ("osMode mac", &|k: &K| matches!(k, K::OsMode { action: OM::Mac, .. })),
+            ("osMode windows", &|k: &K| {
+                matches!(k, K::OsMode { action: OM::Windows, .. })
+            }),
+            ("osMode auto", &|k: &K| matches!(k, K::OsMode { action: OM::Auto, .. })),
+        ]
+        .into_iter()
+        .filter(|(_, p)| !has(*p))
+        .map(|(name, _)| name)
+        .collect();
+        assert!(missing.is_empty(), "the demo layout demonstrates no {missing:?}");
+
+        // A per-key glow override, i.e. a key lit differently from its layer.
+        assert!(
+            demo.layers.iter().any(|l| l.keys.iter().any(|k| k.glow().is_some())),
+            "the demo layout must show a per-key glow"
+        );
+
+        // Combos beyond the two Oryx mirror combos, and every one of them
+        // labelled — an unnamed combo teaches nothing.
+        assert!(
+            demo.combos.len() > 2,
+            "the demo layout adds at least one combo of its own"
+        );
+        for combo in &demo.combos {
+            assert!(!combo.name.trim().is_empty(), "combo {combo:?} needs a name");
+        }
+
+        // Every macro and OS macro carries a label: they render as keycap text,
+        // and the tutorial reads them aloud.
+        for key in &keys {
+            match key {
+                K::Macro { label, .. } | K::OsMacro { label, .. } => {
+                    assert!(!label.trim().is_empty(), "unlabelled macro in the demo layout")
+                }
+                _ => {}
+            }
+        }
+    }
+
+    /// The Demo layer has to be reachable, or none of the above is discoverable.
+    #[test]
+    fn the_demo_layer_is_reachable_from_the_base_layer() {
+        use crate::layout::schema::KeyAction as K;
+
+        let demo: LayoutFile = serde_json::from_str(DEFAULT_LAYOUT).unwrap();
+        let demo_index = demo
+            .layers
+            .iter()
+            .position(|l| l.title == "Demo")
+            .expect("a layer titled Demo") as u8;
+
+        let points_at_demo = |k: &K| match k {
+            K::LayerSwitch { layer, .. } | K::LayerTap { layer, .. } => *layer == demo_index,
+            _ => false,
+        };
+        let from_base = demo.layers[0].keys.iter().any(points_at_demo)
+            || demo
+                .combos
+                .iter()
+                .any(|c| c.layer == 0 && points_at_demo(&c.action));
+        assert!(from_base, "no key or combo on layer 0 reaches the Demo layer");
+
+        // And a way back out, or the demo layer is a trap.
+        let leaves = demo.layers[demo_index as usize]
+            .keys
+            .iter()
+            .any(|k| matches!(k, K::LayerSwitch { layer: 0, .. }));
+        assert!(leaves, "the Demo layer has no key back to the base layer");
+    }
+
+    /// The golden fixture must stay what Oryx can actually produce. If someone
+    /// enriches it in place instead of the demo asset, `reference_keymap.c`
+    /// stops being third-party ground truth and the parity test in
+    /// `codegen::tests` quietly becomes self-referential.
+    #[test]
+    fn the_golden_fixture_stays_free_of_kinds_oryx_cannot_emit() {
+        let fixture: LayoutFile = serde_json::from_str(FIXTURE_LAYOUT).unwrap();
+        let offenders: Vec<String> = fixture
+            .layers
+            .iter()
+            .enumerate()
+            .flat_map(|(li, l)| l.keys.iter().enumerate().map(move |(k, key)| (li, k, key)))
+            .filter(|(_, _, key)| {
+                matches!(
+                    key,
+                    crate::layout::schema::KeyAction::OsMacro { .. }
+                        | crate::layout::schema::KeyAction::OsMode { .. }
+                )
+            })
+            .map(|(li, k, _)| format!("layer {li} key {k}"))
+            .collect();
+        assert!(
+            offenders.is_empty(),
+            "shared/fixtures/seeded_layout.json must not contain osMacro/osMode \
+             keys — Oryx cannot emit them, so reference_keymap.c could not \
+             contain them either. Put demo content in shared/default_layout.json. \
+             Offending keys: {offenders:?}"
+        );
     }
 
     #[test]
