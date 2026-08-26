@@ -218,7 +218,9 @@ export default function LightingPanel() {
                   {!knobs.hue &&
                     `${boot?.label ?? lighting.effect} sets its own hue, so that slider is disabled rather than pretending. `}
                   Brightness also dims the layer colours: the generated
-                  set_layer_color scales every ledmap colour by it.
+                  set_layer_color scales every ledmap colour by it. The board
+                  has its own ceiling — the firmware clamps to it, so past that
+                  point the slider stops making a difference.
                 </p>
               </div>
 

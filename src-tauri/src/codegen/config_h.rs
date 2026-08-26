@@ -96,8 +96,29 @@ fn render_lighting(lighting: &Lighting) -> String {
     }
 
     out.push_str(&format!(
-        "\n#define RGB_MATRIX_DEFAULT_MODE RGB_MATRIX_{}\n#define RGB_MATRIX_DEFAULT_HUE {}\n#define RGB_MATRIX_DEFAULT_SAT {}\n#define RGB_MATRIX_DEFAULT_VAL {}\n#define RGB_MATRIX_DEFAULT_SPD {}\n",
-        lighting.effect, lighting.hue, lighting.sat, lighting.val, lighting.speed
+        "\n#define RGB_MATRIX_DEFAULT_MODE RGB_MATRIX_{}\n#define RGB_MATRIX_DEFAULT_HUE {}\n#define RGB_MATRIX_DEFAULT_SAT {}\n#define RGB_MATRIX_DEFAULT_SPD {}\n",
+        lighting.effect, lighting.hue, lighting.sat, lighting.speed
+    ));
+
+    // Brightness is clamped HERE, in the preprocessor, rather than in the app.
+    //
+    // QMK's own clamp against the board's ceiling lives inside
+    // `rgb_matrix_sethsv_eeprom_helper` (rgb_matrix.c:604), and the boot path
+    // does not go through it — `rgb_matrix_init_drivers` assigns
+    // `rgb_matrix_config.hsv` straight from these defines (:103). So a `val`
+    // above the board's maximum really would light the LEDs harder than the
+    // vendor specified, which is a current-draw decision that is theirs, not
+    // ours.
+    //
+    // The board's ceiling is not something this app knows — it comes from the
+    // keyboard's own `keyboard.json` (175 on the Moonlander) via the generated
+    // `info_config.h`, which the build includes before this file. Comparing
+    // against it in C means the clamp stays correct for a board whose ceiling
+    // we have never heard of. The `#ifdef` matters: an undefined macro reads as
+    // 0 in an `#if`, which would silently clamp the board to black.
+    out.push_str(&format!(
+        "\n#define QF_RGB_REQUESTED_VAL {}\n#ifdef RGB_MATRIX_MAXIMUM_BRIGHTNESS\n#    if QF_RGB_REQUESTED_VAL > RGB_MATRIX_MAXIMUM_BRIGHTNESS\n#        define RGB_MATRIX_DEFAULT_VAL RGB_MATRIX_MAXIMUM_BRIGHTNESS\n#    else\n#        define RGB_MATRIX_DEFAULT_VAL QF_RGB_REQUESTED_VAL\n#    endif\n#else\n#    define RGB_MATRIX_DEFAULT_VAL QF_RGB_REQUESTED_VAL\n#endif\n",
+        lighting.val
     ));
 
     if lighting.mode == LightingMode::Ledmap {
@@ -221,6 +242,28 @@ mod tests {
                 effect.qmk
             );
         }
+    }
+
+    /// The boot path assigns `rgb_matrix_config.hsv` straight from these
+    /// defines and never passes QMK's own clamp, so a `val` above the board's
+    /// ceiling would drive the LEDs past what the vendor specified. The clamp
+    /// is emitted as C because only the board's `info_config.h` knows the
+    /// ceiling — and it is `#ifdef`-guarded, because an undefined macro reads
+    /// as 0 in an `#if` and would clamp the board to black instead.
+    #[test]
+    fn brightness_is_clamped_against_the_boards_own_ceiling() {
+        let mut l = lighting("BREATHING", &[]);
+        l.val = 255;
+        let out = with(l);
+        assert!(out.contains("#define QF_RGB_REQUESTED_VAL 255"));
+        assert!(out.contains("#ifdef RGB_MATRIX_MAXIMUM_BRIGHTNESS"));
+        assert!(out
+            .contains("#        define RGB_MATRIX_DEFAULT_VAL RGB_MATRIX_MAXIMUM_BRIGHTNESS"));
+        // The fallback for a board that names no ceiling honours the request
+        // rather than blacking the LEDs out.
+        assert!(out.contains("#else\n#    define RGB_MATRIX_DEFAULT_VAL QF_RGB_REQUESTED_VAL"));
+        // ...and never as a bare define, which would skip the clamp entirely.
+        assert!(!out.contains("#define RGB_MATRIX_DEFAULT_VAL 255"));
     }
 
     #[test]
