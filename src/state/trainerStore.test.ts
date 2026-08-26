@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { GEOMETRY } from "../lib/geometry";
 import { resetMockStore } from "../lib/ipc";
+import { targetLayer } from "../lib/led";
 import { serializeStats, statKey, type StatsMap } from "../lib/trainer";
 import type { KeyAction, Layer, LayoutFile } from "../lib/types";
 import { useLayoutStore } from "./layoutStore";
@@ -480,12 +481,28 @@ describe("trainer never touches the layout", () => {
     useTrainerStore.getState().start();
     const { targets } = useTrainerStore.getState();
 
-    // The seeded layout has 18 TO/TG keys and 2 LT()s. All 20 used to be
-    // refused or reduced to one drillable witness target; every one is a plain
-    // target now.
-    expect(targets).toHaveLength(20);
-    expect(targets).toContainEqual({ layer: 0, position: 40 }); // LT(3)
-    expect(targets).toContainEqual({ layer: 0, position: 58 }); // LT(1)
+    // Every key that targets a layer used to be refused, or reduced to one
+    // drillable witness; each is a plain target now. Counted off the layout
+    // through the scope's own predicate, so a layout that grows another layer
+    // key cannot silently shrink the drill and still pass.
+    const layout = useLayoutStore.getState().layout!;
+    const expected = layout.layers.flatMap((l, li) =>
+      l.keys.flatMap((k, i) =>
+        targetLayer(k) !== null ? [{ layer: li, position: i }] : [],
+      ),
+    );
+    expect(expected.length).toBeGreaterThan(0);
+    expect(targets).toHaveLength(expected.length);
+    for (const at of expected) expect(targets).toContainEqual(at);
+
+    // The specific regression: layer-taps count too, not just layer switches.
+    const taps = layout.layers.flatMap((l, li) =>
+      l.keys.flatMap((k, i) =>
+        k.kind === "layerTap" ? [{ layer: li, position: i }] : [],
+      ),
+    );
+    expect(taps.length).toBeGreaterThan(0);
+    for (const at of taps) expect(targets).toContainEqual(at);
   });
 
   it("drills the real layout's silent keys too — nothing is left out for being invisible", () => {

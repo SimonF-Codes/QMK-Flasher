@@ -125,6 +125,12 @@ function Example({ step }: { step: TutorialStep }) {
       </div>
     );
   }
+  // When the key does something different per machine, the split below breaks
+  // it down per machine BY NAME — which is the same breakdown the guide's
+  // `detail` carries for an OS macro or a swapped tap/hold, only clearer. In a
+  // card this size, printing both is just saying it twice.
+  const perOs = !!e.os && e.os.mac !== e.os.windows;
+
   return (
     <div className="rounded-lg border border-violet-800/70 bg-violet-950/20 p-3">
       <p className="text-xs font-medium uppercase tracking-wide text-violet-400">
@@ -133,7 +139,7 @@ function Example({ step }: { step: TutorialStep }) {
       <p className="mt-1 text-sm font-semibold text-zinc-100">{e.title}</p>
       <p className="text-[13px] leading-relaxed text-zinc-300">{e.summary}</p>
 
-      {e.detail.length > 0 && (
+      {!perOs && e.detail.length > 0 && (
         <ul className="mt-1.5 space-y-0.5 text-[12px] text-zinc-400">
           {e.detail.map((d, i) => (
             <li key={i} className="flex gap-1.5">
