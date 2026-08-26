@@ -73,6 +73,23 @@ press time.
   only. Picking one used to produce a `basic` key the swap preview could not
   see — fixed.
 
+### Tutorial mode
+
+A guided tour of every feature, offered once on a fresh install and reopenable
+from the header. Fifteen steps in an order that builds — a plain key, then
+layers, tap-holds, macros, combos, the OS-aware keys, and finally Build &
+Flash.
+
+Each step points at a **real key in your own layout**, highlighted on the
+board, because the steps are derived from the layout rather than hardcoded to
+positions. Move a key and the tour follows it onto whatever layer it now lives
+on. A feature your layout does not use yet still gets its step and explains
+itself, so the tour is the same length every time and "step 7 of 15" means
+something.
+
+It shares its derivation with the Tool Guide, so the two cannot drift: the
+guide is the reference, the tour is the tour.
+
 ### Tool Guide
 
 A reference for every non-obvious key in the layout, **derived from the layout

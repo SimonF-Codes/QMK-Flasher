@@ -231,6 +231,40 @@ entry that fails its shape check, is dropped and practice history starts over
 open the trainer is worse). Weighting reads `window`/`times` only, so it decays:
 a key you used to miss stops being favoured after ten clean answers.
 
+### Tutorial mode (added 2026-08-26, frontend-only)
+
+A guided tour of every feature, offered once to a new user and reopenable from
+the header afterwards. Fifteen topics in a fixed order — `welcome`, `key`,
+`layer`, `tapHold`, `tapDance`, `lock`, `macro`, `combo`, `osSwap`, `osMacro`,
+`lighting`, `live`, `versions`, `guide`, `flash` — each building on the last
+rather than following the order the layout happens to be in.
+
+**Steps are derived from the layout, not hardcoded.** `src/lib/tutorial.ts`
+builds each step by asking `toolGuide.ts` for a live example of the feature in
+the current layout, so a step points at a real key wherever that key currently
+is. Move a key and the tour follows it, including onto another layer, which it
+names. This is also why the tutorial and the Tool Guide cannot drift: they are
+one derivation with two presentations — the guide is the reference (everything
+at once, printable), the tour is the tour (one thing at a time, in order).
+
+Invariants worth keeping, each pinned by a test in `tutorial.test.ts`:
+
+- The tour is **the same length whatever the layout**, so "step 7 of 15" means
+  something. A feature the layout lacks still gets its step and explains
+  itself; it just says so instead of pointing.
+- A step **never carries both an example and a missing-note**.
+- A step **never renders empty** — every topic teaches something with nothing
+  to point at.
+
+`the_demo_layout_has_a_live_example_of_every_advanced_kind` (Rust) is the other
+half of that contract: without it the shipped layout could quietly lose a
+feature and the tour would start saying "not in this layout" with nothing else
+noticing.
+
+`tutorialStore.ts` persists a `seen` flag to `localStorage`, set the moment the
+tour is **offered or started** — never when finished. Nobody is asked twice,
+and nobody has to reach the end to stop being asked.
+
 ### Layout version history (added 2026-07-21, additive)
 
 Additive — **no existing signature changes**, `SCHEMA_VERSION` unchanged
