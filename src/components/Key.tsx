@@ -21,6 +21,8 @@ interface KeyProps {
   recent?: boolean;
   /** Trainer: the key currently being asked for. */
   target?: boolean;
+  /** Tutorial: a key the open tour step is talking about. */
+  tutorial?: boolean;
   /**
    * The color the firmware lights this LED with on the current layer — the
    * key's own glow if it has one, else the layer's base color. Drawn faded
@@ -53,6 +55,7 @@ export default function Key({
   pressed = false,
   recent = false,
   target = false,
+  tutorial = false,
   ledColor,
   mode,
   osSwapped = false,
@@ -70,13 +73,16 @@ export default function Key({
   const led = ledColor ?? action.glow;
 
   // The modal board interactions win (swap, then combo picking), then live
-  // press state, then the trainer's prompt, then the edit selection — so a key
-  // you're holding stays visible while editing, and your answer is never
-  // hidden by the question.
+  // press state, then the trainer's prompt, then the tutorial's, then the edit
+  // selection — so a key you're holding stays visible while editing, and your
+  // answer is never hidden by the question.
   //
   // Fuchsia for the trainer is a deliberate choice: green already means "you
   // pressed this" and sky means "you're editing this", so a target has to be
   // neither. It stays dark enough for the LED preview strip to read on top.
+  // Violet for the tutorial is the same argument one step further along, and
+  // it loses to fuchsia because a drill you are answering is more urgent than
+  // a paragraph you are reading.
   // Combo membership borrows sky (it IS a kind of selection — of several keys
   // at once) with a heavier stroke, and non-members dim so the set stands out.
   const rectClass = swapSource
@@ -93,9 +99,11 @@ export default function Key({
               ? "fill-green-900 stroke-green-500/70"
               : target
                 ? "fill-fuchsia-800 stroke-fuchsia-300"
-                : selected
-                  ? "fill-sky-900 stroke-sky-400"
-                  : "fill-zinc-800 stroke-zinc-700 hover:fill-zinc-700";
+                : tutorial
+                  ? "fill-violet-800 stroke-violet-300"
+                  : selected
+                    ? "fill-sky-900 stroke-sky-400"
+                    : "fill-zinc-800 stroke-zinc-700 hover:fill-zinc-700";
 
   return (
     <g
@@ -112,7 +120,9 @@ export default function Key({
         rx={6}
         className={rectClass}
         strokeWidth={
-          selected || swapSource || comboMember || pressed || target ? 2 : 1
+          selected || swapSource || comboMember || pressed || target || tutorial
+            ? 2
+            : 1
         }
       />
       {led && (

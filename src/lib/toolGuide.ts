@@ -148,6 +148,14 @@ export interface GuideLocation {
   index: number | null;
   /** Physical description of the position, "" for a combo. */
   position: string;
+  /**
+   * Every LAYOUT-arg position this location occupies. One entry for an
+   * ordinary key; a combo's whole trigger set for a combo. Carried so a
+   * consumer that wants to point at the board (the tutorial highlights the
+   * key it is talking about) does not have to walk the layout a second time
+   * to rediscover what the guide already found.
+   */
+  keys: readonly number[];
 }
 
 /**
@@ -889,6 +897,7 @@ export function buildToolGuide(
         layerName: label(li),
         index: ki,
         position: describePosition(ki),
+        keys: [ki],
       });
     }),
   );
@@ -904,6 +913,7 @@ export function buildToolGuide(
         layerName: label(combo.layer),
         index: null,
         position: "",
+        keys: combo.keys,
       },
       {
         key: `combo:${ci}`,
