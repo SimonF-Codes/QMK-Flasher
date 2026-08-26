@@ -799,8 +799,7 @@ mod tests {
     /// A layout with no LED data has nothing to choose between, so effect mode
     /// must not conjure a second `keyboard_post_init_user` or a ledmap.
     #[test]
-    fn effect_mode_without_rgb_matrix_custom_emits_no_led_code(
-    ) {
+    fn effect_mode_without_rgb_matrix_custom_emits_no_led_code() {
         let mut layout = fixture();
         layout.settings.rgb_matrix_custom = false;
         layout.settings.lighting = Some(effect_lighting(LightingMode::Effect));

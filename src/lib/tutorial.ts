@@ -89,7 +89,7 @@ export interface TutorialExample {
 
 export interface TutorialStep {
   id: TutorialTopicId;
-  /** 1-based, for "step 4 of 15". */
+  /** 1-based, for "step 4 of 16". */
   number: number;
   title: string;
   /**
@@ -508,7 +508,7 @@ function plainKeyExample(
  * The whole tour for a layout. Every step is always present: a step whose
  * feature this layout does not use still explains the feature and says so,
  * which is the honest thing to show and keeps the numbering stable, so
- * "step 9 of 15" means the same thing to two people with different layouts.
+ * "step 9 of 16" means the same thing to two people with different layouts.
  *
  * `layerNames` overrides the layers' own titles exactly as the guide takes
  * them, so the tour and the guide name a layer identically.

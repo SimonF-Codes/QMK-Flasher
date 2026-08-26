@@ -1,7 +1,6 @@
 //! `config.h` from `settings` (+ combo count + RGB Matrix lighting).
 
-use crate::layout::schema::{Lighting, LightingMode};
-use crate::layout::schema::LayoutFile;
+use crate::layout::schema::{LayoutFile, Lighting, LightingMode};
 use crate::rgb_effects;
 
 pub fn render(layout: &LayoutFile) -> String {
