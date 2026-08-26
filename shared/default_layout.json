@@ -1271,14 +1271,22 @@
           "glow": "#34006b"
         },
         {
-          "kind": "macro",
+          "kind": "osMacro",
           "label": "Screenshot",
-          "steps": [
+          "mac": [
             {
-              "code": "KC_5",
-              "delay": 100,
+              "code": "KC_4",
               "mods": [
-                "MOD_LCTL",
+                "MOD_LGUI",
+                "MOD_LSFT"
+              ]
+            }
+          ],
+          "windows": [
+            {
+              "code": "KC_S",
+              "mods": [
+                "MOD_LGUI",
                 "MOD_LSFT"
               ]
             }
