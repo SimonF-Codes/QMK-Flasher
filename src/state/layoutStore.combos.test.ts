@@ -32,12 +32,13 @@ describe("layoutStore — combo editor (mock IPC)", () => {
   });
 
   it("refuses to commit until there are two distinct keys and an action", () => {
-    store().beginComboEdit(null);
-    // The draft lives outside the layout, so the layout's own combos are
-    // still untouched here — count and name are read from it rather than
-    // written down, so enriching the shipped default cannot break this.
+    // These tests are about the editor's behaviour, not about how many combos
+    // the shipped layout has — so both the count and the auto-assigned name
+    // are read off the layout. The name comes from `suggestComboName` rather
+    // than being spelled out, so the rule stays in one place.
     const before = store().layout!.combos.length;
     const name = suggestComboName(store().layout!);
+    store().beginComboEdit(null);
     expect(store().comboDraftIssue()).toMatch(/at least 2/);
     expect(store().commitComboDraft()).toBe(false);
 
@@ -67,16 +68,16 @@ describe("layoutStore — combo editor (mock IPC)", () => {
   });
 
   it("edits an existing combo in place", () => {
-    const original = store().layout!.combos[0];
     const before = store().layout!.combos.length;
+    const first = store().layout!.combos[0];
     store().beginComboEdit(0);
-    // The draft opens on the combo that is actually there, whatever it is.
-    expect(store().comboEditor?.combo.name).toBe(original.name);
-    expect(store().comboEditor?.combo.keys).toEqual(original.keys);
-    store().updateComboDraft({ name: "Mirror one" });
+    // The draft opens on whatever combo is actually there.
+    expect(store().comboEditor?.combo.name).toBe(first.name);
+    expect(store().comboEditor?.combo.keys).toEqual(first.keys);
+    store().updateComboDraft({ name: "Renamed" });
     expect(store().commitComboDraft()).toBe(true);
-    expect(store().layout!.combos[0].name).toBe("Mirror one");
-    // In place: an edit replaces a combo, it does not append one.
+    expect(store().layout!.combos[0].name).toBe("Renamed");
+    // Editing renames in place; it must not add or drop one.
     expect(store().layout!.combos).toHaveLength(before);
   });
 
@@ -90,9 +91,11 @@ describe("layoutStore — combo editor (mock IPC)", () => {
   });
 
   it("follows the combo's layer, and re-points it when you change tabs", () => {
-    store().selectLayer(2);
-    store().beginComboEdit(0); // Mirror 1 lives on layer 0
-    expect(store().selectedLayer).toBe(0);
+    // Whichever layer the first combo lives on, opening it goes there.
+    const home = store().layout!.combos[0].layer;
+    store().selectLayer(home === 2 ? 3 : 2);
+    store().beginComboEdit(0);
+    expect(store().selectedLayer).toBe(home);
 
     store().selectLayer(3);
     expect(store().comboEditor?.combo.layer).toBe(3);
@@ -106,9 +109,9 @@ describe("layoutStore — combo editor (mock IPC)", () => {
     expect(n).toBeGreaterThan(1);
     expect(store().layout!.settings.combos).toBe(true);
 
-    // The flag tracks CONTENT, so it holds until the last combo goes — drain
-    // the layout rather than assuming how many it shipped with.
-    for (let left = n; left > 1; left--) {
+    // The flag tracks CONTENT: it must stay true while ANY combo remains,
+    // whatever the layout shipped with, and flip only when the last one goes.
+    while (store().layout!.combos.length > 1) {
       store().deleteCombo(0);
       expect(store().layout!.settings.combos).toBe(true);
     }
@@ -125,8 +128,12 @@ describe("layoutStore — combo editor (mock IPC)", () => {
   });
 
   it("clears settings.combos when a layer takes its last combo with it", () => {
-    // Both seeded combos live on layer 0; deleting it drops them, and leaving
-    // the flag true would enable COMBO_ENABLE with no combo table.
+    // The claim is about the LAST combo going with its layer, so it only means
+    // anything if layer 0 carries all of them — assert that rather than assume
+    // it, so a default layout that spreads its combos fails loudly here
+    // instead of quietly testing nothing.
+    expect(store().layout!.combos.every((c) => c.layer === 0)).toBe(true);
+    // Leaving the flag true would enable COMBO_ENABLE with no combo table.
     store().deleteLayer(0);
     expect(store().layout!.combos).toHaveLength(0);
     expect(store().layout!.settings.combos).toBe(false);
@@ -165,6 +172,7 @@ describe("layoutStore — combo editor (mock IPC)", () => {
     await store().save();
     expect(store().isDirty()).toBe(false);
     await store().load();
+    expect(store().layout!.combos).toHaveLength(before + 1);
     expect(store().layout!.combos[before]).toEqual({
       name: "Tab",
       keys: [40, 41],
@@ -182,30 +190,35 @@ describe("layoutStore — OS settings", () => {
   });
 
   it("edits osDetection and osDefault, and ignores no-ops", () => {
-    // A no-op is "set it to what it already is", so read what it already is
-    // rather than asserting what the shipped layout happens to carry.
-    const { osDetection, osDefault } = store().layout!.settings;
+    // Written against whatever the mock layout ships with, so that changing
+    // the default layout's OS settings cannot break this test.
+    const wasOn = store().layout!.settings.osDetection;
+    const wasOs = store().layout!.settings.osDefault;
+    const otherOs = wasOs === "windows" ? "mac" : "windows";
 
-    store().setOsDetection(osDetection);
+    // Setting a value to what it already is must not dirty the layout.
+    store().setOsDetection(wasOn);
     expect(store().isDirty()).toBe(false);
-    store().setOsDefault(osDefault);
+    store().setOsDefault(wasOs);
     expect(store().isDirty()).toBe(false);
 
-    const other = osDefault === "windows" ? "mac" : "windows";
-    store().setOsDetection(!osDetection);
-    expect(store().layout!.settings.osDetection).toBe(!osDetection);
-    store().setOsDefault(other);
-    expect(store().layout!.settings.osDefault).toBe(other);
+    store().setOsDetection(!wasOn);
+    expect(store().layout!.settings.osDetection).toBe(!wasOn);
+    store().setOsDefault(otherOs);
+    expect(store().layout!.settings.osDefault).toBe(otherOs);
     expect(store().isDirty()).toBe(true);
   });
 
   it("round-trips both through the backend", async () => {
-    store().setOsDetection(true);
-    store().setOsDefault("mac");
+    const flipped = !store().layout!.settings.osDetection;
+    const otherOs =
+      store().layout!.settings.osDefault === "windows" ? "mac" : "windows";
+    store().setOsDetection(flipped);
+    store().setOsDefault(otherOs);
     await store().save();
     await store().load();
-    expect(store().layout!.settings.osDetection).toBe(true);
-    expect(store().layout!.settings.osDefault).toBe("mac");
+    expect(store().layout!.settings.osDetection).toBe(flipped);
+    expect(store().layout!.settings.osDefault).toBe(otherOs);
   });
 });
 
