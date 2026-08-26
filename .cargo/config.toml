@@ -1,6 +1,15 @@
-# One shared target dir for the repo and all its worktrees, so a fresh
-# worktree reuses the cache instead of recompiling every dependency.
-# (Originally a workaround for the repo living under OneDrive; the repo moved
-# to C:\dev on 2026-07-30 and this was kept deliberately.)
-[build]
-target-dir = "C:/Users/fridl/.cargo-targets/qmk-flasher"
+# Optional shared target dir.
+#
+# Cargo defaults to a per-checkout `src-tauri/target/`, which means a fresh
+# git worktree recompiles every dependency from scratch. Pointing one build
+# cache at all of them is worth several minutes per worktree, but where that
+# cache lives is a property of the machine, not of the project — so it is an
+# environment variable rather than an absolute path checked in here:
+#
+#   PowerShell   $env:CARGO_TARGET_DIR = "$HOME\.cargo-targets\qmk-flasher"
+#   bash         export CARGO_TARGET_DIR="$HOME/.cargo-targets/qmk-flasher"
+#
+# CARGO_TARGET_DIR overrides `build.target-dir`, so setting it needs no edit
+# to this file. (The shared cache started as a workaround for the repo living
+# under OneDrive; the repo moved to a local disk on 2026-07-30 and it was kept
+# deliberately, for the worktrees.)

@@ -207,11 +207,13 @@ mod tests {
         .expect("real build must succeed");
         assert!(path.ends_with(".bin"));
         let built = std::fs::metadata(&path).expect("built bin exists").len() as f64;
-        let reference = std::fs::metadata(
-            r"C:\Users\fridl\qmk_firmware\zsa_moonlander_revb_arrows_together.bin",
-        )
-        .expect("reference arrows_together bin exists")
-        .len() as f64;
+        // The known-good image Oryx built, at the root of whichever
+        // qmk_firmware checkout the app is configured against.
+        let reference_bin = std::path::Path::new(&appcfg::get().qmk_firmware_path)
+            .join("zsa_moonlander_revb_arrows_together.bin");
+        let reference = std::fs::metadata(&reference_bin)
+            .unwrap_or_else(|e| panic!("reference bin {}: {e}", reference_bin.display()))
+            .len() as f64;
         let deviation = (built - reference).abs() / reference;
         assert!(
             deviation < 0.01,

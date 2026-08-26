@@ -1,15 +1,30 @@
 #!/usr/bin/env node
 // Extracts Moonlander key geometry + LED map from QMK's keyboard.json into
 // shared/moonlander_geometry.json. Re-run after a qmk_firmware update:
-//   node scripts/extract-geometry.mjs [path-to-keyboard.json]
+//   node scripts/extract-geometry.mjs <path-to-keyboard.json>
+//   QMK_FIRMWARE=<qmk_firmware checkout> node scripts/extract-geometry.mjs
 
 import { readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
+// No default checkout location: a qmk_firmware clone can be anywhere, so the
+// path is either given as an argument or read from $QMK_FIRMWARE. Guessing
+// someone's home directory would only fail later, with a worse message.
+const KEYBOARD_SUBPATH = "keyboards/zsa/moonlander/revb/keyboard.json";
 const KEYBOARD_JSON =
   process.argv[2] ??
-  "C:/Users/fridl/qmk_firmware/keyboards/zsa/moonlander/revb/keyboard.json";
+  (process.env.QMK_FIRMWARE
+    ? join(process.env.QMK_FIRMWARE, KEYBOARD_SUBPATH)
+    : null);
+if (!KEYBOARD_JSON) {
+  console.error(
+    `usage: node scripts/extract-geometry.mjs <path-to-keyboard.json>\n` +
+      `   or: QMK_FIRMWARE=<qmk_firmware checkout> node scripts/extract-geometry.mjs\n` +
+      `       (which reads <QMK_FIRMWARE>/${KEYBOARD_SUBPATH})`,
+  );
+  process.exit(2);
+}
 const LAYOUT_NAME = "LAYOUT_moonlander";
 
 const kb = JSON.parse(readFileSync(KEYBOARD_JSON, "utf8"));
