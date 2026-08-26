@@ -192,6 +192,33 @@ mod tests {
         assert!(path.ends_with(".bin"));
     }
 
+    /// Real MSYS build of the SHIPPED DEFAULT layout — the one image every new
+    /// user builds first, and the only layout in the repo whose sources have no
+    /// Oryx original to be checked against. Everything the Demo layer adds
+    /// beyond the fixture goes through the compiler here: twelve `OS_MACRO_n`
+    /// bodies, all four `QF_OS_*` cases, `OS_DETECTION_ENABLE`, four combos,
+    /// and an eighth layer under `LAYER_STATE_8BIT` (which holds exactly 8).
+    /// Builds into a throwaway keymap dir, so the user's `qmk_flasher` sources
+    /// are untouched.
+    #[test]
+    #[ignore = "invokes the real MSYS toolchain (minutes); run manually"]
+    fn real_msys_build_of_the_shipped_demo_layout_is_green() {
+        use crate::layout::LayoutFile;
+        let layout: LayoutFile =
+            serde_json::from_str(crate::layout::store::DEFAULT_LAYOUT).unwrap();
+        assert_eq!(layout.layers.len(), 8, "seven Oryx layers plus Demo");
+        let mut cfg = appcfg::get();
+        cfg.keymap_name = "qmk_flasher_demo_check".into();
+        let keyboard = crate::keyboards::supported(&layout.meta.geometry).unwrap();
+        let dir = codegen::write_sources(&layout, &cfg).expect("write sources");
+        let result = msys::build(&cfg, keyboard, &mut |l| println!("{l}"));
+        let _ = std::fs::remove_dir_all(&dir);
+        let path = result.expect("the shipped default layout must compile");
+        assert!(path.ends_with(".bin"));
+        let bytes = std::fs::metadata(&path).expect("built bin exists").len();
+        println!("\n  shipped demo layout: {bytes} bytes at {path}\n");
+    }
+
     /// A3 acceptance: the real MSYS build. Ignored by default — run manually
     /// once with `cargo test real_msys_build -- --ignored --nocapture`.
     /// Produces a .bin whose size is within ~1% of the known-good
