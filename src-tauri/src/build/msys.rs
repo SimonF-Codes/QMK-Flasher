@@ -21,7 +21,7 @@ use crate::error::AppError;
 use crate::keyboards::KeyboardInfo;
 use crate::layout::store;
 
-/// `C:\Users\fridl\qmk_firmware` → `/c/Users/fridl/qmk_firmware`.
+/// `C:\Users\me\qmk_firmware` → `/c/Users/me/qmk_firmware`.
 fn to_msys_path(win: &str) -> String {
     let s = win.replace('\\', "/");
     match s.split_once(":/") {
@@ -166,8 +166,8 @@ mod tests {
     #[test]
     fn msys_path_conversion() {
         assert_eq!(
-            to_msys_path(r"C:\Users\fridl\qmk_firmware"),
-            "/c/Users/fridl/qmk_firmware"
+            to_msys_path(r"C:\Users\me\qmk_firmware"),
+            "/c/Users/me/qmk_firmware"
         );
         assert_eq!(to_msys_path("D:/already/forward"), "/d/already/forward");
         assert_eq!(to_msys_path("relative/path"), "relative/path");

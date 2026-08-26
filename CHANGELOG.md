@@ -2,6 +2,36 @@
 
 ## Unreleased
 
+### A demo layout that shows the whole app
+
+A fresh install now starts on a layout that already uses every advanced
+feature, so nothing has to be described in the abstract. An eighth layer,
+**Demo**, carries one labelled, working example of each: a macro, twelve
+OS-macro navigation presets, all four OS-mode keys, a tap dance, a
+dual-function key, a mod-tap, a layer-tap, MO/TG/TO/TT side by side, Key Lock,
+Caps Word, RGB and HSV keys, and per-key glows throughout. Two new combos join
+Oryx's mirror pair: Escape+Delete toggles the Demo layer, `-`+`'` toggles Caps
+Word. `TO(0)` on the right thumb leaves the layer.
+
+The shipped layout is now a **separate asset** from the golden test fixture.
+`shared/fixtures/seeded_layout.json` and `reference_keymap.c` exist to prove
+that codegen reproduces real Oryx output byte for byte, and Oryx cannot emit OS
+macros or OS-mode keys at all — enriching that fixture would have quietly
+turned the parity test into a comparison against a file we wrote ourselves.
+`shared/default_layout.json` is what installs; the fixture is frozen and its
+parity test is unchanged. A test now fails the build if a kind Oryx cannot
+produce appears in the fixture.
+
+### Less of one person's machine
+
+- The `qmk_firmware` default is `%USERPROFILE%\qmk_firmware` — where `qmk
+  setup` clones — instead of a hard-coded home directory.
+- `scripts/extract-geometry.mjs` has no default path: pass the `keyboard.json`,
+  or set `QMK_FIRMWARE`. It exits with usage instead of guessing.
+- The shared Cargo build cache across worktrees is now opt-in via
+  `CARGO_TARGET_DIR`; `.cargo/config.toml` documents it rather than pinning an
+  absolute path.
+
 ### Multi-key and multi-output keys
 
 Combos and macros have always been *generated* — they arrived from the Oryx

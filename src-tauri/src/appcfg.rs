@@ -13,17 +13,30 @@ use crate::layout::store::data_dir;
 pub struct AppConfig {
     /// QMK MSYS install root, e.g. `C:\QMK_MSYS`.
     pub msys_path: String,
-    /// qmk_firmware checkout, e.g. `C:\Users\fridl\qmk_firmware`.
+    /// qmk_firmware checkout, e.g. `C:\Users\me\qmk_firmware`.
     pub qmk_firmware_path: String,
     /// Keymap directory name codegen writes into (never `arrows_together`).
     pub keymap_name: String,
+}
+
+/// `%USERPROFILE%\qmk_firmware`, the location `qmk setup` clones into. Falls
+/// back to a drive-root path only if the environment has no USERPROFILE at
+/// all; either way the user can point the setting somewhere else, and the
+/// build reports a missing checkout rather than guessing further.
+fn default_qmk_firmware_path() -> String {
+    match std::env::var("USERPROFILE") {
+        Ok(home) if !home.trim().is_empty() => {
+            std::path::Path::new(&home).join("qmk_firmware").display().to_string()
+        }
+        _ => r"C:\qmk_firmware".into(),
+    }
 }
 
 impl Default for AppConfig {
     fn default() -> Self {
         Self {
             msys_path: r"C:\QMK_MSYS".into(),
-            qmk_firmware_path: r"C:\Users\fridl\qmk_firmware".into(),
+            qmk_firmware_path: default_qmk_firmware_path(),
             keymap_name: "qmk_flasher".into(),
         }
     }
@@ -80,6 +93,19 @@ mod tests {
     #[test]
     fn default_config_is_valid() {
         assert!(validate(&get()).is_ok());
+    }
+
+    /// The default is derived from the environment, not a path baked in at
+    /// compile time — a checked-in home directory is one person's machine.
+    #[test]
+    fn the_default_qmk_path_follows_the_user_profile() {
+        let cfg = AppConfig::default();
+        assert!(cfg.qmk_firmware_path.ends_with("qmk_firmware"), "{cfg:?}");
+        if let Ok(home) = std::env::var("USERPROFILE") {
+            if !home.trim().is_empty() {
+                assert!(cfg.qmk_firmware_path.starts_with(&home), "{cfg:?}");
+            }
+        }
     }
 
     #[test]
