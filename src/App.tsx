@@ -11,12 +11,14 @@ import LiveToggle from "./components/LiveToggle";
 import OsSettingsPanel from "./components/OsSettingsPanel";
 import OsSwapToggle from "./components/OsSwapToggle";
 import ToolGuidePanel from "./components/ToolGuidePanel";
+import TutorialPanel from "./components/TutorialPanel";
 import VersionHistoryPanel from "./components/VersionHistoryPanel";
 import { targetKind } from "./lib/focus";
 import { ipc, MOCK } from "./lib/ipc";
 import { useClipboardStore } from "./state/clipboardStore";
 import { useLayoutStore } from "./state/layoutStore";
 import { useLiveStore } from "./state/liveStore";
+import { useTutorialStore } from "./state/tutorialStore";
 
 export default function App() {
   const layout = useLayoutStore((s) => s.layout);
@@ -29,6 +31,8 @@ export default function App() {
   const dirty = useLayoutStore((s) => s.isDirty)();
   const liveEnabled = useLiveStore((s) => s.enabled);
   const [guideOpen, setGuideOpen] = useState(false);
+  const startTour = useTutorialStore((s) => s.start);
+  const tourOpen = useTutorialStore((s) => s.open);
 
   useEffect(() => {
     void load();
@@ -138,6 +142,18 @@ export default function App() {
         {/* shrink-0 keeps the controls at full size; when the row runs out of
             space this group wraps to its own line instead of being squeezed. */}
         <div className="ml-auto flex shrink-0 items-center gap-2">
+          {/* Beside the guide because they are the same material seen two
+              ways: the guide is the reference, the tour is the reference
+              walked in order. Always here, so leaving the tour is never
+              final. */}
+          <button
+            onClick={startTour}
+            disabled={tourOpen}
+            className="rounded-md border border-violet-800 bg-violet-950/40 px-2 py-1 text-xs font-medium text-violet-200 enabled:hover:bg-violet-900/50 disabled:opacity-40"
+            title="A guided tour of every feature, using this layout's own keys as the examples"
+          >
+            🧭 Tour
+          </button>
           <button
             onClick={() => setGuideOpen(true)}
             className="rounded-md border border-zinc-700 bg-zinc-900 px-2 py-1 text-xs font-medium text-zinc-300 hover:bg-zinc-800"
@@ -201,6 +217,13 @@ export default function App() {
         </section>
         <KeyPicker />
       </main>
+
+      {/* In the column rather than over it: the tour highlights a real key on
+          the board while it talks about it, so it must not cover the board.
+          The keyboard is an SVG that scales, so docking here shrinks it
+          instead of hiding it. Renders nothing at all once a returning user
+          has been offered the tour and closed it. */}
+      <TutorialPanel />
 
       <BuildFlashPanel />
 

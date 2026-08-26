@@ -5,6 +5,7 @@ import { useDisplayStore } from "../state/displayStore";
 import { useLayoutStore } from "../state/layoutStore";
 import { useLiveStore } from "../state/liveStore";
 import { useTrainerStore } from "../state/trainerStore";
+import { tutorialHighlight, useTutorialStore } from "../state/tutorialStore";
 import Key from "./Key";
 
 const VIEW_BOX = viewBox();
@@ -27,6 +28,9 @@ export default function Keyboard() {
   const drilling = useTrainerStore((s) => s.running);
   const reveal = useTrainerStore((s) => s.reveal);
   const trainerTarget = useTrainerStore((s) => s.target);
+  // Derived in the store so the board never has to know what a tour step is;
+  // it is handed the positions to light and nothing else.
+  const toured = useTutorialStore((s) => tutorialHighlight(s, selectedLayer));
 
   const layer = layout?.layers[selectedLayer];
   if (!layer) return null;
@@ -85,6 +89,7 @@ export default function Keyboard() {
           pressed={live && pressed.has(i)}
           recent={live && recent.has(i)}
           target={targetPos === i}
+          tutorial={toured.includes(i)}
           ledColor={leds[i]}
           mode={mode}
           osSwapped={osSwapped}
