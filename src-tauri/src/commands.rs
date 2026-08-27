@@ -14,6 +14,7 @@ use crate::events::{
     emit_build_log, emit_key_report, emit_layer_report, emit_pipeline_state,
     PipelinePhase, PipelineState,
 };
+use crate::f75;
 use crate::flash::{self, DfuDeviceInfo};
 use crate::geometry::{self, GeometryFile};
 use crate::keyboards::{self, KeyboardInfo};
@@ -279,4 +280,16 @@ mod tests {
         let sources = generate_sources(load_layout().unwrap()).unwrap();
         assert!(sources.keymap_c.contains("LAYOUT_moonlander"));
     }
+}
+
+// -- AULA F75 (vendor-HID remapper, NOT a QMK target) -----------------------
+
+/// The F75 geometry, or where to generate it if it is not there yet.
+///
+/// Absence is a normal return value, not an error: the file is produced by
+/// `scripts/extract-f75-geometry.mjs` from the user's own OEM installer and is
+/// expected to be missing until they run it.
+#[tauri::command]
+pub fn get_f75_geometry() -> Result<f75::geometry::F75GeometryState, AppError> {
+    f75::geometry::load()
 }

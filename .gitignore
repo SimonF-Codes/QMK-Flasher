@@ -26,3 +26,8 @@ dist-ssr
 # worktree-command-center readiness marker
 .cos-ready
 
+
+# F75 geometry is generated from the user OWN OEM installer, never committed:
+# it derives from proprietary data and the licensing call is open.
+# See scripts/extract-f75-geometry.mjs and docs/CONTRACT.md.
+shared/f75_geometry.json

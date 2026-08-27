@@ -4,6 +4,7 @@ pub mod codegen;
 pub mod commands;
 pub mod error;
 pub mod events;
+pub mod f75;
 pub mod flash;
 pub mod geometry;
 pub mod keyboards;
@@ -48,6 +49,7 @@ pub fn run() {
             commands::snapshot_layout,
             commands::list_keyboards,
             commands::get_keyboard_geometry,
+            commands::get_f75_geometry,
             commands::get_app_config,
             commands::set_app_config,
             commands::generate_sources,

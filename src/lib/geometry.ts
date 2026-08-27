@@ -4,7 +4,7 @@
  * matrix → LAYOUT-arg index lookup live key reports resolve through.
  */
 import geometryJson from "../../shared/moonlander_geometry.json";
-import { GeometryFileSchema, type GeometryKey } from "./types";
+import { GeometryFileSchema } from "./types";
 
 export const GEOMETRY = GeometryFileSchema.parse(geometryJson);
 
@@ -42,7 +42,23 @@ export interface KeyRect {
   transform?: string;
 }
 
-export function keyRect(k: GeometryKey): KeyRect {
+/**
+ * The minimum a key needs for the grid math: a placed, optionally rotated box
+ * in key units. Structural on purpose — the AULA F75's geometry is a different
+ * shape from the Moonlander's (no matrix, no LED, different provenance) but
+ * lays out on the same grid, so it shares this and nothing else.
+ */
+export interface PlacedKey {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+  r?: number;
+  rx?: number;
+  ry?: number;
+}
+
+export function keyRect(k: PlacedKey): KeyRect {
   const rect: KeyRect = {
     x: k.x * U + KEY_GAP / 2,
     y: k.y * U + KEY_GAP / 2,
@@ -73,13 +89,18 @@ function rotate(
   ];
 }
 
-/** Bounding box of all keys (rotation applied), with padding. */
+/** Bounding box of the Moonlander's keys (rotation applied), with padding. */
 export function viewBox(pad = 12): string {
+  return viewBoxOf(GEOMETRY.keys, pad);
+}
+
+/** Bounding box of any placed key set (rotation applied), with padding. */
+export function viewBoxOf(keys: readonly PlacedKey[], pad = 12): string {
   let minX = Infinity;
   let minY = Infinity;
   let maxX = -Infinity;
   let maxY = -Infinity;
-  for (const k of GEOMETRY.keys) {
+  for (const k of keys) {
     const x = k.x * U;
     const y = k.y * U;
     const w = k.w * U;

@@ -2,6 +2,38 @@
 
 ## Unreleased
 
+### AULA F75: geometry and a read-only view
+
+Simon asked for the F75 as a second board. It cannot be one: it runs
+proprietary firmware on an 8051-class vendor MCU, has no QMK port, and its
+bootloader does not speak DFU, so the codegen/build/flash pipeline has nothing
+to target (`docs/research/aula-f75-feasibility.md`). What it *can* be is a
+separate vendor-HID feature, and this is its first phase: **geometry and a
+read-only view. No byte is sent to any device.**
+
+`scripts/extract-f75-geometry.mjs` turns the OEM configurator's `KB.ini` into
+our own geometry JSON. Nothing in it is invented — positions, sizes, matrix
+indices and labels all come out of the file. The only derived quantity is the
+pixel-to-key-unit scale, and it is *measured*: the vendor draws each key inset
+inside its cell, so reading the rectangle directly makes the spacebar 5.79u
+instead of 6.25u. Rows are clustered before the pitch is taken (the file
+jitters row tops by a pixel), and the integer-pixel estimate is then fitted to
+the quarter-unit grid keycaps are actually made on, because the raw estimate
+accumulates error until Backspace runs a quarter-unit into Delete. An overlap
+check refuses the whole output if two keycaps intersect — a board that cannot
+physically exist is not written. Validated against all three real OEM variants.
+
+The F75 is deliberately **not** in the keyboard registry and does not reuse
+`LayoutFile`: it has two layers, a slot holds one HID usage with no tap/hold,
+tap dance, combos or macros, and F1–F12 are pinned by the firmware where no
+tool can remap them. It shares the key-grid math and nothing else — modelling
+it as a Moonlander would imply capabilities the hardware lacks.
+
+Its geometry is loaded at runtime rather than compiled in, because it derives
+from a proprietary installer and that licensing question is still open. Each
+user generates it from their own copy, and not having one is a normal state the
+UI explains rather than an error.
+
 ### Lighting that reacts and moves
 
 The LEDs have only ever been able to hold still: a colour per layer, a colour
