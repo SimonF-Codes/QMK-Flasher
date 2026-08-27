@@ -3,6 +3,7 @@ import { useLayoutStore } from "../state/layoutStore";
 import { useLiveStore } from "../state/liveStore";
 import LedPanel from "./LedPanel";
 import LightingPanel from "./LightingPanel";
+import MirrorPanel from "./MirrorPanel";
 
 export default function LayerTabs() {
   const layout = useLayoutStore((s) => s.layout);
@@ -229,6 +230,8 @@ export default function LayerTabs() {
           )}
         </div>
       )}
+
+      <MirrorPanel />
     </nav>
   );
 }

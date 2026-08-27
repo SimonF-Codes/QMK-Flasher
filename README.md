@@ -10,6 +10,11 @@ firmware in one click over USB DFU.
   key-reactive ones that flare under the key you strike. The panel says what
   each choice costs the firmware, and makes the effect-or-layer-colours
   question a choice, because the two cannot share the board.
+- **Mirror a layer** — generate a one-handed mirrored layer instead of
+  maintaining one by hand: every key reflected to its counterpart on the other
+  half, paired from the board geometry rather than a typed-out table. Layer
+  keys, thumb clusters and modifiers stay under the hand that is still typing,
+  and each of those three is a checkbox that says why.
 - **Macros and combos** — author them in the app: one key that types a
   sequence, or several keys pressed together that fire one action.
 - **OS-aware keys** — one key carrying a separate sequence per host OS, since

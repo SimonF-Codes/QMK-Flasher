@@ -36,6 +36,12 @@ import {
   swapLayers as swapLayersInLayout,
   transposeIndex,
 } from "../lib/layers";
+import {
+  DEFAULT_MIRROR_OPTIONS,
+  appendMirroredLayer,
+  mirrorLayerInto,
+  type MirrorOptions,
+} from "../lib/mirror";
 import type {
   AppError,
   Combo,
@@ -162,6 +168,17 @@ interface LayoutState {
    * viewed layer's content selected.
    */
   swapLayers(a: number, b: number): void;
+  /**
+   * Generate the mirror of layer `source` — every key reflected to its
+   * geometric counterpart on the other half — into `target`, or into a new
+   * appended layer when `target` is null. Selects whatever it wrote and marks
+   * dirty. `options` says which key classes stay put; see `lib/mirror.ts`.
+   */
+  mirrorLayer(
+    source: number,
+    target: number | null,
+    options?: MirrorOptions,
+  ): void;
   /** Set a layer's base LED color (the ledmap base HSV for all its keys). */
   setLayerColor(index: number, color: string): void;
   /**
@@ -588,6 +605,40 @@ export const useLayoutStore = create<LayoutState>()((set, get) => ({
     set({
       layout: next,
       selectedLayer: selectedLayerNext,
+      selectedKey: null,
+      swapSource: null,
+      comboEditor: null,
+    });
+  },
+
+  mirrorLayer(source, target, options = DEFAULT_MIRROR_OPTIONS) {
+    const { layout } = get();
+    if (!layout) return;
+    if (source < 0 || source >= layout.layers.length) return;
+    if (target !== null && (target < 0 || target >= layout.layers.length)) {
+      return;
+    }
+
+    const next =
+      target === null
+        ? appendMirroredLayer(layout, source, options)
+        : mirrorLayerInto(layout, source, target, options);
+    // The lib returns the SAME object when it declined the edit.
+    if (next === layout) return;
+
+    // Overwriting a layer can drop the last tap-dance key on the board (or
+    // bring the first one in), and settings.tapDance drives TAP_DANCE_ENABLE —
+    // the same re-derivation deleteLayer does, for the same build-breaking
+    // reason. Combos are untouched by mirroring, so the combo flag cannot move.
+    const tapDance = layersUseTapDance(next.layers);
+    const settings =
+      tapDance === next.settings.tapDance
+        ? next.settings
+        : { ...next.settings, tapDance };
+
+    set({
+      layout: { ...next, settings },
+      selectedLayer: target ?? next.layers.length - 1,
       selectedKey: null,
       swapSource: null,
       comboEditor: null,

@@ -2,6 +2,50 @@
 
 ## Unreleased
 
+### Mirror a layer, and a key that reaches it
+
+The Mirror layer — the one-handed layer whose left half carries the right
+half's letters — was typed out by hand, and a hand-maintained mirror drifts
+out of step with its base layer the first time the base layer changes. It is a
+*derived* artifact, and there is no way to keep a derived artifact honest by
+editing it.
+
+**"Mirror layer"** in the layer bar generates one. Pick a source layer, pick a
+destination (an existing layer, or a new one), and every key is reflected to
+its counterpart on the other half of the board. The pairing comes out of
+`shared/moonlander_geometry.json`: each key's centre is reflected about the
+middle of the board's bounding box and matched to the nearest key. Nothing is
+hardcoded, so the pairing cannot disagree with the geometry, and it is checked
+against the coordinates rather than against a table.
+
+**Three things deliberately do not swap sides**, and they are the actual design
+of the feature. A mirror layer exists so that ONE hand can type the whole
+board, which means everything you need in order to keep working has to stay
+under the hand still on it:
+
+- **Layer keys** (MO/TG/TO/TT/LT) — mirroring the key that turns Mirror off
+  sends the way out to the hand holding the mouse.
+- **Thumb clusters** — a thumb cluster is not the other one reflected, it is
+  the same three keys under the same thumb, and the working hand keeps its
+  space bar.
+- **Bare modifiers** — Shift/Ctrl/Alt/GUI are held while another key is
+  struck, so one hand needs both. Mod-taps still cross over: their tap half is
+  a character, and characters are the point.
+
+All three are on by default and each is a checkbox that explains itself.
+Mirroring is its own inverse — run it twice and you are back where you started,
+whatever the checkboxes say — because held-back positions are closed under the
+pairing, which keeps the transform a permutation instead of a shredder.
+
+**A Mirror key on the board.** Reaching the Mirror layer used to require one of
+two chords and *leaving* it required forming a chord one-handed while mirrored.
+The shipped demo layout now carries `TG(5)` on keys 34 and 35 — reflections of
+each other, so one under each hand — on the **Media** layer, whose inner column
+is already the board's complete layer-navigation column, and on the **Mirror**
+layer itself, which turns it into a real toggle you can leave with one key.
+Every position on the base layer is taken, so that is as close to the base
+layer as a free key gets. Both combos still work.
+
 ### Lighting that reacts and moves
 
 The LEDs have only ever been able to hold still: a colour per layer, a colour

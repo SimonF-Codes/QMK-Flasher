@@ -73,32 +73,68 @@ function rotate(
   ];
 }
 
-/** Bounding box of all keys (rotation applied), with padding. */
-export function viewBox(pad = 12): string {
+/** The four corners of a key in key units, rotation applied. */
+function corners(k: GeometryKey): [number, number][] {
+  const pts: [number, number][] = [
+    [k.x, k.y],
+    [k.x + k.w, k.y],
+    [k.x, k.y + k.h],
+    [k.x + k.w, k.y + k.h],
+  ];
+  if (!k.r) return pts;
+  const { r, rx, ry, x, y } = k;
+  return pts.map(([px, py]) => rotate(px, py, rx ?? x, ry ?? y, r));
+}
+
+/**
+ * The middle of a keycap in key units, rotation applied.
+ *
+ * Key units, not SVG units: this is board space, which is the frame anything
+ * reasoning about *where a key physically sits* wants — see `mirror.ts`, which
+ * pairs keys by reflecting their centers. Rendering scales by `U` afterwards.
+ */
+export function keyCenter(k: GeometryKey): [number, number] {
+  const cx = k.x + k.w / 2;
+  const cy = k.y + k.h / 2;
+  return k.r ? rotate(cx, cy, k.rx ?? k.x, k.ry ?? k.y, k.r) : [cx, cy];
+}
+
+export interface Bounds {
+  minX: number;
+  minY: number;
+  maxX: number;
+  maxY: number;
+}
+
+/** Axis-aligned bounding box of every key, in key units, rotation applied. */
+export function boardBounds(): Bounds {
   let minX = Infinity;
   let minY = Infinity;
   let maxX = -Infinity;
   let maxY = -Infinity;
   for (const k of GEOMETRY.keys) {
-    const x = k.x * U;
-    const y = k.y * U;
-    const w = k.w * U;
-    const h = k.h * U;
-    const corners: [number, number][] = [
-      [x, y],
-      [x + w, y],
-      [x, y + h],
-      [x + w, y + h],
-    ];
-    for (let [px, py] of corners) {
-      if (k.r) {
-        [px, py] = rotate(px, py, (k.rx ?? k.x) * U, (k.ry ?? k.y) * U, k.r);
-      }
+    for (const [px, py] of corners(k)) {
       minX = Math.min(minX, px);
       minY = Math.min(minY, py);
       maxX = Math.max(maxX, px);
       maxY = Math.max(maxY, py);
     }
   }
-  return `${minX - pad} ${minY - pad} ${maxX - minX + 2 * pad} ${maxY - minY + 2 * pad}`;
+  return { minX, minY, maxX, maxY };
+}
+
+/**
+ * Bounding box of all keys (rotation applied), with padding.
+ *
+ * Scaling `boardBounds()` by `U` is exact, not an approximation: `U` is a
+ * uniform scale about the origin, and rotating-then-scaling equals
+ * scaling-then-rotating about the scaled center.
+ */
+export function viewBox(pad = 12): string {
+  const { minX, minY, maxX, maxY } = boardBounds();
+  const x = minX * U;
+  const y = minY * U;
+  const w = (maxX - minX) * U;
+  const h = (maxY - minY) * U;
+  return `${x - pad} ${y - pad} ${w + 2 * pad} ${h + 2 * pad}`;
 }

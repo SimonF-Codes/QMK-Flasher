@@ -1398,10 +1398,16 @@
           "code": "TOGGLE_LAYER_COLOR"
         },
         {
-          "kind": "transparent"
+          "kind": "layerSwitch",
+          "action": "TG",
+          "layer": 5,
+          "glow": "#c00eb9"
         },
         {
-          "kind": "transparent"
+          "kind": "layerSwitch",
+          "action": "TG",
+          "layer": 5,
+          "glow": "#c00eb9"
         },
         {
           "kind": "special",
@@ -1711,10 +1717,16 @@
           "code": "KC_H"
         },
         {
-          "kind": "transparent"
+          "kind": "layerSwitch",
+          "action": "TG",
+          "layer": 5,
+          "glow": "#c00eb9"
         },
         {
-          "kind": "transparent"
+          "kind": "layerSwitch",
+          "action": "TG",
+          "layer": 5,
+          "glow": "#c00eb9"
         },
         {
           "kind": "basic",
