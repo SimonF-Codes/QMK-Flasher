@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { resetMockStore } from "../lib/ipc";
+import { mirrorKeys } from "../lib/mirror";
 import { useLayoutStore } from "./layoutStore";
 
 describe("layoutStore (mock IPC)", () => {
@@ -258,6 +259,107 @@ describe("layoutStore swap layers (mock IPC)", () => {
     const reloaded = useLayoutStore.getState().layout!;
     expect(reloaded.layers[1].title).toBe(t4);
     expect(reloaded.layers[4].title).toBe(t1);
+    expect(useLayoutStore.getState().isDirty()).toBe(false);
+  });
+});
+
+describe("layoutStore mirror layer (mock IPC)", () => {
+  beforeEach(async () => {
+    resetMockStore();
+    useLayoutStore.setState({
+      layout: null,
+      savedJson: null,
+      layouts: [],
+      activeId: null,
+      selectedLayer: 0,
+      selectedKey: null,
+      swapSource: null,
+      error: null,
+    });
+    await useLayoutStore.getState().load();
+  });
+
+  it("writes the mirror of one layer over another and dirties", () => {
+    const s = useLayoutStore.getState();
+    const source = s.layout!.layers[0].keys;
+    const title = s.layout!.layers[5].title;
+
+    s.mirrorLayer(0, 5);
+
+    const after = useLayoutStore.getState();
+    expect(after.layout!.layers[5].keys).toEqual(mirrorKeys(source));
+    // The destination keeps its own name — this regenerates content, not identity.
+    expect(after.layout!.layers[5].title).toBe(title);
+    expect(after.layout!.layers[0].keys).toEqual(source);
+    expect(after.selectedLayer).toBe(5);
+    expect(after.isDirty()).toBe(true);
+  });
+
+  it("appends a new layer when there is no destination", () => {
+    const s = useLayoutStore.getState();
+    const count = s.layout!.layers.length;
+    s.mirrorLayer(0, null);
+
+    const after = useLayoutStore.getState();
+    expect(after.layout!.layers).toHaveLength(count + 1);
+    expect(after.layout!.layers.at(-1)!.keys).toEqual(
+      mirrorKeys(s.layout!.layers[0].keys),
+    );
+    // Appending leaves every existing layer reference meaning what it did, so
+    // the combos must come out byte-identical.
+    expect(after.layout!.combos).toEqual(s.layout!.combos);
+    expect(after.selectedLayer).toBe(count);
+  });
+
+  it("mirroring a layer into itself twice restores it", () => {
+    const s = useLayoutStore.getState();
+    const before = s.layout!.layers[0].keys;
+    s.mirrorLayer(0, 0);
+    useLayoutStore.getState().mirrorLayer(0, 0);
+    expect(useLayoutStore.getState().layout!.layers[0].keys).toEqual(before);
+  });
+
+  it("honours the keep-options it is handed", () => {
+    const s = useLayoutStore.getState();
+    const source = s.layout!.layers[0].keys;
+    const all = { keepLayerKeys: false, keepThumbs: false, keepModifiers: false };
+    s.mirrorLayer(0, 5, all);
+    expect(useLayoutStore.getState().layout!.layers[5].keys).toEqual(
+      mirrorKeys(source, all),
+    );
+  });
+
+  it("re-derives settings.tapDance when the overwrite moves the last dance", () => {
+    // Layer 6 has no tap dance; mirroring it over every layer that does would
+    // leave TAP_DANCE_ENABLE on with no tap_dance_actions[] to go with it.
+    const dances = () =>
+      useLayoutStore
+        .getState()
+        .layout!.layers.flatMap((l) => l.keys)
+        .filter((k) => k.kind === "tapDance").length;
+    expect(dances()).toBeGreaterThan(0);
+    const st = useLayoutStore.getState();
+    st.layout!.layers.forEach((_, i) => {
+      useLayoutStore.getState().mirrorLayer(6, i);
+    });
+    expect(dances()).toBe(0);
+    expect(useLayoutStore.getState().layout!.settings.tapDance).toBe(false);
+  });
+
+  it("is a no-op for a layer index that does not exist", () => {
+    const s = useLayoutStore.getState();
+    s.mirrorLayer(0, 99);
+    s.mirrorLayer(99, 0);
+    expect(useLayoutStore.getState().isDirty()).toBe(false);
+  });
+
+  it("a mirrored layer survives save/load", async () => {
+    const s = useLayoutStore.getState();
+    const expected = mirrorKeys(s.layout!.layers[0].keys);
+    s.mirrorLayer(0, 5);
+    await useLayoutStore.getState().save();
+    await useLayoutStore.getState().load();
+    expect(useLayoutStore.getState().layout!.layers[5].keys).toEqual(expected);
     expect(useLayoutStore.getState().isDirty()).toBe(false);
   });
 });
