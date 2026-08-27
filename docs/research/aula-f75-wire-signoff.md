@@ -246,3 +246,82 @@ of these bytes apply.
 - all from [cloudglides/aula-f75-linux-drivers](https://github.com/cloudglides/aula-f75-linux-drivers),
   which credits [vndarkblue/aula-keybind](https://github.com/vndarkblue/aula-keybind) (MIT)
   for the keybind format and factory templates
+
+---
+
+## 5. What is actually attached — 2026-08-27. NEITHER SEQUENCE WAS SENT.
+
+Both sequences above were approved. Before sending, I enumerated the USB bus
+(passive — a read of the Windows device tree, no traffic to any device). The
+result invalidates both, so **nothing was sent**.
+
+### The F75 is here, but it is the dongle
+
+```
+FOUND   3554:FA09   F75 2.4 GHz dongle   (USB composite, 2 interfaces, 6 HID collections)
+absent  258A:010C   wired F75            <- what both approved sequences target
+absent  0C45:800A   F75 Max
+```
+
+`258A:010C` has **never** enumerated on this machine — not present, and not as
+a retained ghost entry either. Same for the Max. The Moonlander (`3297:1972`)
+is present, so this is the right machine.
+
+The dongle presents as: an HID keyboard on MI_00, and on MI_01 six collections
+— vendor-defined (COL01), consumer control, system controller, a second
+keyboard, a mouse, and a second vendor-defined (COL06).
+
+### Why that means the approved bytes must not be sent
+
+Both sequences are 520-byte **feature** reports on report ID `0x06`, and §1's
+header is only meaningful to the wired firmware. The dongle speaks a different
+protocol entirely: 20-byte **output** reports on report ID `0x13`, framed as
+`[0]=0x13, [1]=cmd, [2]=subcmd, [3]=seq, [4..18]=payload, [19]=checksum`, with
+`checksum = sum(b[0..18]) & 0xFF`.
+
+Upstream makes the split explicit rather than incidental:
+
+```js
+export const WIRELESS_PID = 0xFA09;
+export function isFeatureTransport(pid) { return pid !== WIRELESS_PID; }
+```
+
+The feature-report path is *excluded* for exactly this PID. Sending
+`06 84 00 00 01 00 80 00` here would be putting a frame from one protocol onto
+a device that speaks another — the precise failure this gate exists to prevent.
+
+It would also be outside the sign-off. The approval was for specific bytes to a
+specific device. A different device needs a different decision, not a
+reinterpretation of this one.
+
+### Why the wired board probably is not showing
+
+Upstream records (VERIFIED on live hardware) that **the tri-mode side switch
+gates wired enumeration**: in the wireless positions the USB data lines are
+muxed off, so nothing appears over USB until the switch is set to wired. They
+also found hub ports enumerated flakily where root ports were reliable.
+
+So the most likely situation is simply that the board is in a wireless position
+and/or not cabled — not that it is faulty.
+
+### What unblocks §1 and §3, unchanged
+
+1. Set the F75's side switch to the **wired** position.
+2. Connect USB-C **directly to a root port**, not through a hub.
+3. Confirm `258A:010C` enumerates.
+
+Then §1 and §3 run exactly as written above — no byte changes.
+
+### If the dongle is the only way in
+
+That is a separate piece of work needing its own sign-off, and I would not
+want to shortcut it. Its config read is cmd `0x44` / subcmd `0x0A` across ten
+20-byte frames (seq 0–9), each ending in a checksum byte — and those are
+*output reports*, so they are unambiguously writes, gated the same way.
+
+I would also want to verify the dongle section against ground truth before
+proposing bytes for it, because §2 above found **three demonstrable errors** in
+the same document's wired keybind layout. There is no reason to assume its
+dongle section is cleaner, and unlike the wired keybind format there are **no
+dongle captures anywhere** to check it against — the only fixtures in that
+project are the two F87 keybind blobs.
