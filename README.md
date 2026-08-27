@@ -6,10 +6,11 @@ firmware in one click over USB DFU.
 
 - **Visual layout editor** — layers, keycodes, mod-taps, dual-function keys,
   per-key LED colors.
-- **Reactive lighting** — pick from QMK's RGB Matrix effects, including the
-  key-reactive ones that flare under the key you strike. The panel says what
-  each choice costs the firmware, and makes the effect-or-layer-colours
-  question a choice, because the two cannot share the board.
+- **Reactive lighting that keeps your colours** — your per-key layout colours
+  stay on the board and a keypress lifts that key's brightness, fading back.
+  QMK's own reactive effects paint the whole board one colour, so this is a
+  generated effect rather than one of theirs. The stock effects are offered
+  too, for when you want a pattern instead of your layout.
 - **Mirror a layer** — generate a one-handed mirrored layer instead of
   maintaining one by hand: every key reflected to its counterpart on the other
   half, paired from the board geometry rather than a typed-out table. Layer
@@ -21,6 +22,11 @@ firmware in one click over USB DFU.
   Windows and macOS screen navigation are different shortcuts rather than a
   modifier substitution. The board detects the host at USB enumeration and
   picks a half at press time.
+- **AULA F75 (read-only)** — a key grid for the tri-mode F75, which runs
+  proprietary firmware and cannot take QMK at all. Geometry is generated from
+  your own copy of the vendor installer rather than shipped here. Remapping is
+  not implemented: see `docs/research/` for what the protocol actually is and
+  why writing to it is still gated.
 - **Build & flash in-app** — generates `keymap.c`/`rules.mk`/`config.h`, runs
   the real QMK build, and flashes over DFU (`0483:df11` and ZSA `3297:2003`)
   without leaving the window.
