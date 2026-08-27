@@ -695,3 +695,52 @@ for parity: there is no Oryx rendering of it to compare against.
   `reference_keymap.c` (diffs via `similar`).
 - Worker B: safe E2E first flashes the existing known-good arrows_together
   .bin (zero behavior change).
+
+### AULA F75 (added 2026-08-27, additive — Phase 1, read-only)
+
+The F75 is **not** in `shared/keyboards.json`, and that is deliberate. The
+keyboard registry means "a board the QMK codegen/build/flash pipeline can
+target"; the F75 cannot run QMK at all (proprietary firmware on an 8051-class
+vendor MCU, no upstream port, no DFU bootloader — see
+`docs/research/aula-f75-feasibility.md`). A registry entry would require
+inventing a `qmkKeyboard`, a `layoutMacro` and a geometry file for a board that
+has none, so it is a **sibling feature** instead, sharing only the key-grid
+math (`keyRect` / `viewBoxOf` / `U` in `src/lib/geometry.ts`).
+
+It deliberately does not reuse `LayoutFile` or `Key.tsx` either: the F75 has
+two layers (base + FN1) and a slot holds one HID page + usage — no tap/hold,
+tap dance, combos, macros or Key Lock. Rendering it through the Moonlander's
+model would imply capabilities the hardware does not have.
+
+**Geometry is loaded at runtime, not compiled in.** The Moonlander's geometry
+comes from QMK's own `keyboard.json`, which is GPL like this repo;
+the F75's comes from AULA's proprietary Windows installer, so whether its
+derived data may ship here is an open licensing question. Until that is
+decided, `scripts/extract-f75-geometry.mjs` turns a user's own
+`app/Dev/kb/<variant>/KB.ini` into `%APPDATA%\qmk-flasher\f75_geometry.json`,
+and `f75::geometry::load()` reads it from there. **Missing is a normal state,
+not an error** (`F75GeometryState = {state: "missing", path} | {state:
+"loaded", geometry}`), and the UI explains how to generate it. Mirrors:
+`src-tauri/src/f75/geometry.rs` (serde) + `types.ts` (zod). Command:
+`get_f75_geometry`.
+
+**The extractor derives, it does not assume.** The OEM rectangles are
+`left,top,right,bottom` (the vendor's own provenance note calls them
+`x,y,w,h`; that label is wrong) and are *inset* inside their grid cell, so a
+key's width is `(drawn + inset) / pitch`. Pitch and inset are measured from the
+file, then fitted to the quarter-unit grid keycaps are made on, because the
+integer-pixel estimate accumulates error across the board. An **overlap check
+rejects the output outright** if any two derived keycaps intersect.
+
+**KB.ini's packed outputs keep their raw value.** `0xCC00UUUU`'s high byte is
+AULA's own category (0x07 keyboard, 0x02 consumer, 0x08 vendor, 0x00
+unclassified). That is *not* the keybind blob's page byte — the blob uses 0x00
+for HID page 0x07 and 0x02 for HID page 0x0C, so the two agree on one value and
+disagree on another, and two categories have no blob equivalent at all. No page
+byte is synthesised; `packed` is the authority.
+
+**Nothing here touches a USB device.** Phase 1 is geometry and a read-only
+view. Note for the phase after it: the documented way to *read* the board's
+config is a **SET-then-GET** — a request feature report is sent before the
+response is read — so even reading the F75 puts bytes on the wire and is gated
+behind the same sign-off as a write.

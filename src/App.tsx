@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import BuildFlashPanel from "./components/BuildFlashPanel";
 import ComboPanel from "./components/ComboPanel";
 import DisplayModeToggle from "./components/DisplayModeToggle";
+import F75Panel from "./components/F75Panel";
 import Keyboard from "./components/Keyboard";
 import KeyPicker from "./components/KeyPicker";
 import LayerTabs from "./components/LayerTabs";
@@ -31,6 +32,7 @@ export default function App() {
   const dirty = useLayoutStore((s) => s.isDirty)();
   const liveEnabled = useLiveStore((s) => s.enabled);
   const [guideOpen, setGuideOpen] = useState(false);
+  const [f75Open, setF75Open] = useState(false);
   const startTour = useTutorialStore((s) => s.start);
   const tourOpen = useTutorialStore((s) => s.open);
 
@@ -161,6 +163,13 @@ export default function App() {
           >
             📖 Guide
           </button>
+          <button
+            onClick={() => setF75Open(true)}
+            className="rounded-md border border-zinc-700 bg-zinc-900 px-2 py-1 text-xs font-medium text-zinc-300 hover:bg-zinc-800"
+            title="AULA F75 key layout (read-only) — a separate board that cannot run QMK"
+          >
+            ⌨ F75
+          </button>
           <VersionHistoryPanel />
           <LiveToggle />
           <DisplayModeToggle />
@@ -232,6 +241,33 @@ export default function App() {
           stylesheet (which isolates #tool-guide-print from the rest of the
           page). It reads nothing from the stores — everything it shows is
           derived from the layout handed to it. */}
+      {/* A drawer, not a pane or a board switcher. The F75 cannot run QMK, so
+          it shares none of this app's layout/codegen/flash machinery — only
+          the key-grid math. Restructuring the main view around a board
+          selector is a decision for when the F75 becomes editable; until then
+          it stays a thing you open and close. */}
+      {f75Open && (
+        <div className="fixed inset-0 z-30 flex justify-end">
+          <div
+            className="flex-1 bg-black/50"
+            onClick={() => setF75Open(false)}
+            aria-hidden
+          />
+          <aside className="flex h-full w-full max-w-4xl flex-col border-l border-zinc-800 bg-zinc-950 shadow-2xl">
+            <div className="flex items-center border-b border-zinc-800 px-4 py-2">
+              <h2 className="text-sm font-semibold">AULA F75</h2>
+              <button
+                onClick={() => setF75Open(false)}
+                className="ml-auto rounded px-2 py-1 text-xs text-zinc-400 hover:bg-zinc-800"
+              >
+                Close
+              </button>
+            </div>
+            <F75Panel />
+          </aside>
+        </div>
+      )}
+
       {guideOpen && (
         <div className="fixed inset-0 z-30 flex justify-end">
           <div

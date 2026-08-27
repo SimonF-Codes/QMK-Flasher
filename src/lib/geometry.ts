@@ -4,7 +4,7 @@
  * matrix → LAYOUT-arg index lookup live key reports resolve through.
  */
 import geometryJson from "../../shared/moonlander_geometry.json";
-import { GeometryFileSchema, type GeometryKey } from "./types";
+import { GeometryFileSchema } from "./types";
 
 export const GEOMETRY = GeometryFileSchema.parse(geometryJson);
 
@@ -42,7 +42,23 @@ export interface KeyRect {
   transform?: string;
 }
 
-export function keyRect(k: GeometryKey): KeyRect {
+/**
+ * The minimum a key needs for the grid math: a placed, optionally rotated box
+ * in key units. Structural on purpose — the AULA F75's geometry is a different
+ * shape from the Moonlander's (no matrix, no LED, different provenance) but
+ * lays out on the same grid, so it shares this and nothing else.
+ */
+export interface PlacedKey {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+  r?: number;
+  rx?: number;
+  ry?: number;
+}
+
+export function keyRect(k: PlacedKey): KeyRect {
   const rect: KeyRect = {
     x: k.x * U + KEY_GAP / 2,
     y: k.y * U + KEY_GAP / 2,
@@ -74,7 +90,7 @@ function rotate(
 }
 
 /** The four corners of a key in key units, rotation applied. */
-function corners(k: GeometryKey): [number, number][] {
+function corners(k: PlacedKey): [number, number][] {
   const pts: [number, number][] = [
     [k.x, k.y],
     [k.x + k.w, k.y],
@@ -93,7 +109,7 @@ function corners(k: GeometryKey): [number, number][] {
  * reasoning about *where a key physically sits* wants — see `mirror.ts`, which
  * pairs keys by reflecting their centers. Rendering scales by `U` afterwards.
  */
-export function keyCenter(k: GeometryKey): [number, number] {
+export function keyCenter(k: PlacedKey): [number, number] {
   const cx = k.x + k.w / 2;
   const cy = k.y + k.h / 2;
   return k.r ? rotate(cx, cy, k.rx ?? k.x, k.ry ?? k.y, k.r) : [cx, cy];
@@ -106,13 +122,17 @@ export interface Bounds {
   maxY: number;
 }
 
-/** Axis-aligned bounding box of every key, in key units, rotation applied. */
-export function boardBounds(): Bounds {
+/**
+ * Axis-aligned bounding box of any placed key set, in key units, rotation
+ * applied. Takes `PlacedKey` rather than the Moonlander's own key type so the
+ * F75 grid — a different geometry on the same layout math — can share it.
+ */
+export function boundsOf(keys: readonly PlacedKey[]): Bounds {
   let minX = Infinity;
   let minY = Infinity;
   let maxX = -Infinity;
   let maxY = -Infinity;
-  for (const k of GEOMETRY.keys) {
+  for (const k of keys) {
     for (const [px, py] of corners(k)) {
       minX = Math.min(minX, px);
       minY = Math.min(minY, py);
@@ -123,18 +143,29 @@ export function boardBounds(): Bounds {
   return { minX, minY, maxX, maxY };
 }
 
+/** Axis-aligned bounding box of the Moonlander's keys, in key units. */
+export function boardBounds(): Bounds {
+  return boundsOf(GEOMETRY.keys);
+}
+
 /**
- * Bounding box of all keys (rotation applied), with padding.
+ * Bounding box of any placed key set (rotation applied), with padding, in
+ * SVG units.
  *
- * Scaling `boardBounds()` by `U` is exact, not an approximation: `U` is a
+ * Scaling the key-unit bounds by `U` is exact, not an approximation: `U` is a
  * uniform scale about the origin, and rotating-then-scaling equals
  * scaling-then-rotating about the scaled center.
  */
-export function viewBox(pad = 12): string {
-  const { minX, minY, maxX, maxY } = boardBounds();
+export function viewBoxOf(keys: readonly PlacedKey[], pad = 12): string {
+  const { minX, minY, maxX, maxY } = boundsOf(keys);
   const x = minX * U;
   const y = minY * U;
   const w = (maxX - minX) * U;
   const h = (maxY - minY) * U;
   return `${x - pad} ${y - pad} ${w + 2 * pad} ${h + 2 * pad}`;
+}
+
+/** Bounding box of the Moonlander's keys (rotation applied), with padding. */
+export function viewBox(pad = 12): string {
+  return viewBoxOf(GEOMETRY.keys, pad);
 }

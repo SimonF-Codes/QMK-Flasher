@@ -23,6 +23,7 @@ import fixtureJson from "../../shared/default_layout.json";
 import oryxJson from "../../shared/fixtures/seeded_layout.json";
 import keyboardsJson from "../../shared/keyboards.json";
 import geometryJson from "../../shared/moonlander_geometry.json";
+import f75GeometryJson from "../../shared/fixtures/f75_geometry_synthetic.json";
 import {
   AppErrorSchema,
   BuildLogSchema,
@@ -32,6 +33,7 @@ import {
   EVENT_KEY_REPORT,
   EVENT_LAYER_REPORT,
   EVENT_PIPELINE_STATE,
+  F75GeometryStateSchema,
   GeometryFileSchema,
   KeyboardInfoSchema,
   KeyReportSchema,
@@ -46,6 +48,7 @@ import {
   type BuildLog,
   type DfuDevice,
   type DfuDeviceInfo,
+  type F75GeometryState,
   type GeneratedSources,
   type GeometryFile,
   type KeyboardInfo,
@@ -85,6 +88,8 @@ export interface Ipc {
   listKeyboards(): Promise<KeyboardInfo[]>;
   getKeyboardGeometry(keyboardId: string): Promise<GeometryFile>;
   getGeometry(): Promise<GeometryFile>;
+  /** F75 geometry, or where to generate it. Missing is a normal result. */
+  getF75Geometry(): Promise<F75GeometryState>;
   getAppConfig(): Promise<AppConfig>;
   setAppConfig(cfg: AppConfig): Promise<void>;
   generateSources(layout: LayoutFile): Promise<GeneratedSources>;
@@ -177,6 +182,8 @@ const realIpc: Ipc = {
     invoke("get_keyboard_geometry", { keyboardId }).then((r) =>
       GeometryFileSchema.parse(r),
     ),
+  getF75Geometry: () =>
+    invoke("get_f75_geometry").then((r) => F75GeometryStateSchema.parse(r)),
   getGeometry: () =>
     invoke("get_geometry").then((r) => GeometryFileSchema.parse(r)),
   getAppConfig: () => invoke("get_app_config"),
@@ -659,6 +666,13 @@ const mockIpc: Ipc = {
     return GeometryFileSchema.parse(geometryJson);
   },
   getGeometry: async () => GeometryFileSchema.parse(geometryJson),
+  // The SYNTHETIC fixture, not vendor data — its `source` says so. Real
+  // geometry comes from the user running the extractor on their own installer.
+  getF75Geometry: async () =>
+    F75GeometryStateSchema.parse({
+      state: "loaded",
+      geometry: f75GeometryJson,
+    }),
   getAppConfig: async () => ({
     msysPath: "C:\\QMK_MSYS",
     qmkFirmwarePath: "C:\\Users\\fridl\\qmk_firmware",

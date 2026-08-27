@@ -1,0 +1,133 @@
+{
+  "source": "SYNTHETIC F75 fixture (KB.ini)",
+  "vid": "0x258a",
+  "pid": "0x010C",
+  "matrixLen": 128,
+  "scale": {
+    "pitchPx": 38.99,
+    "vPitchPx": 39.82,
+    "hInsetPx": 13.99,
+    "vInsetPx": 12.82
+  },
+  "lockedSlots": [
+    12
+  ],
+  "keyCount": 10,
+  "keys": [
+    {
+      "slot": 0,
+      "label": "Esc",
+      "positioned": true,
+      "x": 0,
+      "y": 0,
+      "w": 1,
+      "h": 1,
+      "vk": 27,
+      "fn1": {
+        "packed": "0x07000004",
+        "category": 7,
+        "usage": 4
+      }
+    },
+    {
+      "slot": 12,
+      "label": "F1",
+      "positioned": true,
+      "x": 2,
+      "y": 0,
+      "w": 1,
+      "h": 1,
+      "vk": 112,
+      "fn1": {
+        "packed": "0x02000223",
+        "category": 2,
+        "usage": 547
+      }
+    },
+    {
+      "slot": 1,
+      "label": "`",
+      "positioned": true,
+      "x": 0,
+      "y": 1.25,
+      "w": 1,
+      "h": 1,
+      "vk": 192
+    },
+    {
+      "slot": 7,
+      "label": "1",
+      "positioned": true,
+      "x": 1,
+      "y": 1.25,
+      "w": 1,
+      "h": 1,
+      "vk": 49,
+      "fn1": {
+        "packed": "0x08030200",
+        "category": 8,
+        "usage": 512
+      }
+    },
+    {
+      "slot": 79,
+      "label": "Backspace",
+      "positioned": true,
+      "x": 2,
+      "y": 1.25,
+      "w": 2,
+      "h": 1,
+      "vk": 8
+    },
+    {
+      "slot": 2,
+      "label": "Tab",
+      "positioned": true,
+      "x": 0,
+      "y": 2.25,
+      "w": 1.5,
+      "h": 1,
+      "vk": 9
+    },
+    {
+      "slot": 8,
+      "label": "Q",
+      "positioned": true,
+      "x": 1.5,
+      "y": 2.25,
+      "w": 1,
+      "h": 1,
+      "vk": 81
+    },
+    {
+      "slot": 3,
+      "label": "CapsLock",
+      "positioned": true,
+      "x": 0,
+      "y": 3.25,
+      "w": 1.75,
+      "h": 1,
+      "vk": 20
+    },
+    {
+      "slot": 9,
+      "label": "A",
+      "positioned": true,
+      "x": 1.75,
+      "y": 3.25,
+      "w": 1,
+      "h": 1,
+      "vk": 65
+    },
+    {
+      "slot": 84,
+      "label": "Wheel",
+      "positioned": false,
+      "hid": {
+        "packed": "0x0700001d",
+        "category": 7,
+        "usage": 29
+      }
+    }
+  ]
+}
