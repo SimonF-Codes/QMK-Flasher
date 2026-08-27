@@ -160,9 +160,10 @@
           "code": "KC_G"
         },
         {
-          "kind": "tapDance",
-          "tap": "KC_BSPC",
-          "doubleTap": "KC_CALCULATOR"
+          "kind": "layerSwitch",
+          "action": "TG",
+          "layer": 5,
+          "glow": "#c00eb9"
         },
         {
           "kind": "qkLock"
@@ -2724,7 +2725,10 @@
     "lighting": {
       "mode": "ledmap",
       "effect": "SOLID_REACTIVE_SIMPLE",
-      "extraEffects": ["SOLID_SPLASH", "BREATHING"],
+      "extraEffects": [
+        "SOLID_SPLASH",
+        "BREATHING"
+      ],
       "hue": 170,
       "sat": 255,
       "val": 175,
