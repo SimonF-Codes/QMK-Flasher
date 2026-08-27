@@ -119,9 +119,14 @@ describe("clipboardStore", () => {
   });
 
   it("pasting goes through setKeyAction, so settings.tapDance stays in sync", () => {
-    // Layer 0 key 34 is the fixture's tap-dance key.
-    expect(keyAt(0, 34).kind).toBe("tapDance");
-    layoutState().selectKey(34);
+    // Found rather than hardcoded: which position holds a tap dance is a
+    // property of the shipped layout, and this test is about paste keeping
+    // settings.tapDance in sync - not about where the key happens to sit.
+    const source = layoutState().layout!.layers[0].keys.findIndex(
+      (k) => k.kind === "tapDance",
+    );
+    expect(source).toBeGreaterThanOrEqual(0);
+    layoutState().selectKey(source);
     clip().copySelectedKey();
 
     layoutState().selectLayer(5); // no tap-dance keys of its own

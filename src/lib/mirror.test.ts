@@ -373,18 +373,29 @@ describe("the shipped layout's Mirror toggle", () => {
     );
   });
 
-  it("is pinned by the generator, but not immune to being overwritten", () => {
+  it("survives being regenerated from either layer", () => {
     // Layer keys stay put, so re-mirroring the Mirror layer in place leaves the
     // way out exactly where it was.
     const inPlace = mirrorLayerInto(layout(), MIRROR_LAYER, MIRROR_LAYER);
     expect(isTG5(inPlace.layers[MIRROR_LAYER].keys[34])).toBe(true);
     expect(isTG5(inPlace.layers[MIRROR_LAYER].keys[35])).toBe(true);
 
-    // Regenerating it from the BASE layer is a different act: pinning protects
-    // the source's layer keys, not the destination's, so the exit keys are
-    // replaced by whatever layer 0 holds there. The panel says so before it
-    // runs — it replaces all 72 keys — and the combos still get you out.
+    // Regenerating from the BASE layer replaces all 72 keys, so the exit keys
+
+    // are whatever layer 0 holds at those positions - pinning protects the
+
+    // source's layer keys, not the destination's. Layer 0 carries the Mirror
+
+    // toggle itself, so the way out comes along with the mirror rather than
+
+    // being wiped by it. That is a property of the shipped layout, not of the
+
+    // transform: put something else on layer 0 key 34 and this stops holding,
+
+    // which is why the combos remain the guaranteed way out.
+
     const fromBase = mirrorLayerInto(layout(), 0, MIRROR_LAYER);
-    expect(isTG5(fromBase.layers[MIRROR_LAYER].keys[34])).toBe(false);
+
+    expect(isTG5(fromBase.layers[MIRROR_LAYER].keys[34])).toBe(true);
   });
 });
