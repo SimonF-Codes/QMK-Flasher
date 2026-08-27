@@ -593,6 +593,7 @@ All results are `Result<T, AppError>` unless noted; errors cross IPC as
 | `flash_firmware` | `(bin_path) -> ()` | `flash::flash_firmware` (no rebuild) |
 | `start_key_reporting` | `() -> ()` | `keyreport::start`; streams `key-report`/`layer-report` |
 | `stop_key_reporting` | `() -> ()` | `keyreport::stop` (idempotent) |
+| `get_f75_geometry` | `() -> F75GeometryState` | `f75::geometry::load`; `{state:"missing"}` is a normal answer, not an error — see **AULA F75** |
 
 ## Events (`src-tauri/src/events.rs`)
 

@@ -109,6 +109,18 @@ arm. Layouts already on disk open unchanged, and one that configured lighting
 gains `applyOnBoot: true` — which is the point of the version, since its stored
 settings were the ones EEPROM was overruling.
 
+### The demo Screenshot key works on both machines
+
+The shipped layout’s `Screenshot` key was a plain macro sending `Ctrl+Shift+5`.
+Macros bypass the Ctrl↔Cmd swap entirely — they go out through
+`register_code16()`, which never reaches `mod_config()` — so it sent literal
+`Ctrl+Shift+5` on both machines: not the Mac screenshot shortcut, and nothing
+standard on Windows. It was the Tool Guide’s only OS warning.
+
+It is now an OS macro built from the `shot-region` preset — `Cmd+Shift+4` on
+Mac, `Win+Shift+S` on Windows — and the guide reclassifies it from
+"bypassed — check this one" to OS-aware.
+
 ### Mirror a layer, and a key that reaches it
 
 The Mirror layer — the one-handed layer whose left half carries the right
@@ -150,8 +162,15 @@ The shipped demo layout now carries `TG(5)` on keys 34 and 35 — reflections of
 each other, so one under each hand — on the **Media** layer, whose inner column
 is already the board's complete layer-navigation column, and on the **Mirror**
 layer itself, which turns it into a real toggle you can leave with one key.
-Every position on the base layer is taken, so that is as close to the base
-layer as a free key gets. Both combos still work.
+Both combos still work.
+
+It is on the **base layer** too, at key 34, which used to hold a
+Backspace/Calculator tap dance. Backspace survives on the thumb; what goes is
+the double-tap to Calculator. That position is `transparent` on most other
+layers, so they inherit the toggle by fall-through and it becomes the Mirror
+key nearly everywhere — and because the base layer carries it, regenerating
+the Mirror layer from the base layer now brings the way out along with it
+rather than wiping it.
 
 ### AULA F75: geometry and a read-only view
 
