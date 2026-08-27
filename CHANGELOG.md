@@ -2,7 +2,113 @@
 
 ## Unreleased
 
-<<<<<<< HEAD
+### Lighting that reacts *and* keeps your colours
+
+The last release gave the board QMK's key-reactive effects. Flashed, they did
+exactly what QMK's source says they do and not at all what was asked for: the
+board went reactive and every key went white, with the per-layer colours gone.
+That is not a bug in the firmware — `effect_runner_reactive`
+(`quantum/rgb_matrix/animations/runners/effect_runner_reactive.h`) renders
+**every LED from the single global `rgb_matrix_config.hsv`**. All twelve
+reactive effects go through it. None of them can ever show more than one colour,
+so none of them could ever have been the feature.
+
+**"Colours + tap"** (`lighting.mode: "reactive"`, schema **v5**) is the mode
+that was actually asked for. The ledmap is emitted exactly as it is in static
+mode and keeps every colour; one generated function, `qf_reactive_value()`,
+scales each LED's `v` by how recently that LED was struck, read from QMK's
+`g_last_hit_tracker`. `h` and `s` are never touched. The board still looks like
+your layout; typing makes it respond.
+
+**A tap goes up to your colour, not past it** — and that shapes the knob. The
+brightest an LED can be is already its ledmap value scaled by the board's master
+brightness, which the firmware clamps to the vendor's ceiling. So **Tap boost**
+is how far an untouched key sits *below* its colour, and a hit restores it to
+full over **Fade** milliseconds (50–5000, checked where the layout is loaded
+because it is a divisor in the generated C). At 100% boost, unstruck keys are
+dark and only what you type is lit.
+
+**The board remembers eight hits.** `LED_HITS_TO_REMEMBER` is 8, so a ninth key
+struck inside the fade window pushes the oldest out of QMK's buffer and that key
+drops back to rest instead of finishing its fade. The panel says so. The colours
+are never affected by it — they do not come from the tracker.
+
+`RGB_MATRIX_KEYPRESSES` is now derived from the **mode** as well as the effect
+set: `g_last_hit_tracker` is declared only under `RGB_MATRIX_KEYREACTIVE_ENABLED`,
+so reactive mode needs the define even with nothing but static effects compiled
+in. The generated `keymap.c` carries an `#error` in case the two ever disagree.
+
+### The app's lighting settings now actually reach the board
+
+Independent of the above, and the other half of why the flash came out white:
+**every lighting setting in this app was inert on any board that had been used
+before.** `rgb_matrix_init()` applies `RGB_MATRIX_DEFAULT_MODE/HUE/SAT/VAL/SPD`
+only when EEPROM holds no mode at all —
+
+```c
+eeconfig_init_rgb_matrix();
+if (!rgb_matrix_config.mode) {          // ONLY on a blank EEPROM
+    eeconfig_update_rgb_matrix_default();
+}
+```
+
+— so a board with a stored mode kept whatever hue, saturation and brightness it
+was last left on and ignored the panel entirely. Worse: `#undef`-ing effects
+shrinks the effect enum, so a *stored mode index* resolves to a different effect
+after every flash. That is the whole explanation for "white, in a mode I did not
+choose". It also silently pinned the ledmap's master brightness, since
+`hsv_to_rgb_with_value()` reads `rgb_matrix_config.hsv.v` live rather than the
+define.
+
+**Apply these on every boot** (on by default) makes the firmware authoritative:
+the generated `keyboard_post_init_user()` restates mode, hue, saturation,
+brightness and speed with QMK's `_noeeprom` setters, after `rgb_matrix_enable()`
+— which has to come first, because `rgb_matrix_sethsv_eeprom_helper` returns
+having done nothing while the matrix is disabled.
+
+**The trade-off is a checkbox, not a silent default.** With this on, a mode you
+cycle to with an `RGB_MOD` key does not survive a replug. That is the right
+behaviour for an app that owns the layout, and it is said where it is chosen.
+`QK_CLEAR_EEPROM` (`EE_CLR`) joins the keycode catalog and the shipped demo
+layout — it is the escape hatch for exactly this class of problem, and it costs
+one key.
+
+**What a user has to do to see this:** a fresh flash is enough. No EEPROM clear
+is needed, on an existing board or a new one — that is the entire point of
+applying the settings at boot rather than at EEPROM-init.
+
+### `RGB_MATRIX_STARTUP_SPD` is gone, not documented
+
+The app emitted `#define RGB_MATRIX_STARTUP_SPD` from `settings.rgbStartupSpeed`
+because Oryx does, and the last release recorded that the macro does not exist
+in `qmk_firmware` — the name is `RGB_MATRIX_DEFAULT_SPD` — and kept emitting it
+anyway, for byte-parity with real Oryx output. A comment explaining that a knob
+does nothing is not as good as the knob not being there. Both the define and the
+setting are removed. Nothing ever read it, so this is the one change to the
+generated firmware that is provably invisible to the board; a *rename* would not
+have been, which is why it is a removal.
+`shared/fixtures/reference_config.h` loses the same line and is now real Oryx
+output minus exactly that one dead define.
+
+**Sizes, measured.** Two real MSYS builds of `zsa/moonlander/revb`, the shipped
+demo layout in each:
+
+| Build | Bytes | vs. baseline |
+|---|---|---|
+| Before this change (demo layout in ledmap mode) | 61,924 | — |
+| **The demo layout as it now ships** (reactive mode, settings applied at boot) | **62,072** | **+148** |
+
+148 bytes buys the reactive modulation and the boot-time re-apply together.
+`RGB_MATRIX_KEYPRESSES` was already on in the baseline — the demo layout has
+compiled in a reactive effect since the last release — so this measures the new
+code alone and not the tracking it needs.
+
+**Schema v5**: `lighting` gains `reactiveBoost`, `reactiveFadeMs` and
+`applyOnBoot`; `settings.rgbStartupSpeed` is removed. `migrate()` gained a v4→v5
+arm. Layouts already on disk open unchanged, and one that configured lighting
+gains `applyOnBoot: true` — which is the point of the version, since its stored
+settings were the ones EEPROM was overruling.
+
 ### Mirror a layer, and a key that reaches it
 
 The Mirror layer — the one-handed layer whose left half carries the right
@@ -46,7 +152,7 @@ is already the board's complete layer-navigation column, and on the **Mirror**
 layer itself, which turns it into a real toggle you can leave with one key.
 Every position on the base layer is taken, so that is as close to the base
 layer as a free key gets. Both combos still work.
-=======
+
 ### AULA F75: geometry and a read-only view
 
 Simon asked for the F75 as a second board. It cannot be one: it runs
@@ -78,7 +184,6 @@ Its geometry is loaded at runtime rather than compiled in, because it derives
 from a proprietary installer and that licensing question is still open. Each
 user generates it from their own copy, and not having one is a normal state the
 UI explains rather than an error.
->>>>>>> wt/main-15
 
 ### Lighting that reacts and moves
 
@@ -140,10 +245,9 @@ described, and the code follows the source:
 - **`RGB_MATRIX_STARTUP_SPD` does not exist.** The app has emitted it since the
   beginning as its one dynamic lighting knob, and it appears nowhere in
   `qmk_firmware` — the name is `RGB_MATRIX_DEFAULT_SPD`. `settings.rgbStartupSpeed`
-  has therefore never reached the board. The line is still emitted verbatim,
-  because it is part of the byte-for-byte parity with real Oryx output that the
-  golden fixture exists to prove, and `config_h.rs` now says so where it is
-  written. `lighting.speed` is the knob that works.
+  has therefore never reached the board. (It was kept for byte-parity with real
+  Oryx output at the time; it has since been removed outright — see above.)
+  `lighting.speed` is the knob that works.
 - **Choosing effects is subtraction, not addition.** Every effect the board can
   run is already compiled in; the interesting act is removing the ones nobody
   asked for.
