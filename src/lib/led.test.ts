@@ -77,7 +77,6 @@ function tinyLayout(): LayoutFile {
       rgbMatrixCustom: true,
       layerState8bit: true,
       serialNumber: "x",
-      rgbStartupSpeed: 0,
       osDetection: false,
       osDefault: "windows" as const,
     },

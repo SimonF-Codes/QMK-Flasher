@@ -755,6 +755,9 @@ mod tests {
             sat: 255,
             val: 175,
             speed: 128,
+            reactive_boost: 160,
+            reactive_fade_ms: 400,
+            apply_on_boot: true,
         }
     }
 
@@ -778,16 +781,21 @@ mod tests {
         assert!(c.contains("rgb_matrix_enable();"));
     }
 
-    /// The other half of the same claim: ledmap mode is untouched by this
-    /// feature. A layout that picks an effect but leaves the ledmap in charge
-    /// generates exactly the keymap.c it generated before — the effect is
-    /// configured in config.h and reachable with TOGGLE_LAYER_COLOR, and that
-    /// is the whole difference.
+    /// The other half of the same claim: ledmap mode changes nothing about how
+    /// the board is *painted*. A layout that picks an effect but leaves the
+    /// ledmap in charge generates exactly the keymap.c it generated before —
+    /// the effect is configured in config.h and reachable with
+    /// TOGGLE_LAYER_COLOR, and that is the whole difference.
+    ///
+    /// `apply_on_boot` is off here because it is the one thing that does reach
+    /// keymap.c, and the test below is where it is pinned.
     #[test]
     fn ledmap_mode_generates_the_same_keymap_as_no_lighting_at_all() {
         let base = generate(&fixture()).unwrap().keymap_c;
         let mut layout = fixture();
-        layout.settings.lighting = Some(effect_lighting(LightingMode::Ledmap));
+        let mut lighting = effect_lighting(LightingMode::Ledmap);
+        lighting.apply_on_boot = false;
+        layout.settings.lighting = Some(lighting);
         assert_eq!(generate(&layout).unwrap().keymap_c, base);
         // ...and the difference really is in config.h.
         assert_ne!(
@@ -796,16 +804,114 @@ mod tests {
         );
     }
 
-    /// A layout with no LED data has nothing to choose between, so effect mode
-    /// must not conjure a second `keyboard_post_init_user` or a ledmap.
+    /// The whole of deliverable 2: `RGB_MATRIX_DEFAULT_*` reaches a used board
+    /// only if the firmware states it at boot, because `rgb_matrix_init()`
+    /// applies those defines only when EEPROM has no mode stored at all. The
+    /// `_noeeprom` setters are what make the app's settings authoritative, and
+    /// they belong in the one `keyboard_post_init_user` the file has.
     #[test]
-    fn effect_mode_without_rgb_matrix_custom_emits_no_led_code() {
+    fn apply_on_boot_restates_the_settings_over_eeprom() {
+        for mode in [LightingMode::Ledmap, LightingMode::Reactive, LightingMode::Effect] {
+            let mut layout = fixture();
+            layout.settings.lighting = Some(effect_lighting(mode));
+            let c = generate(&layout).unwrap().keymap_c;
+            assert_eq!(c.matches("void keyboard_post_init_user(void)").count(), 1, "{mode:?}");
+            for call in [
+                "rgb_matrix_mode_noeeprom(RGB_MATRIX_DEFAULT_MODE);",
+                "rgb_matrix_sethsv_noeeprom(RGB_MATRIX_DEFAULT_HUE, RGB_MATRIX_DEFAULT_SAT, RGB_MATRIX_DEFAULT_VAL);",
+                "rgb_matrix_set_speed_noeeprom(RGB_MATRIX_DEFAULT_SPD);",
+            ] {
+                assert!(c.contains(call), "{mode:?} is missing {call}\n{c}");
+            }
+            // rgb_matrix_sethsv_* returns having done nothing while the matrix
+            // is disabled, so enabling has to come first.
+            let enable = c.find("rgb_matrix_enable();").expect("the matrix is enabled");
+            let sethsv = c.find("rgb_matrix_sethsv_noeeprom").unwrap();
+            assert!(enable < sethsv, "{mode:?}: enable must precede sethsv");
+        }
+    }
+
+    /// Turning it off is a real choice, not a no-op: someone who cycles modes
+    /// with RGB_MOD on the board keeps them across a replug, and pays for it by
+    /// having the app's settings only apply to a blank EEPROM.
+    #[test]
+    fn apply_on_boot_off_emits_none_of_it() {
+        let mut layout = fixture();
+        let mut lighting = effect_lighting(LightingMode::Ledmap);
+        lighting.apply_on_boot = false;
+        layout.settings.lighting = Some(lighting);
+        assert!(!generate(&layout).unwrap().keymap_c.contains("_noeeprom"));
+    }
+
+    /// A layout with no LED data has nothing to paint, so no ledmap and no
+    /// second `keyboard_post_init_user` — but its lighting settings still have
+    /// to reach the board, and with no LED section to carry the boot apply,
+    /// `render` has to emit one itself.
+    #[test]
+    fn effect_mode_without_rgb_matrix_custom_emits_no_ledmap_but_still_applies() {
         let mut layout = fixture();
         layout.settings.rgb_matrix_custom = false;
         layout.settings.lighting = Some(effect_lighting(LightingMode::Effect));
         let c = generate(&layout).unwrap().keymap_c;
         assert!(!c.contains("ledmap[]"));
+        assert!(!c.contains("set_layer_color"));
+        assert_eq!(c.matches("void keyboard_post_init_user(void)").count(), 1);
+        assert!(c.contains("rgb_matrix_mode_noeeprom(RGB_MATRIX_DEFAULT_MODE);"));
+
+        // ...and with nothing to apply, nothing at all.
+        let mut layout = fixture();
+        layout.settings.rgb_matrix_custom = false;
+        let mut lighting = effect_lighting(LightingMode::Effect);
+        lighting.apply_on_boot = false;
+        layout.settings.lighting = Some(lighting);
+        let c = generate(&layout).unwrap().keymap_c;
+        assert!(!c.contains("keyboard_post_init_user"));
         assert!(!c.contains("rgb_matrix_enable();"));
+    }
+
+    /// The mode Simon actually asked for, and the reason none of QMK's twelve
+    /// reactive effects is it: they all render from the one global
+    /// `rgb_matrix_config.hsv`. Here the ledmap is emitted whole and only `v`
+    /// moves, so the layout's colours survive.
+    #[test]
+    fn reactive_mode_keeps_the_ledmap_and_modulates_only_brightness() {
+        let mut layout = fixture();
+        layout.settings.lighting = Some(effect_lighting(LightingMode::Reactive));
+        let out = generate(&layout).unwrap();
+
+        // Every part of the static ledmap is still there, unchanged.
+        assert!(out.keymap_c.contains("const uint8_t PROGMEM ledmap[]"));
+        assert!(out.keymap_c.contains("bool rgb_matrix_indicators_user(void)"));
+        assert!(out.keymap_c.contains("RGB rgb = hsv_to_rgb_with_value(hsv);"));
+
+        // ...plus exactly one modulation, on `v` alone.
+        assert!(out.keymap_c.contains("hsv.v = qf_reactive_value((uint8_t)i, hsv.v);"));
+        assert!(!out.keymap_c.contains("hsv.h ="));
+        assert!(!out.keymap_c.contains("hsv.s ="));
+
+        // The tracker it reads exists only under this define, which is why
+        // `needs_keypresses` is not just about the effect set.
+        assert!(out.config_h.contains("#define RGB_MATRIX_KEYPRESSES"));
+        assert!(out.keymap_c.contains("g_last_hit_tracker"));
+    }
+
+    /// The static ledmap must be exactly what it was — the reactive helper is
+    /// additive, and a layout with the feature off pays nothing for it.
+    #[test]
+    fn the_static_ledmap_is_untouched_when_reactive_is_off() {
+        let base = generate(&fixture()).unwrap().keymap_c;
+        for mode in [LightingMode::Ledmap, LightingMode::Effect] {
+            let mut layout = fixture();
+            let mut lighting = effect_lighting(mode);
+            lighting.apply_on_boot = false;
+            layout.settings.lighting = Some(lighting);
+            let c = generate(&layout).unwrap().keymap_c;
+            assert!(!c.contains("qf_reactive_value"), "{mode:?}");
+            assert!(!c.contains("g_last_hit_tracker"), "{mode:?}");
+            if mode == LightingMode::Ledmap {
+                assert_eq!(c, base);
+            }
+        }
     }
 
     #[test]

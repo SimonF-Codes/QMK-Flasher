@@ -24,7 +24,6 @@ const SETTINGS: Settings = {
   rgbMatrixCustom: true,
   layerState8bit: false,
   serialNumber: "test",
-  rgbStartupSpeed: 60,
   osDetection: false,
   osDefault: "windows",
 };

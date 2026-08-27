@@ -1,5 +1,5 @@
 {
-  "schemaVersion": 4,
+  "schemaVersion": 5,
   "meta": {
     "name": "Arrows Together",
     "geometry": "moonlander",
@@ -2596,7 +2596,9 @@
           "kind": "transparent"
         },
         {
-          "kind": "transparent"
+          "kind": "special",
+          "code": "QK_CLEAR_EEPROM",
+          "glow": "#ff2d00"
         },
         {
           "kind": "rgb",
@@ -2719,11 +2721,10 @@
     "rgbMatrixCustom": true,
     "layerState8bit": true,
     "serialNumber": "rddD7/QzpBEp",
-    "rgbStartupSpeed": 60,
     "osDetection": true,
     "osDefault": "windows",
     "lighting": {
-      "mode": "ledmap",
+      "mode": "reactive",
       "effect": "SOLID_REACTIVE_SIMPLE",
       "extraEffects": [
         "SOLID_SPLASH",
@@ -2732,7 +2733,10 @@
       "hue": 170,
       "sat": 255,
       "val": 175,
-      "speed": 150
+      "speed": 150,
+      "reactiveBoost": 160,
+      "reactiveFadeMs": 400,
+      "applyOnBoot": true
     }
   }
 }

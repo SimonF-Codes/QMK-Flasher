@@ -47,7 +47,6 @@ function makeLayout(layers: Layer[]): LayoutFile {
       rgbMatrixCustom: false,
       layerState8bit: false,
       serialNumber: "",
-      rgbStartupSpeed: 0,
       osDetection: false,
       osDefault: "windows" as const,
     },

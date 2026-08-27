@@ -14,7 +14,14 @@ import {
   setLighting,
   toggleExtraEffect,
 } from "./rgbEffects";
-import { LayoutFileSchema, type LayoutFile, type Lighting } from "./types";
+import {
+  LayoutFileSchema,
+  LightingSchema,
+  REACTIVE_FADE_MS_MAX,
+  REACTIVE_FADE_MS_MIN,
+  type LayoutFile,
+  type Lighting,
+} from "./types";
 
 const fixture = () => LayoutFileSchema.parse(fixtureJson);
 
@@ -230,5 +237,95 @@ describe("the starting point", () => {
   it("starts at the board's brightness ceiling and QMK's own speed", () => {
     expect(DEFAULT_LIGHTING.val).toBe(175);
     expect(DEFAULT_LIGHTING.speed).toBe(128);
+  });
+});
+
+describe("the reactive ledmap", () => {
+  /**
+   * The whole reason the mode exists. QMK's twelve reactive effects all render
+   * through `effect_runner_reactive`, which paints every LED from the single
+   * global `rgb_matrix_config.hsv` — pick one and the board becomes one colour.
+   * Reactive mode is a LEDMAP mode: the same table, the same repaint, with only
+   * `v` modulated, so the layout's colours still reach the board and the
+   * preview is still telling the truth.
+   */
+  it("is a ledmap painter, not an effect painter", () => {
+    expect(paintedBy(withLighting({ mode: "reactive" }))).toBe("ledmap");
+  });
+
+  /**
+   * Mirrors `Lighting::needs_keypresses`, including its mode arm: the generated
+   * `set_layer_color()` reads `g_last_hit_tracker`, which QMK declares only
+   * under `RGB_MATRIX_KEYREACTIVE_ENABLED`. Get this wrong in the UI and the
+   * panel promises a cost-free feature that does not compile.
+   */
+  it("needs keypress tracking even with no reactive effect compiled in", () => {
+    const c = costs(lighting({ mode: "reactive", effect: "BREATHING" }));
+    expect(c.keypresses).toBe(true);
+    expect(c.reactiveLedmap).toBe(true);
+    // ...and the effect set is reported honestly: nothing there is reactive.
+    expect(c.reactiveEffects).toEqual([]);
+  });
+
+  it("does not claim the reactive ledmap in the other modes", () => {
+    for (const mode of ["ledmap", "effect"] as const) {
+      const c = costs(lighting({ mode, effect: "BREATHING" }));
+      expect(c.reactiveLedmap).toBe(false);
+      expect(c.keypresses).toBe(false);
+    }
+  });
+});
+
+describe("settings that reach the board", () => {
+  /**
+   * `RGB_MATRIX_DEFAULT_*` is applied by `rgb_matrix_init()` only when EEPROM
+   * holds no mode at all, so on a board that has been used the panel's hue,
+   * saturation, brightness and effect are ignored. Defaulting this on is what
+   * makes the app authoritative; the cost (an RGB_MOD mode not surviving a
+   * replug) is stated in the panel rather than assumed away.
+   */
+  it("re-applies the settings at boot by default", () => {
+    expect(DEFAULT_LIGHTING.applyOnBoot).toBe(true);
+  });
+
+  it("starts with a visible tap and a fade a typist can see", () => {
+    expect(DEFAULT_LIGHTING.reactiveBoost).toBeGreaterThan(0);
+    expect(DEFAULT_LIGHTING.reactiveFadeMs).toBeGreaterThanOrEqual(
+      REACTIVE_FADE_MS_MIN,
+    );
+    expect(DEFAULT_LIGHTING.reactiveFadeMs).toBeLessThanOrEqual(
+      REACTIVE_FADE_MS_MAX,
+    );
+  });
+
+  /**
+   * The fade window is a divisor in the generated C, and QMK's hit ticks are
+   * `uint16_t` milliseconds. Rejecting it here is what stops a layout that
+   * cannot compile from ever being saved. Mirrors `REACTIVE_FADE_MS_RANGE`.
+   */
+  it("refuses a fade window the firmware cannot express", () => {
+    for (const reactiveFadeMs of [0, 10, 60_000]) {
+      expect(() => LightingSchema.parse(lighting({ reactiveFadeMs }))).toThrow();
+    }
+    expect(() =>
+      LightingSchema.parse(lighting({ reactiveFadeMs: 400 })),
+    ).not.toThrow();
+  });
+
+  /**
+   * A layout written before this feature existed must still open, and must
+   * open with the settings reaching the board — that is the fix, and it should
+   * not need the user to find a checkbox.
+   */
+  it("fills in the new fields when an older layout has none of them", () => {
+    const { reactiveBoost, reactiveFadeMs, applyOnBoot, ...old } =
+      DEFAULT_LIGHTING;
+    void reactiveBoost;
+    void reactiveFadeMs;
+    void applyOnBoot;
+    const parsed = LightingSchema.parse(old);
+    expect(parsed.applyOnBoot).toBe(true);
+    expect(parsed.reactiveBoost).toBe(160);
+    expect(parsed.reactiveFadeMs).toBe(400);
   });
 });

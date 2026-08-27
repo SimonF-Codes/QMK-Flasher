@@ -32,7 +32,6 @@ const SETTINGS: Settings = {
   rgbMatrixCustom: true,
   layerState8bit: false,
   serialNumber: "test",
-  rgbStartupSpeed: 60,
   osDetection: false,
   osDefault: "windows",
 };
@@ -310,6 +309,9 @@ describe("a layout that does not use a feature", () => {
             sat: 255,
             val: 175,
             speed: 128,
+            reactiveBoost: 160,
+            reactiveFadeMs: 400,
+            applyOnBoot: true,
           },
         },
       });
@@ -334,6 +336,9 @@ describe("a layout that does not use a feature", () => {
             sat: 255,
             val: 175,
             speed: 128,
+            reactiveBoost: 160,
+            reactiveFadeMs: 400,
+            applyOnBoot: true,
           },
         },
       });

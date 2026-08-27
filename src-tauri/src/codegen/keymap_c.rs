@@ -354,9 +354,64 @@ fn os_section(layout: &LayoutFile) -> String {
         );
     }
     if !layout.settings.rgb_matrix_custom {
-        out.push_str("\nvoid keyboard_post_init_user(void) {\n  qf_os_apply();\n}\n");
+        out.push('\n');
+        out.push_str(&post_init(layout, true));
     }
     out
+}
+
+/// The boot-time re-apply of `settings.lighting`, emitted inside
+/// [`post_init`] when `lighting.apply_on_boot`.
+///
+/// Without it the `RGB_MATRIX_DEFAULT_*` defines are inert on any board that
+/// has been used before. `rgb_matrix_init()` writes them to EEPROM only when
+/// EEPROM holds no mode at all (`rgb_matrix.c`, `if (!rgb_matrix_config.mode)`
+/// guarding `eeconfig_update_rgb_matrix_default()`), so a board with a stored
+/// mode keeps whatever hue, saturation, brightness and effect it was last left
+/// on and ignores every one of them — which is also why the ledmap's master
+/// brightness (`hsv_to_rgb_with_value` reads `rgb_matrix_config.hsv.v` live)
+/// has never followed `lighting.val`.
+///
+/// The `_noeeprom` variants are the point: they move the live config without
+/// writing, so the firmware states the settings afresh on every boot instead of
+/// racing EEPROM to own them. The cost — a mode cycled to with `RGB_MOD` does
+/// not survive a replug — is stated in the app where the switch is.
+const APPLY_LIGHTING: &str = "  /* settings.lighting, applied over whatever EEPROM happens to hold.\n   * rgb_matrix_init() writes the RGB_MATRIX_DEFAULT_* values only when EEPROM\n   * has no mode stored at all, so on a board that has ever been used they are\n   * ignored: it keeps its last hue, brightness and mode. Worse, #undef-ing\n   * effects shrinks the effect enum, so a stored mode index resolves to a\n   * DIFFERENT effect after each flash. These setters change the live config\n   * without writing it, so the firmware is the authority every boot.\n   * The cost, stated in the app where this is chosen: a mode reached with\n   * RGB_MOD on the board does not survive a replug. */\n  rgb_matrix_mode_noeeprom(RGB_MATRIX_DEFAULT_MODE);\n  rgb_matrix_sethsv_noeeprom(RGB_MATRIX_DEFAULT_HUE, RGB_MATRIX_DEFAULT_SAT, RGB_MATRIX_DEFAULT_VAL);\n  rgb_matrix_set_speed_noeeprom(RGB_MATRIX_DEFAULT_SPD);\n";
+
+/// True when the layout needs a `keyboard_post_init_user` at all.
+fn needs_post_init(layout: &LayoutFile, uses_os: bool) -> bool {
+    uses_os || layout.settings.rgb_matrix_custom || applies_lighting(layout)
+}
+
+fn applies_lighting(layout: &LayoutFile) -> bool {
+    layout
+        .settings
+        .lighting
+        .as_ref()
+        .is_some_and(|l| l.apply_on_boot)
+}
+
+/// The single `keyboard_post_init_user` this file emits, wherever it lands.
+///
+/// Four callers can own it — [`ledmap_section`], [`effect_section`],
+/// [`os_section`], and [`render`] for a layout that configures lighting without
+/// either LED section — so the body is built here rather than written out four
+/// times and left to drift.
+fn post_init(layout: &LayoutFile, uses_os: bool) -> String {
+    let mut body = String::new();
+    // Also the precondition for APPLY_LIGHTING: rgb_matrix_sethsv_* returns
+    // having done nothing while the matrix is disabled
+    // (`rgb_matrix_sethsv_eeprom_helper`, first line), so enabling comes first.
+    if layout.settings.rgb_matrix_custom || applies_lighting(layout) {
+        body.push_str("  rgb_matrix_enable();\n");
+    }
+    if applies_lighting(layout) {
+        body.push_str(APPLY_LIGHTING);
+    }
+    if uses_os {
+        body.push_str("  qf_os_apply();\n");
+    }
+    format!("void keyboard_post_init_user(void) {{\n{body}}}\n")
 }
 
 /// LAYOUT arg index ranges of the visual rows (left + right half per line).
@@ -430,6 +485,9 @@ fn combos(layout: &LayoutFile, plan: &RenderPlan) -> Result<String, AppError> {
 /// removal, not a suppression: `rgb_matrix_indicators_user()` runs after the
 /// active effect has drawn its frame and `set_layer_color()` rewrites every
 /// LED, so leaving the ledmap in would make the effect literally invisible.
+///
+/// [`LightingMode::Reactive`] is a ledmap mode: the same table, the same
+/// repaint, with each LED's brightness modulated by how recently it was struck.
 pub fn emits_ledmap(layout: &LayoutFile) -> bool {
     layout.settings.rgb_matrix_custom
         && !matches!(
@@ -438,20 +496,50 @@ pub fn emits_ledmap(layout: &LayoutFile) -> bool {
         )
 }
 
+/// True when the emitted `set_layer_color()` modulates brightness from
+/// `g_last_hit_tracker`.
+fn ledmap_is_reactive(layout: &LayoutFile) -> bool {
+    emits_ledmap(layout)
+        && matches!(
+            layout.settings.lighting.as_ref().map(|l| l.mode),
+            Some(LightingMode::Reactive)
+        )
+}
+
+/// `qf_reactive_value()` — the whole of the reactive ledmap, and the thing
+/// none of QMK's twelve reactive effects can do.
+///
+/// Every one of them renders through `effect_runner_reactive`, which paints
+/// each LED from `rgb_matrix_config.hsv`: one hue, one saturation, one board.
+/// Turning one on replaces the layout's colours with a single colour, which is
+/// what "reactive, but every key white" looks like. Here the colours come from
+/// the ledmap exactly as in static mode and only `v` moves.
+///
+/// `g_last_hit_tracker` (`rgb_matrix.h:284`, declared only under
+/// `RGB_MATRIX_KEYREACTIVE_ENABLED`) is QMK's record of recent hits: `count`
+/// live entries, appended oldest-first, each with the `index` of the LED struck
+/// and `tick`, milliseconds since. So the search runs backwards and takes the
+/// first entry for this LED — the most recent one.
+///
+/// **It remembers `LED_HITS_TO_REMEMBER` hits, 8 by default, and no more.**
+/// Strike a ninth key while eight are still inside the fade window and
+/// `rgb_matrix_handle_key_event` shifts the oldest entry out of the buffer; that
+/// key drops straight back to rest instead of finishing its fade. Eight keys
+/// inside one fade window is faster than the fade is long, and the visible
+/// failure is a glow cut short — never a wrong colour, because the colour never
+/// came from here.
+const REACTIVE_HELPER: &str = "\n#ifndef RGB_MATRIX_KEYREACTIVE_ENABLED\n#    error \"reactive ledmap needs RGB_MATRIX_KEYPRESSES: config.h and keymap.c disagree\"\n#endif\n\n/* The brightness of one LED this frame, given its ledmap value.\n *\n * g_last_hit_tracker is QMK's record of recent key hits: `count` live entries,\n * appended oldest-first, each carrying the `index` of the LED that was struck\n * and `tick`, milliseconds since. The newest is last, so this searches\n * backwards and stops at the first entry for this LED.\n *\n * It remembers LED_HITS_TO_REMEMBER hits (8) and no more. Strike a ninth key\n * while eight are still inside the fade window and rgb_matrix_handle_key_event\n * shifts the oldest entry out; that key drops straight back to rest instead of\n * finishing its fade. The colours are never affected - they come from the\n * ledmap, not from here. */\nstatic uint8_t qf_reactive_value(uint8_t led, uint8_t v) {\n  uint16_t tick = QF_REACTIVE_FADE_MS;\n  for (int8_t j = (int8_t)g_last_hit_tracker.count - 1; j >= 0; j--) {\n    if (g_last_hit_tracker.index[j] == led) {\n      tick = g_last_hit_tracker.tick[j];\n      break;\n    }\n  }\n  /* 255 - BOOST at rest, up to 255 the instant the key is struck. */\n  uint16_t level = 255 - QF_REACTIVE_BOOST;\n  if (tick < QF_REACTIVE_FADE_MS) {\n    level += ((uint32_t)QF_REACTIVE_BOOST * (QF_REACTIVE_FADE_MS - tick)) / QF_REACTIVE_FADE_MS;\n  }\n  return (uint8_t)(((uint16_t)v * level) / 255);\n}\n";
+
 /// `keyboard_post_init_user` on its own, for effect mode: the board still has
 /// to turn the matrix on, it just has no ledmap to paint with afterwards.
 /// Everything else `ledmap_section` emits — `hsv_to_rgb_with_value`, the
 /// `ledmap[]` table, `set_layer_color`, `rgb_matrix_indicators_user` — exists
 /// only to serve that table and goes with it.
-fn effect_section(uses_os: bool) -> String {
+fn effect_section(layout: &LayoutFile, uses_os: bool) -> String {
     let mut out = String::from(
         "\n\n\n/* mode: effect — the RGB Matrix effect chosen in config.h owns the LEDs.\n * No ledmap is emitted, so nothing repaints over it. */\n",
     );
-    out.push_str(if uses_os {
-        "void keyboard_post_init_user(void) {\n  rgb_matrix_enable();\n  qf_os_apply();\n}\n"
-    } else {
-        "void keyboard_post_init_user(void) {\n  rgb_matrix_enable();\n}\n"
-    });
+    out.push_str(&post_init(layout, uses_os));
     out
 }
 
@@ -462,14 +550,25 @@ fn ledmap_section(layout: &LayoutFile, uses_os: bool) -> Result<String, AppError
     let mut out = String::from(
         "\n\n\nextern rgb_config_t rgb_matrix_config;\n\nRGB hsv_to_rgb_with_value(HSV hsv) {\n  RGB rgb = hsv_to_rgb( hsv );\n  float f = (float)rgb_matrix_config.hsv.v / UINT8_MAX;\n  return (RGB){ f * rgb.r, f * rgb.g, f * rgb.b };\n}\n\n",
     );
-    out.push_str(if uses_os {
-        "void keyboard_post_init_user(void) {\n  rgb_matrix_enable();\n  qf_os_apply();\n}\n\n"
-    } else {
-        "void keyboard_post_init_user(void) {\n  rgb_matrix_enable();\n}\n\n"
-    });
+    out.push_str(&post_init(layout, uses_os));
+    out.push('\n');
     out.push_str(&super::ledmap::render(layout)?);
+    if ledmap_is_reactive(layout) {
+        out.push_str(REACTIVE_HELPER);
+    }
     out.push_str(
-        "\nvoid set_layer_color(int layer) {\n  for (int i = 0; i < RGB_MATRIX_LED_COUNT; i++) {\n    HSV hsv = {\n      .h = pgm_read_byte(&ledmap[layer][i][0]),\n      .s = pgm_read_byte(&ledmap[layer][i][1]),\n      .v = pgm_read_byte(&ledmap[layer][i][2]),\n    };\n    if (!hsv.h && !hsv.s && !hsv.v) {\n        rgb_matrix_set_color( i, 0, 0, 0 );\n    } else {\n        RGB rgb = hsv_to_rgb_with_value(hsv);\n        rgb_matrix_set_color(i, rgb.r, rgb.g, rgb.b);\n    }\n  }\n}\n\nbool rgb_matrix_indicators_user(void) {\n  if (rawhid_state.rgb_control) {\n      return false;\n  }\n  if (!keyboard_config.disable_layer_led) { \n    switch (biton32(layer_state)) {\n",
+        "\nvoid set_layer_color(int layer) {\n  for (int i = 0; i < RGB_MATRIX_LED_COUNT; i++) {\n    HSV hsv = {\n      .h = pgm_read_byte(&ledmap[layer][i][0]),\n      .s = pgm_read_byte(&ledmap[layer][i][1]),\n      .v = pgm_read_byte(&ledmap[layer][i][2]),\n    };\n    if (!hsv.h && !hsv.s && !hsv.v) {\n        rgb_matrix_set_color( i, 0, 0, 0 );\n    } else {\n",
+    );
+    if ledmap_is_reactive(layout) {
+        // After the off test, deliberately: {0,0,0} is the ledmap's "LED off"
+        // and stays off however hard the key is struck. Before the master-
+        // brightness scaling in hsv_to_rgb_with_value, also deliberately: the
+        // dip is relative to this key's own colour, and the board's ceiling
+        // still applies to the result.
+        out.push_str("        hsv.v = qf_reactive_value((uint8_t)i, hsv.v);\n");
+    }
+    out.push_str(
+        "        RGB rgb = hsv_to_rgb_with_value(hsv);\n        rgb_matrix_set_color(i, rgb.r, rgb.g, rgb.b);\n    }\n  }\n}\n\nbool rgb_matrix_indicators_user(void) {\n  if (rawhid_state.rgb_control) {\n      return false;\n  }\n  if (!keyboard_config.disable_layer_led) { \n    switch (biton32(layer_state)) {\n",
     );
     for li in 0..layout.layers.len() {
         out.push_str(&format!(
@@ -703,7 +802,13 @@ pub fn render(layout: &LayoutFile) -> Result<String, AppError> {
     if emits_ledmap(layout) {
         out.push_str(&ledmap_section(layout, uses_os)?);
     } else if layout.settings.rgb_matrix_custom {
-        out.push_str(&effect_section(uses_os));
+        out.push_str(&effect_section(layout, uses_os));
+    } else if !uses_os && needs_post_init(layout, uses_os) {
+        // No LED section and no OS block, but the layout still configures
+        // lighting and wants it applied at boot — so nothing else is going to
+        // emit `keyboard_post_init_user` and this has to.
+        out.push_str("\n\n\n/* The layout carries no ledmap, but it does configure RGB Matrix. */\n");
+        out.push_str(&post_init(layout, uses_os));
     }
     out.push_str(&dance_section(&plan));
     out.push_str(&process_record_user(layout, &plan)?);

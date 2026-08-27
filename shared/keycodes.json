@@ -1994,6 +1994,17 @@
     "modsApplicable": false
   },
   {
+    "qmk": "QK_CLEAR_EEPROM",
+    "aliases": [
+      "EE_CLR"
+    ],
+    "label": "EE Clr",
+    "longLabel": "Clear EEPROM (reset stored settings)",
+    "category": "special",
+    "tappable": false,
+    "modsApplicable": false
+  },
+  {
     "qmk": "CW_TOGG",
     "aliases": [
       "QK_CAPS_WORD_TOGGLE"

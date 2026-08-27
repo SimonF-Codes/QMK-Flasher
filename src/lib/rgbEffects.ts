@@ -62,6 +62,9 @@ export const DEFAULT_LIGHTING: Lighting = {
   sat: 255,
   val: 175,
   speed: 128,
+  reactiveBoost: 160,
+  reactiveFadeMs: 400,
+  applyOnBoot: true,
 };
 
 /**
@@ -85,6 +88,12 @@ export interface LightingCosts {
   keypresses: boolean;
   /** RGB_MATRIX_FRAMEBUFFER_EFFECTS — a per-LED buffer kept between frames. */
   framebuffer: boolean;
+  /**
+   * `mode === "reactive"` — the reactive ledmap needs the hit tracker too, and
+   * needs it whether or not a stock reactive effect is compiled in. Reported
+   * separately so the panel can say which of the two reasons applies.
+   */
+  reactiveLedmap: boolean;
   /** Which chosen effects are the reason `keypresses` is on. */
   reactiveEffects: string[];
   /** Which chosen effects are the reason `framebuffer` is on. */
@@ -107,9 +116,14 @@ export function costs(lighting: Lighting): LightingCosts {
   const framebufferEffects = entries
     .filter((e) => e.framebuffer)
     .map((e) => e.qmk);
+  const reactiveLedmap = lighting.mode === "reactive";
   return {
-    keypresses: reactiveEffects.length > 0,
+    // Mirrors `Lighting::needs_keypresses` in the Rust schema, including the
+    // mode arm: the generated `set_layer_color()` reads `g_last_hit_tracker`,
+    // which QMK declares only under `RGB_MATRIX_KEYREACTIVE_ENABLED`.
+    keypresses: reactiveLedmap || reactiveEffects.length > 0,
     framebuffer: framebufferEffects.length > 0,
+    reactiveLedmap,
     reactiveEffects,
     framebufferEffects,
     compiled: chosen.length,
@@ -124,7 +138,9 @@ export type Painter = "ledmap" | "effect" | "none";
  *
  * `rgbMatrixCustom` says the layout carries LED data at all; `lighting.mode`
  * says whether that data is what the board shows. Mirrors
- * `codegen::keymap_c::emits_ledmap`.
+ * `codegen::keymap_c::emits_ledmap`, `reactive` included: that mode emits the
+ * same ledmap and only modulates each LED's brightness, so the colours on the
+ * board are still the layout's and the preview is still right.
  */
 export function paintedBy(layout: LayoutFile): Painter {
   if (layout.settings.lighting?.mode === "effect") return "effect";

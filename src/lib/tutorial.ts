@@ -377,10 +377,19 @@ const TOPICS: readonly TopicSpec[] = [
         `This layout compiles in ${count(chosen.length, "effect")} — ${chosen.map(effectLabel).join(", ")} — and boots into ${effectLabel(lighting.effect)}.`,
         lighting.mode === "ledmap"
           ? "It boots in layer-colour mode, so the board looks exactly as the last step described it and the effect is sitting underneath, invisible. A TOGGLE_LAYER_COLOR key stops the repaint and reveals it — that is the switch worth pressing once, to see what is already in your firmware."
-          : "The effect owns the board, so this layout's per-layer and per-key colours are not generated into the firmware at all. They are still in the layout; switching back in the Effects panel brings them to the board again.",
+          : lighting.mode === "reactive"
+            ? `It boots in "layer colours + tap": your colours still light the board, and the key you strike jumps to full brightness and fades back over ${lighting.reactiveFadeMs} ms. None of QMK's own reactive effects can do that — every one of them paints the whole board from a single colour, so turning one on would replace your layout with one hue. This modulates brightness over your ledmap instead, so the colours are still yours.`
+            : "The effect owns the board, so this layout's per-layer and per-key colours are not generated into the firmware at all. They are still in the layout; switching back in the Effects panel brings them to the board again.",
         cost.keypresses
-          ? `${cost.reactiveEffects.map(effectLabel).join(", ")} ${cost.reactiveEffects.length === 1 ? "is" : "are"} key-reactive, so the firmware compiles in RGB_MATRIX_KEYPRESSES and the matrix scan records which key was hit and when. That is a real cost in firmware size and scan time, paid on every scan whether or not the reactive effect is the one running — the panel says so before a build, rather than leaving it to a build that stops fitting.`
+          ? `${
+              cost.reactiveLedmap
+                ? "Reacting to a keypress at all means"
+                : `${cost.reactiveEffects.map(effectLabel).join(", ")} ${cost.reactiveEffects.length === 1 ? "is" : "are"} key-reactive, so`
+            } the firmware compiles in RGB_MATRIX_KEYPRESSES and the matrix scan records which key was hit and when. That is a real cost in firmware size and scan time, paid on every scan whether or not anything reactive is running — the panel says so before a build, rather than leaving it to a build that stops fitting.`
           : "Nothing here is key-reactive, so the matrix scan is untouched. The reactive effects are the ones marked in the panel; picking one is what turns that tracking on.",
+        lighting.applyOnBoot
+          ? "This layout also restates its lighting settings on every boot. It has to: QMK writes the firmware's defaults to EEPROM only when EEPROM holds no mode at all, so on a board that has ever been used, a hue or brightness chosen here would otherwise be ignored in favour of whatever the board was last left on. The cost is that a mode you cycle to with an RGB_MOD key does not survive a replug."
+          : "This layout does not restate its lighting at boot, so a mode you cycle to on the board survives a replug — and the hue, brightness and effect chosen here only reach a board whose EEPROM has been cleared.",
         "The effects you did not pick are actively removed from the build. The Moonlander's own board definition turns on forty-eight of them, so an explicit set is how the reactive ones get paid for.",
       ];
     },
