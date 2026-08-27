@@ -325,3 +325,66 @@ describe("appendMirroredLayer", () => {
     expect(appendMirroredLayer(before, 99)).toBe(before);
   });
 });
+
+describe("the shipped layout's Mirror toggle", () => {
+  /** The Mirror layer index the combos have always targeted. */
+  const MIRROR_LAYER = 5;
+  const isTG5 = (a: KeyAction) =>
+    a.kind === "layerSwitch" && a.action === "TG" && a.layer === MIRROR_LAYER;
+
+  it("still has both one-handed combos", () => {
+    // The toggle is an addition, not a replacement — muscle memory keeps working.
+    const combos = layout().combos.filter((c) => isTG5(c.action));
+    expect(combos.map((c) => c.name)).toEqual(["Mirror 1", "Mirror 2"]);
+    expect(combos.map((c) => c.keys)).toEqual([
+      [21, 7],
+      [20, 6],
+    ]);
+  });
+
+  it("reaches Mirror from a single key, not only from a chord", () => {
+    const l = layout();
+    const single = l.layers.flatMap((layer, li) =>
+      layer.keys.flatMap((k, ki) => (isTG5(k) ? [{ li, ki }] : [])),
+    );
+    expect(single.length).toBeGreaterThan(0);
+  });
+
+  it("puts one under each hand, on both the way in and the way out", () => {
+    const l = layout();
+    // Keys 34 and 35 are each other's reflection, so the toggle exists on the
+    // left half and the right half of the board. Present on the Media layer
+    // (the way in, since every position on the base layer is taken) and on the
+    // Mirror layer itself (the way out — leaving used to need the chord).
+    expect(mirrorPosition(34)).toBe(35);
+    [4, MIRROR_LAYER].forEach((li) => {
+      expect(isTG5(l.layers[li].keys[34])).toBe(true);
+      expect(isTG5(l.layers[li].keys[35])).toBe(true);
+    });
+  });
+
+  it("glows in the Mirror layer's own color, like every other layer key", () => {
+    const l = layout();
+    const color = l.layers[MIRROR_LAYER].color;
+    [4, MIRROR_LAYER].forEach((li) =>
+      [34, 35].forEach((ki) =>
+        expect(l.layers[li].keys[ki].glow).toBe(color),
+      ),
+    );
+  });
+
+  it("is pinned by the generator, but not immune to being overwritten", () => {
+    // Layer keys stay put, so re-mirroring the Mirror layer in place leaves the
+    // way out exactly where it was.
+    const inPlace = mirrorLayerInto(layout(), MIRROR_LAYER, MIRROR_LAYER);
+    expect(isTG5(inPlace.layers[MIRROR_LAYER].keys[34])).toBe(true);
+    expect(isTG5(inPlace.layers[MIRROR_LAYER].keys[35])).toBe(true);
+
+    // Regenerating it from the BASE layer is a different act: pinning protects
+    // the source's layer keys, not the destination's, so the exit keys are
+    // replaced by whatever layer 0 holds there. The panel says so before it
+    // runs — it replaces all 72 keys — and the combos still get you out.
+    const fromBase = mirrorLayerInto(layout(), 0, MIRROR_LAYER);
+    expect(isTG5(fromBase.layers[MIRROR_LAYER].keys[34])).toBe(false);
+  });
+});
