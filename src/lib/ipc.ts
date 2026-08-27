@@ -344,7 +344,6 @@ function mockBlankLayout(name: string, kb: KeyboardInfo): LayoutFile {
       rgbMatrixCustom: true,
       layerState8bit: true,
       serialNumber: `qmk-flasher/${kb.id}`,
-      rgbStartupSpeed: 60,
       osDetection: false,
       osDefault: "windows" as const,
     },

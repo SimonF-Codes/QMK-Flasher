@@ -547,6 +547,11 @@
       "description": "RGB Matrix configuration: which effects are compiled in, which one boots,\nand the HSV/speed the board starts at.\n\nNames in `effect` / `extra_effects` are QMK's own, from\n`shared/rgb_effects.json` — `SOLID_REACTIVE_SIMPLE`, `SPLASH`, … The\nexpensive switches (`RGB_MATRIX_KEYPRESSES`, `RGB_MATRIX_FRAMEBUFFER_EFFECTS`)\nare **derived** from that set by `codegen::config_h`, never stored, for the\nsame reason `TAP_DANCE_ENABLE` is derived from the layout's actual tap\ndances: a stored flag drifts from the thing it describes, and here the drift\ncompiles an effect that can never render or costs scan time nothing uses.",
       "type": "object",
       "properties": {
+        "applyOnBoot": {
+          "description": "Re-apply `mode`/`hue`/`sat`/`val`/`speed` from\n`keyboard_post_init_user()` on every boot, with the `_noeeprom` setters.\n\nWithout this the settings above are **inert on any board that has been\nused before**: `rgb_matrix_init()` applies the `RGB_MATRIX_DEFAULT_*`\ndefines only when EEPROM holds no mode at all (`rgb_matrix.c:492`,\n`if (!rgb_matrix_config.mode)`), so a board with a stored mode keeps\nwhatever hue, saturation and brightness it was last left on — and,\nbecause `#undef`-ing effects shrinks the effect enum, a stored mode\nindex resolves to a *different* effect after each flash.\n\nThe cost is stated in the UI rather than hidden: with this on, a mode\ncycled to with `RGB_MOD` on the board does not survive a replug.",
+          "type": "boolean",
+          "default": true
+        },
         "effect": {
           "description": "`RGB_MATRIX_DEFAULT_MODE` — the effect the board boots into.",
           "type": "string"
@@ -568,6 +573,22 @@
         },
         "mode": {
           "$ref": "#/$defs/LightingMode"
+        },
+        "reactiveBoost": {
+          "description": "How much brighter a struck key goes than its resting level, on the\nledmap's own 0–255 `v` scale. Only read in [`LightingMode::Reactive`].\n\nA tap cannot go *above* the layout's color: the peak the LEDs can reach\nis already `hsv.v` scaled by the board's master brightness, and pushing\npast that would mean overriding the ceiling the vendor set. So the\nresting state is the ledmap color dimmed **by** this much and a hit\nrestores it to full. 0 is a static ledmap; 255 leaves unstruck keys\ndark.",
+          "type": "integer",
+          "format": "uint8",
+          "default": 160,
+          "maximum": 255,
+          "minimum": 0
+        },
+        "reactiveFadeMs": {
+          "description": "Milliseconds from the strike back to the resting level, linear. Only\nread in [`LightingMode::Reactive`]. Bounded by [`validate`] to\n[`REACTIVE_FADE_MS_RANGE`]: 0 would divide by zero in the generated C,\nand QMK's hit ticks are `uint16_t` milliseconds.\n\n[`validate`]: LayoutFile::validate",
+          "type": "integer",
+          "format": "uint16",
+          "default": 400,
+          "maximum": 65535,
+          "minimum": 0
         },
         "sat": {
           "description": "`RGB_MATRIX_DEFAULT_SAT`.",
@@ -601,7 +622,7 @@
       ]
     },
     "LightingMode": {
-      "description": "Which painter owns the LEDs.\n\nThe two cannot share the board, and this is not a policy choice — it falls\nout of the generated firmware. `rgb_matrix_indicators_user()` runs *after*\nthe active effect has rendered a frame and `set_layer_color()` overwrites\nevery LED from the ledmap, so with the ledmap emitted no animation is ever\nvisible. Rather than let one silently win, the layout picks.",
+      "description": "Which painter owns the LEDs.\n\nThe ledmap and a stock effect cannot share the board, and this is not a\npolicy choice — it falls out of the generated firmware.\n`rgb_matrix_indicators_user()` runs *after* the active effect has rendered a\nframe and `set_layer_color()` overwrites every LED from the ledmap, so with\nthe ledmap emitted no animation is ever visible. Rather than let one\nsilently win, the layout picks.",
       "oneOf": [
         {
           "description": "Today's behavior: the per-layer ledmap repaints every LED every frame.\nThe effect below is still compiled in and still configured — ZSA's\n`TOGGLE_LAYER_COLOR` keycode stops the repaint at runtime and reveals it.",
@@ -612,6 +633,11 @@
           "description": "The chosen effect owns the board. `ledmap[]`, `set_layer_color()` and\n`rgb_matrix_indicators_user()` are not emitted at all, so the per-layer\ncolors are absent from the firmware rather than merely overdrawn.",
           "type": "string",
           "const": "effect"
+        },
+        {
+          "description": "The ledmap still owns the **colors**; a keypress owns the **brightness**\nof the key it struck, which then fades back.\n\nThis is not one of QMK's reactive effects and could not be: every one of\nthem renders through `effect_runner_reactive`, which paints each LED\nfrom the single global `rgb_matrix_config.hsv`\n(`quantum/rgb_matrix/animations/runners/effect_runner_reactive.h`) — one\ncolor for the whole board, per-key layout colors gone. Here the ledmap\nis emitted exactly as in [`LightingMode::Ledmap`] and\n`set_layer_color()` scales each LED's `v` by how recently that LED was\nhit, read from `g_last_hit_tracker`.",
+          "type": "string",
+          "const": "reactive"
         }
       ]
     },
@@ -781,13 +807,6 @@
         "rgbMatrixCustom": {
           "type": "boolean"
         },
-        "rgbStartupSpeed": {
-          "description": "RGB_MATRIX_STARTUP_SPD in config.h.",
-          "type": "integer",
-          "format": "uint16",
-          "maximum": 65535,
-          "minimum": 0
-        },
         "serialNumber": {
           "description": "SERIAL_NUMBER in config.h, e.g. \"rddD7/QzpBEp\".",
           "type": "string"
@@ -805,8 +824,7 @@
         "oryx",
         "rgbMatrixCustom",
         "layerState8bit",
-        "serialNumber",
-        "rgbStartupSpeed"
+        "serialNumber"
       ]
     },
     "TapSpec": {

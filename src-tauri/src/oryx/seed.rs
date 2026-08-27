@@ -482,7 +482,6 @@ pub fn layout_from_snapshot(
         rgb_matrix_custom: true,
         layer_state_8bit: true,
         serial_number: format!("{layout_id}/{}", rev.hash_id),
-        rgb_startup_speed: 60,
         // Oryx layouts carry no OS intent; a seeded layout starts on the
         // app defaults and the user opts in from the OS panel.
         os_detection: false,

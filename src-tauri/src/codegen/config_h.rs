@@ -27,18 +27,16 @@ pub fn render(layout: &LayoutFile) -> String {
         // QF_OS_* override.
         out.push_str("\n#define OS_DETECTION_DEBOUNCE 250\n");
     }
-    // Oryx writes this line and so, byte for byte, do we — it is part of the
-    // golden parity with `shared/fixtures/reference_config.h`. It is also dead:
-    // `RGB_MATRIX_STARTUP_SPD` appears nowhere in qmk_firmware (the name was
-    // `RGB_MATRIX_DEFAULT_SPD` by the time RGB Matrix landed in `rgb_matrix.h`),
-    // so the board has always booted at QMK's own `UINT8_MAX / 2` regardless of
-    // what this says. `settings.lighting.speed` below is the knob that works;
-    // this one is kept only so a layout that configures nothing still generates
-    // the exact file Oryx would have.
-    out.push_str(&format!(
-        "\n#define RGB_MATRIX_STARTUP_SPD {}\n\n",
-        s.rgb_startup_speed
-    ));
+    // `RGB_MATRIX_STARTUP_SPD` used to be emitted here, with `60` from
+    // `settings.rgbStartupSpeed`, because Oryx writes that line. It is gone,
+    // and so is the setting: the macro appears nowhere in qmk_firmware (the
+    // name is `RGB_MATRIX_DEFAULT_SPD`), so nothing ever read it and no board
+    // has ever behaved differently for it. Emitting it cost nothing but read as
+    // the app's one dynamic lighting knob, which is worse than emitting
+    // nothing. `settings.lighting.speed` is the knob that works; removing this
+    // line is the only change to the generated firmware that is provably
+    // invisible to the board, which is why it is a removal and not a rename.
+    out.push('\n');
     if let Some(lighting) = &s.lighting {
         out.push_str(&render_lighting(lighting));
     }
@@ -121,14 +119,17 @@ fn render_lighting(lighting: &Lighting) -> String {
         lighting.val
     ));
 
-    if lighting.mode == LightingMode::Ledmap {
-        out.push_str(
+    match lighting.mode {
+        LightingMode::Ledmap => out.push_str(
             "\n/* mode: ledmap — the per-layer ledmap repaints over the effect above\n   every frame. TOGGLE_LAYER_COLOR stops the repaint and reveals it. */\n",
-        );
-    } else {
-        out.push_str(
+        ),
+        LightingMode::Effect => out.push_str(
             "\n/* mode: effect — no ledmap is emitted, so the effect above owns the board. */\n",
-        );
+        ),
+        LightingMode::Reactive => out.push_str(&format!(
+            "\n/* mode: reactive — the ledmap owns the colours and a keypress owns the\n   brightness of the key it struck. The generated set_layer_color() reads\n   g_last_hit_tracker for this, which is why RGB_MATRIX_KEYPRESSES is on\n   above whether or not any stock reactive effect is compiled in.\n\n   QF_REACTIVE_BOOST: how far below its ledmap colour an untouched key rests,\n     on the ledmap's own 0-255 v scale. A hit restores the full colour. It is\n     a dip and not a lift because the full colour is already the ceiling: the\n     LEDs cannot go past rgb_matrix_config.hsv.v, which the board clamps.\n   QF_REACTIVE_FADE_MS: milliseconds from the strike back to rest, linear. */\n#define QF_REACTIVE_BOOST {}\n#define QF_REACTIVE_FADE_MS {}\n",
+            lighting.reactive_boost, lighting.reactive_fade_ms
+        )),
     }
     out
 }
@@ -157,6 +158,9 @@ mod tests {
             sat: 255,
             val: 175,
             speed: 128,
+            reactive_boost: 160,
+            reactive_fade_ms: 400,
+            apply_on_boot: true,
         }
     }
 
@@ -169,8 +173,42 @@ mod tests {
         assert!(!out.contains("RGB_MATRIX_DEFAULT_MODE"));
         assert!(!out.contains("ENABLE_RGB_MATRIX_"));
         assert!(!out.contains("RGB_MATRIX_KEYPRESSES"));
-        // The dead-but-faithful Oryx line stays exactly where it was.
-        assert!(out.contains("#define RGB_MATRIX_STARTUP_SPD"));
+    }
+
+    /// The one macro QMK never had. It was emitted for years because Oryx
+    /// emits it; nothing read it, so removing it changes no board's behaviour
+    /// and stops the file claiming a knob that does not exist.
+    #[test]
+    fn the_dead_startup_speed_define_is_gone() {
+        assert!(!render(&fixture()).contains("RGB_MATRIX_STARTUP_SPD"));
+        assert!(!with(lighting("SPLASH", &[])).contains("RGB_MATRIX_STARTUP_SPD"));
+    }
+
+    /// The reactive ledmap is not one of QMK's effects — it is our
+    /// `set_layer_color()` reading `g_last_hit_tracker`, which QMK declares
+    /// only under `RGB_MATRIX_KEYREACTIVE_ENABLED`. So the gate has to be on
+    /// even when every compiled-in effect is a static one.
+    #[test]
+    fn reactive_mode_turns_on_keypresses_without_a_reactive_effect() {
+        let mut l = lighting("BREATHING", &[]);
+        l.mode = LightingMode::Reactive;
+        let out = with(l);
+        assert!(out.contains("#define RGB_MATRIX_KEYPRESSES"), "{out}");
+        assert!(out.contains("#define QF_REACTIVE_BOOST 160"), "{out}");
+        assert!(out.contains("#define QF_REACTIVE_FADE_MS 400"), "{out}");
+    }
+
+    /// The two knobs are only meaningful in reactive mode, so they are only
+    /// emitted there — a define that is read by no generated code reads like
+    /// one that is.
+    #[test]
+    fn the_reactive_knobs_are_absent_in_the_other_modes() {
+        for mode in [LightingMode::Ledmap, LightingMode::Effect] {
+            let mut l = lighting("SPLASH", &[]);
+            l.mode = mode;
+            let out = with(l);
+            assert!(!out.contains("QF_REACTIVE_"), "{mode:?}: {out}");
+        }
     }
 
     #[test]

@@ -10,7 +10,7 @@ use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
 /// Current version of the layout-file schema.
-pub const SCHEMA_VERSION: u32 = 4;
+pub const SCHEMA_VERSION: u32 = 5;
 
 /// Keys per layer in `LAYOUT_moonlander` argument order.
 pub const MOONLANDER_KEY_COUNT: usize = 72;
@@ -264,8 +264,6 @@ pub struct Settings {
     pub layer_state_8bit: bool,
     /// SERIAL_NUMBER in config.h, e.g. "rddD7/QzpBEp".
     pub serial_number: String,
-    /// RGB_MATRIX_STARTUP_SPD in config.h.
-    pub rgb_startup_speed: u16,
     /// OS_DETECTION_ENABLE — the board asks the host what it is at USB
     /// enumeration and sets its OS mode from the answer.
     #[serde(default)]
@@ -289,11 +287,12 @@ pub struct Settings {
 
 /// Which painter owns the LEDs.
 ///
-/// The two cannot share the board, and this is not a policy choice — it falls
-/// out of the generated firmware. `rgb_matrix_indicators_user()` runs *after*
-/// the active effect has rendered a frame and `set_layer_color()` overwrites
-/// every LED from the ledmap, so with the ledmap emitted no animation is ever
-/// visible. Rather than let one silently win, the layout picks.
+/// The ledmap and a stock effect cannot share the board, and this is not a
+/// policy choice — it falls out of the generated firmware.
+/// `rgb_matrix_indicators_user()` runs *after* the active effect has rendered a
+/// frame and `set_layer_color()` overwrites every LED from the ledmap, so with
+/// the ledmap emitted no animation is ever visible. Rather than let one
+/// silently win, the layout picks.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
 pub enum LightingMode {
@@ -306,6 +305,18 @@ pub enum LightingMode {
     /// `rgb_matrix_indicators_user()` are not emitted at all, so the per-layer
     /// colors are absent from the firmware rather than merely overdrawn.
     Effect,
+    /// The ledmap still owns the **colors**; a keypress owns the **brightness**
+    /// of the key it struck, which then fades back.
+    ///
+    /// This is not one of QMK's reactive effects and could not be: every one of
+    /// them renders through `effect_runner_reactive`, which paints each LED
+    /// from the single global `rgb_matrix_config.hsv`
+    /// (`quantum/rgb_matrix/animations/runners/effect_runner_reactive.h`) — one
+    /// color for the whole board, per-key layout colors gone. Here the ledmap
+    /// is emitted exactly as in [`LightingMode::Ledmap`] and
+    /// `set_layer_color()` scales each LED's `v` by how recently that LED was
+    /// hit, read from `g_last_hit_tracker`.
+    Reactive,
 }
 
 /// RGB Matrix configuration: which effects are compiled in, which one boots,
@@ -338,6 +349,55 @@ pub struct Lighting {
     pub val: u8,
     /// `RGB_MATRIX_DEFAULT_SPD`.
     pub speed: u8,
+    /// How much brighter a struck key goes than its resting level, on the
+    /// ledmap's own 0–255 `v` scale. Only read in [`LightingMode::Reactive`].
+    ///
+    /// A tap cannot go *above* the layout's color: the peak the LEDs can reach
+    /// is already `hsv.v` scaled by the board's master brightness, and pushing
+    /// past that would mean overriding the ceiling the vendor set. So the
+    /// resting state is the ledmap color dimmed **by** this much and a hit
+    /// restores it to full. 0 is a static ledmap; 255 leaves unstruck keys
+    /// dark.
+    #[serde(default = "default_reactive_boost")]
+    pub reactive_boost: u8,
+    /// Milliseconds from the strike back to the resting level, linear. Only
+    /// read in [`LightingMode::Reactive`]. Bounded by [`validate`] to
+    /// [`REACTIVE_FADE_MS_RANGE`]: 0 would divide by zero in the generated C,
+    /// and QMK's hit ticks are `uint16_t` milliseconds.
+    ///
+    /// [`validate`]: LayoutFile::validate
+    #[serde(default = "default_reactive_fade_ms")]
+    pub reactive_fade_ms: u16,
+    /// Re-apply `mode`/`hue`/`sat`/`val`/`speed` from
+    /// `keyboard_post_init_user()` on every boot, with the `_noeeprom` setters.
+    ///
+    /// Without this the settings above are **inert on any board that has been
+    /// used before**: `rgb_matrix_init()` applies the `RGB_MATRIX_DEFAULT_*`
+    /// defines only when EEPROM holds no mode at all (`rgb_matrix.c:492`,
+    /// `if (!rgb_matrix_config.mode)`), so a board with a stored mode keeps
+    /// whatever hue, saturation and brightness it was last left on — and,
+    /// because `#undef`-ing effects shrinks the effect enum, a stored mode
+    /// index resolves to a *different* effect after each flash.
+    ///
+    /// The cost is stated in the UI rather than hidden: with this on, a mode
+    /// cycled to with `RGB_MOD` on the board does not survive a replug.
+    #[serde(default = "default_apply_on_boot")]
+    pub apply_on_boot: bool,
+}
+
+/// Bounds on [`Lighting::reactive_fade_ms`].
+pub const REACTIVE_FADE_MS_RANGE: std::ops::RangeInclusive<u16> = 50..=5000;
+
+fn default_reactive_boost() -> u8 {
+    160
+}
+
+fn default_reactive_fade_ms() -> u16 {
+    400
+}
+
+fn default_apply_on_boot() -> bool {
+    true
 }
 
 impl Lighting {
@@ -354,12 +414,18 @@ impl Lighting {
     }
 
     /// `RGB_MATRIX_KEYPRESSES` is needed iff some compiled-in effect is one of
-    /// QMK's key-reactive ones. Derived, never stored.
+    /// QMK's key-reactive ones, **or** the ledmap itself is reactive — the
+    /// generated `set_layer_color()` reads `g_last_hit_tracker`, which QMK
+    /// declares only under `RGB_MATRIX_KEYREACTIVE_ENABLED`
+    /// (`rgb_matrix.h:284`), and that is what this define turns on
+    /// (`rgb_matrix_types.h:26`). Derived, never stored.
     pub fn needs_keypresses(&self) -> bool {
-        self.effects()
-            .iter()
-            .filter_map(|n| crate::rgb_effects::find(n))
-            .any(|e| e.reactive)
+        self.mode == LightingMode::Reactive
+            || self
+                .effects()
+                .iter()
+                .filter_map(|n| crate::rgb_effects::find(n))
+                .any(|e| e.reactive)
     }
 
     /// Likewise `RGB_MATRIX_FRAMEBUFFER_EFFECTS`.
@@ -405,11 +471,13 @@ impl LayoutFile {
     ///
     /// Every arm so far has been an additive one: v2→v3 added
     /// `settings.osDetection` / `settings.osDefault`, v3→v4 added
-    /// `settings.lighting`, and all three are `serde(default)`, so serde has
-    /// already filled them in by the time this runs and the version stamp is
-    /// all that is left to move. The arms are written as a **ladder**, not a
-    /// match: a v2 file has to walk 2→3→4, and the day one of these steps
-    /// stops being a no-op that ordering is what makes it correct.
+    /// `settings.lighting`, v4→v5 added the reactive-ledmap knobs and dropped
+    /// `settings.rgbStartupSpeed`, and every added field is `serde(default)`,
+    /// so serde has already filled them in by the time this runs and the
+    /// version stamp is all that is left to move. The arms are written as a
+    /// **ladder**, not a match: a v2 file has to walk 2→3→4→5, and the day one
+    /// of these steps stops being a no-op that ordering is what makes it
+    /// correct.
     pub fn migrate(&mut self) {
         if self.schema_version == 2 {
             self.schema_version = 3;
@@ -420,6 +488,16 @@ impl LayoutFile {
             // synthesize: filling in a default here would start emitting RGB
             // defines into firmware that never had them.
             self.schema_version = 4;
+        }
+        if self.schema_version == 4 {
+            // `rgbStartupSpeed` is gone; serde has already dropped it (it is an
+            // unknown field now, and this struct does not deny those). Nothing
+            // is lost — `RGB_MATRIX_STARTUP_SPD` is not a macro QMK has ever
+            // read, so the value never reached a board. A v4 layout that
+            // configured `lighting` picks up `applyOnBoot: true` here, which is
+            // the whole point of the version: its stored hue and mode start
+            // reaching the board instead of being overruled by EEPROM.
+            self.schema_version = 5;
         }
     }
 
@@ -448,6 +526,17 @@ impl LayoutFile {
                          shared/rgb_effects.json"
                     ));
                 }
+            }
+            // The fade window is a divisor in the generated C and QMK's hit
+            // ticks are `uint16_t` milliseconds, so 0 is a division by zero and
+            // a minute-long fade is past what the tracker can even represent.
+            if !REACTIVE_FADE_MS_RANGE.contains(&lighting.reactive_fade_ms) {
+                return Err(format!(
+                    "settings.lighting.reactiveFadeMs is {}, outside {}..={}",
+                    lighting.reactive_fade_ms,
+                    REACTIVE_FADE_MS_RANGE.start(),
+                    REACTIVE_FADE_MS_RANGE.end()
+                ));
             }
         }
         // Per-keyboard key count from the registry (`meta.geometry` is the
@@ -618,6 +707,97 @@ mod tests {
         layout.validate().expect("a v2 layout must reach the current schema");
     }
 
+    /// v4→v5: `rgbStartupSpeed` leaves and the reactive knobs arrive. The
+    /// consequential part is `applyOnBoot`, which lands on `true` — a v4 layout
+    /// that configured lighting had settings the board was ignoring, and
+    /// migrating is where they start reaching it. `reactiveBoost` and
+    /// `reactiveFadeMs` are inert until the mode changes, so their defaults
+    /// change nothing about the firmware a v4 layout generates.
+    #[test]
+    fn v4_layout_migrates_and_its_lighting_starts_reaching_the_board() {
+        let mut doc: serde_json::Value = serde_json::from_str(FIXTURE).unwrap();
+        doc["schemaVersion"] = serde_json::json!(4);
+        let settings = doc["settings"].as_object_mut().unwrap();
+        settings.insert("rgbStartupSpeed".into(), serde_json::json!(60));
+        settings.insert(
+            "lighting".into(),
+            serde_json::json!({
+                "mode": "ledmap",
+                "effect": "SPLASH",
+                "extraEffects": [],
+                "hue": 170,
+                "sat": 255,
+                "val": 175,
+                "speed": 150,
+            }),
+        );
+
+        let mut layout: LayoutFile = serde_json::from_value(doc).expect("v4 must deserialize");
+        assert_eq!(layout.schema_version, 4);
+        layout.migrate();
+
+        assert_eq!(layout.schema_version, SCHEMA_VERSION);
+        layout.validate().expect("migrated layout must validate");
+        let lighting = layout.settings.lighting.expect("lighting survives");
+        assert_eq!(lighting.mode, LightingMode::Ledmap);
+        assert_eq!(lighting.hue, 170);
+        assert!(lighting.apply_on_boot);
+        assert_eq!(lighting.reactive_boost, 160);
+        assert_eq!(lighting.reactive_fade_ms, 400);
+    }
+
+    /// The fade window is a divisor in the generated C — `(FADE_MS - tick) /
+    /// FADE_MS` — and QMK's hit ticks are `uint16_t` milliseconds. A zero here
+    /// is a division by zero in firmware, which is a compile that succeeds and
+    /// a board that misbehaves, so it is refused where the layout is loaded.
+    #[test]
+    fn a_fade_window_the_firmware_cannot_express_is_rejected() {
+        let mut layout = fixture();
+        let mut lighting = Lighting {
+            mode: LightingMode::Reactive,
+            effect: "SPLASH".into(),
+            extra_effects: vec![],
+            hue: 0,
+            sat: 255,
+            val: 175,
+            speed: 128,
+            reactive_boost: 160,
+            reactive_fade_ms: 400,
+            apply_on_boot: true,
+        };
+        layout.settings.lighting = Some(lighting.clone());
+        layout.validate().expect("400ms is a fine fade");
+
+        for bad in [0, 10, 60_000] {
+            lighting.reactive_fade_ms = bad;
+            layout.settings.lighting = Some(lighting.clone());
+            assert!(layout.validate().is_err(), "{bad}ms must be rejected");
+        }
+    }
+
+    /// The reactive ledmap reads `g_last_hit_tracker`, which QMK declares only
+    /// under `RGB_MATRIX_KEYREACTIVE_ENABLED` — so the gate is needed for the
+    /// MODE, not only for the effect set. Deriving it from the effects alone
+    /// would generate a keymap.c that does not compile.
+    #[test]
+    fn the_reactive_mode_needs_keypresses_on_its_own() {
+        let mut lighting = Lighting {
+            mode: LightingMode::Ledmap,
+            effect: "BREATHING".into(),
+            extra_effects: vec![],
+            hue: 0,
+            sat: 255,
+            val: 175,
+            speed: 128,
+            reactive_boost: 160,
+            reactive_fade_ms: 400,
+            apply_on_boot: true,
+        };
+        assert!(!lighting.needs_keypresses());
+        lighting.mode = LightingMode::Reactive;
+        assert!(lighting.needs_keypresses());
+    }
+
     /// `effect` and `extraEffects` are pasted into `RGB_MATRIX_<name>` by
     /// codegen, so a name QMK does not have is a compile error minutes later.
     /// Catch it where the layout is loaded instead.
@@ -632,6 +812,9 @@ mod tests {
             sat: 255,
             val: 175,
             speed: 128,
+            reactive_boost: 160,
+            reactive_fade_ms: 400,
+            apply_on_boot: true,
         });
         assert!(layout.validate().is_err());
 
@@ -658,6 +841,9 @@ mod tests {
             sat: 255,
             val: 175,
             speed: 128,
+            reactive_boost: 160,
+            reactive_fade_ms: 400,
+            apply_on_boot: true,
         };
         assert_eq!(lighting.effects(), ["SPLASH", "BREATHING"]);
     }

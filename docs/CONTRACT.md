@@ -25,12 +25,12 @@ Worker modules expose plain functions taking `FnMut` callbacks for
 progress/logs — they never touch `AppHandle`; the command layer forwards
 callbacks to the webview as events. Keep that pattern.
 
-## Layout schema (v4)
+## Layout schema (v5)
 
 Source of truth: **`src-tauri/src/layout/schema.rs`** (serde). Mirrors:
 **`src/lib/types.ts`** (zod), **`shared/layout.schema.json`** (generated —
 regenerate with `REGEN_SCHEMA=1 cargo test json_schema`; a test fails if
-stale). `SCHEMA_VERSION` = **4**. All JSON is camelCase.
+stale). `SCHEMA_VERSION` = **5**. All JSON is camelCase.
 
 ```
 LayoutFile { schemaVersion, meta { name, geometry,
@@ -39,16 +39,19 @@ LayoutFile { schemaVersion, meta { name, geometry,
 Layer      { title, color: "#rrggbb", keys: KeyAction[72] }   // LAYOUT-arg order
 Combo      { name, keys: number[] /* LAYOUT-arg indices */, layer, action: KeyAction }
 settings   { autoShift, capsWord, tapDance, combos, keyLock: true (always),
-             oryx, rgbMatrixCustom, layerState8bit, serialNumber, rgbStartupSpeed,
+             oryx, rgbMatrixCustom, layerState8bit, serialNumber,
              osDetection, osDefault, lighting? }
 ```
 
-Every version so far has been **additive**: every field added since v1 is
-`serde(default)` / zod-`optional`, so serde has already filled it in by the
-time `migrate()` runs and each arm only moves the version stamp. The arms are
-written as a **ladder** rather than a match — v2 walks 2→3→4 — so the first
-non-trivial step lands in the right order. `v2_layout_migrates_to_current_schema`
-and `v3_layout_migrates_to_current_schema` are the pattern to copy.
+Every version so far has been **additive or a pure removal**: every field added
+since v1 is `serde(default)` / zod-`optional`, so serde has already filled it in
+by the time `migrate()` runs, and v5's one removal (`rgbStartupSpeed`) is a field
+serde now simply ignores — so each arm only moves the version stamp. The arms
+are written as a **ladder** rather than a match — v2 walks 2→3→4→5 — so the
+first non-trivial step lands in the right order.
+`v2_layout_migrates_to_current_schema`, `v3_…` and
+`v4_layout_migrates_and_its_lighting_starts_reaching_the_board` are the pattern
+to copy.
 
 `KeyAction` is a tagged union on `kind`, every variant with optional
 `glow: "#rrggbb"`:
@@ -63,7 +66,7 @@ and `v3_layout_migrates_to_current_schema` are the pattern to copy.
 | `layerTap` | `layer, tap` | LT() |
 | `dualFunc` | `tap: {code, mods?}, hold: {code, mods?}` | Oryx DUAL_FUNC_n |
 | `qkLock` | — | the Key Lock key |
-| `special` | `code` | QK_BOOT, CW_TOGG, AS_*, AU/MU_*, TOGGLE_LAYER_COLOR |
+| `special` | `code` | QK_BOOT, QK_CLEAR_EEPROM, CW_TOGG, AS_*, AU/MU_*, TOGGLE_LAYER_COLOR |
 | `tapDance` | `tap?, hold?, doubleTap?, tapHold?, tappingTerm?` | v1 read-only |
 | `macro` | `label, steps: [{code, delay?, mods?}]` | v1 read-only |
 | `rgb` | `code` | RGB_TOG etc., v1 read-only |
@@ -122,10 +125,13 @@ which is what every Oryx-seeded layout means and what keeps the generated
 the same as "an effect set to nothing".
 
 ```
-lighting? { mode: "ledmap" | "effect",
+lighting? { mode: "ledmap" | "effect" | "reactive",
             effect: string,            // RGB_MATRIX_DEFAULT_MODE
             extraEffects: string[],    // also compiled in, for RGB_MOD
-            hue, sat, val, speed: u8 } // RGB_MATRIX_DEFAULT_{HUE,SAT,VAL,SPD}
+            hue, sat, val, speed: u8,  // RGB_MATRIX_DEFAULT_{HUE,SAT,VAL,SPD}
+            reactiveBoost: u8,         // QF_REACTIVE_BOOST   (reactive mode)
+            reactiveFadeMs: u16,       // QF_REACTIVE_FADE_MS (reactive mode)
+            applyOnBoot: bool }        // restate all of the above at boot
 ```
 
 `effect` / `extraEffects` name QMK effects from **`shared/rgb_effects.json`**
@@ -150,6 +156,83 @@ one silently winning:
   `hsv_to_rgb_with_value` are **not emitted**. The layer/key colors stay in the
   layout and come back when the mode does. `codegen::keymap_c::emits_ledmap`
   is the predicate; `src/lib/rgbEffects.ts#paintedBy` mirrors it.
+- `reactive` — a **ledmap** mode (added 2026-08-27): the same table, the same
+  repaint, with each LED's `v` scaled by how recently it was struck. See below.
+
+### Reactive brightness over the ledmap (added 2026-08-27)
+
+**None of QMK's twelve reactive effects can do this, and that is why the mode
+exists.** Every one of them renders through `effect_runner_reactive`
+(`quantum/rgb_matrix/animations/runners/effect_runner_reactive.h`), which paints
+each LED from the single global `rgb_matrix_config.hsv` — one hue and one
+saturation for the whole board. Selecting one replaces a layout's per-key colors
+with one color; that is what "reactive, but every key white" is.
+
+`mode: "reactive"` emits the ledmap exactly as `ledmap` does and adds one
+function, `qf_reactive_value(led, v)`, called from `set_layer_color()` between
+the black-is-off test and `hsv_to_rgb_with_value()`. Only `v` moves — `h` and
+`s` come from the ledmap untouched.
+
+The source of truth is `g_last_hit_tracker` (`rgb_matrix.h:284`, declared only
+under `RGB_MATRIX_KEYREACTIVE_ENABLED`): `count` live entries appended
+oldest-first, each with the struck LED's `index` and `tick`, **milliseconds**
+since the hit (`rgb_task_timers` adds `sync_timer_elapsed32` deltas). The
+generated search runs backwards and stops at the first entry for the LED, so it
+reads the most recent hit.
+
+- **A tap cannot go above the layout's color.** The peak an LED can reach is
+  already `hsv.v` scaled by `rgb_matrix_config.hsv.v`, which the board clamps to
+  its own ceiling. So `reactiveBoost` is how far an untouched key sits *below*
+  its color and a hit restores it to full: `level` runs from `255 - BOOST` at
+  rest to `255` at the strike, linear over `reactiveFadeMs`. `boost: 0` is the
+  static ledmap; `255` leaves unstruck keys dark.
+- **`LED_HITS_TO_REMEMBER` is 8, and the overflow is visible.** Strike a ninth
+  key while eight are still inside the fade window and
+  `rgb_matrix_handle_key_event` shifts the oldest entry out of the buffer; that
+  key drops straight back to rest instead of finishing its fade. Colors are
+  never affected — they do not come from the tracker.
+- **`{0,0,0}` stays off.** The modulation is applied after the off test, so a
+  key the ledmap turns off stays off however hard it is struck.
+- **`reactiveFadeMs` is bounded to 50..=5000** (`REACTIVE_FADE_MS_RANGE` in
+  Rust, `REACTIVE_FADE_MS_{MIN,MAX}` in `types.ts`) and checked by `validate()`.
+  It is a divisor in the generated C, and QMK's ticks are `uint16_t` ms.
+- **`RGB_MATRIX_KEYPRESSES` is derived from the MODE as well as the effect set.**
+  `Lighting::needs_keypresses` returns true for `mode == Reactive` regardless of
+  which effects are compiled in, because the tracker does not exist without it.
+  `costs()` in `rgbEffects.ts` mirrors this and reports `reactiveLedmap`
+  separately so the panel can name the right reason. The generated keymap.c also
+  carries an `#error` if the two ever disagree.
+
+### The app's settings reaching the board: `applyOnBoot` (added 2026-08-27)
+
+`RGB_MATRIX_DEFAULT_MODE/HUE/SAT/VAL/SPD` are applied by `rgb_matrix_init()`
+**only when EEPROM holds no mode at all** — `eeconfig_init_rgb_matrix(); if
+(!rgb_matrix_config.mode) eeconfig_update_rgb_matrix_default();`. On any board
+that has been used before, every one of them is ignored and the board keeps the
+hue, saturation, brightness and effect it was last left on. Worse, `#undef`-ing
+effects shrinks the effect enum, so a stored mode *index* resolves to a
+different effect after each flash. This also silently pinned the ledmap's master
+brightness, since `hsv_to_rgb_with_value()` reads `rgb_matrix_config.hsv.v` live.
+
+`applyOnBoot` (default **true**) makes the firmware authoritative: the generated
+`keyboard_post_init_user()` calls `rgb_matrix_mode_noeeprom`,
+`rgb_matrix_sethsv_noeeprom` and `rgb_matrix_set_speed_noeeprom` — all real,
+in `rgb_matrix.c` — after `rgb_matrix_enable()`. **The ordering is load-bearing:**
+`rgb_matrix_sethsv_eeprom_helper` returns having done nothing while the matrix
+is disabled, so enabling must come first.
+
+**The trade-off is stated in `LightingPanel`, not hidden:** with this on, a mode
+cycled to with `RGB_MOD` on the board does not survive a replug. That is the
+right default for an app that owns the layout, and it is a checkbox.
+
+`keyboard_post_init_user` is emitted by exactly one of four places —
+`ledmap_section`, `effect_section`, `os_section`, or `render` itself for a layout
+that configures lighting but carries no ledmap — and all four build the body
+through `keymap_c::post_init`, so they cannot drift.
+
+`QK_CLEAR_EEPROM` (alias `EE_CLR`) is in `shared/keycodes.json` and bound in the
+shipped demo layout. It is the escape hatch for a board whose stored settings
+have gone wrong, and it costs one key.
 
 **Derived, never stored** (same rule as `TAP_DANCE_ENABLE` / `COMBO_ENABLE`):
 `RGB_MATRIX_KEYPRESSES` iff some compiled-in effect is `reactive`,
@@ -172,15 +255,23 @@ sizes in `CHANGELOG.md`. `SOLID_COLOR` is never `#undef`ed or `#define`d — it
 is the one effect QMK compiles in unguarded (`solid_color_anim.h:1`) and the
 floor everything else leans on.
 
-**`RGB_MATRIX_STARTUP_SPD` is dead and stays.** It appears nowhere in
-`qmk_firmware`; the real name is `RGB_MATRIX_DEFAULT_SPD`. `settings.rgbStartupSpeed`
-has therefore never reached the board. The line is still emitted verbatim
-because it is part of the Oryx golden parity, and `config_h.rs` says so at the
-point of emission. `lighting.speed` is the knob that works.
+**`RGB_MATRIX_STARTUP_SPD` is gone, and so is `settings.rgbStartupSpeed`**
+(removed 2026-08-27, schema v5). It appears nowhere in `qmk_firmware`; the real
+name is `RGB_MATRIX_DEFAULT_SPD`, so the value never reached a board and the
+line read as the app's one dynamic lighting knob while doing nothing. It was
+kept for Oryx byte-parity; that is no longer a good enough reason for a define
+that lies. Removing it is the only change to the generated firmware that is
+provably invisible to the board, which is why the fix is a removal and not a
+rename — renaming it would change what every existing layout's board does.
+`shared/fixtures/reference_config.h` drops the same line and is therefore real
+Oryx output minus exactly that one dead define. `lighting.speed` is the knob
+that works.
 
 `lighting.val` is also the ledmap's master brightness: the generated
 `hsv_to_rgb_with_value()` scales every ledmap color by `rgb_matrix_config.hsv.v`,
-so it dims both modes.
+so it dims every mode. Note that it reads that value **live**, not from the
+define — which is precisely why it needed `applyOnBoot` to mean anything on a
+used board.
 
 Editing follows the `led.ts` contract — every transform in `rgbEffects.ts`
 (`setLighting`, `patchLighting`, `setBootEffect`, `toggleExtraEffect`) returns

@@ -8,7 +8,11 @@ import {
   respondsTo,
 } from "../lib/rgbEffects";
 import { useLayoutStore } from "../state/layoutStore";
-import type { LightingMode } from "../lib/types";
+import {
+  REACTIVE_FADE_MS_MAX,
+  REACTIVE_FADE_MS_MIN,
+  type LightingMode,
+} from "../lib/types";
 
 /**
  * RGB Matrix effects: which one boots, what it costs, and — the decision this
@@ -20,6 +24,19 @@ import type { LightingMode } from "../lib/types";
  * frame, so an animation under the ledmap is not dimmed or blended, it is
  * invisible. Presenting the effect list without saying that would let someone
  * pick Splash, flash the board, and see the same static colors as before.
+ *
+ * "Colours + tap" is the third answer, and it is here because the list below
+ * cannot give it. Every one of QMK's reactive effects renders through
+ * `effect_runner_reactive`, which paints each LED from the single global
+ * `rgb_matrix_config.hsv` — pick one and the whole board becomes one colour,
+ * layout gone. Reactive mode keeps the ledmap and modulates only brightness.
+ *
+ * "Apply these on every boot" is here rather than being silently on because it
+ * has a real cost. Without it the settings on this panel are inert on any board
+ * that has ever been used, since QMK writes the firmware defaults to EEPROM
+ * only when EEPROM has no mode stored; with it, a mode reached with `RGB_MOD`
+ * does not survive a replug. That is a trade, and the trade is stated where it
+ * is made.
  *
  * The cost line is here for the same reason. Reactive effects are gated on
  * `RGB_MATRIX_KEYPRESSES`, which makes the matrix scan record every hit —
@@ -97,6 +114,7 @@ export default function LightingPanel() {
                   {(
                     [
                       ["ledmap", "Layer colours"],
+                      ["reactive", "Colours + tap"],
                       ["effect", effectLabel(lighting.effect)],
                     ] as [LightingMode, string][]
                   ).map(([mode, label]) => (
@@ -122,6 +140,17 @@ export default function LightingPanel() {
                       <span className="text-zinc-200">not visible</span>. A
                       TOGGLE_LAYER_COLOR key stops the repaint and reveals it.
                     </>
+                  ) : lighting.mode === "reactive" ? (
+                    <>
+                      Your colours still light the board and the key you strike{" "}
+                      <span className="text-zinc-200">
+                        brightens, then fades back
+                      </span>
+                      . None of the reactive effects below can do this — they
+                      all paint the whole board from one colour, so picking one
+                      replaces your layout with a single hue. This scales the
+                      brightness of your own ledmap instead.
+                    </>
                   ) : (
                     <>
                       The effect owns the LEDs. No ledmap is generated at all,
@@ -136,6 +165,76 @@ export default function LightingPanel() {
                 </p>
               </div>
 
+              {/* ---- The reactive knobs ---- */}
+              {lighting.mode === "reactive" && (
+                <div className="mt-3 space-y-2 border-t border-zinc-800 pt-3">
+                  <div className="text-xs font-medium uppercase tracking-wide text-zinc-500">
+                    Tap response
+                  </div>
+                  <label className="flex items-center gap-2 text-xs text-zinc-300">
+                    <span className="w-20 shrink-0">Tap boost</span>
+                    <input
+                      type="range"
+                      min={0}
+                      max={255}
+                      value={lighting.reactiveBoost}
+                      aria-label="Tap boost"
+                      onChange={(e) =>
+                        patchLighting({
+                          reactiveBoost: Number(e.target.value),
+                        })
+                      }
+                      className="flex-1 accent-sky-600"
+                    />
+                    <span className="w-12 shrink-0 text-right font-mono">
+                      {Math.round((lighting.reactiveBoost / 255) * 100)}%
+                    </span>
+                  </label>
+                  <label className="flex items-center gap-2 text-xs text-zinc-300">
+                    <span className="w-20 shrink-0">Fade</span>
+                    <input
+                      type="range"
+                      min={REACTIVE_FADE_MS_MIN}
+                      max={REACTIVE_FADE_MS_MAX}
+                      step={10}
+                      value={lighting.reactiveFadeMs}
+                      aria-label="Fade"
+                      onChange={(e) =>
+                        patchLighting({
+                          reactiveFadeMs: Number(e.target.value),
+                        })
+                      }
+                      className="flex-1 accent-sky-600"
+                    />
+                    <span className="w-12 shrink-0 text-right font-mono">
+                      {lighting.reactiveFadeMs}ms
+                    </span>
+                  </label>
+                  <p className="text-[11px] leading-snug text-zinc-500">
+                    A tap goes{" "}
+                    <span className="text-zinc-300">up to your colour</span>, not
+                    past it — the board's brightness ceiling is already the
+                    peak — so the boost is how far an untouched key sits{" "}
+                    <em>below</em> it. At 100% unstruck keys are dark and only
+                    what you type is lit.
+                    {lighting.reactiveBoost === 0 && (
+                      <>
+                        {" "}
+                        <span className="text-amber-400">
+                          At 0% nothing moves
+                        </span>{" "}
+                        — this is the static ledmap with the hit tracker still
+                        compiled in.
+                      </>
+                    )}{" "}
+                    The board remembers 8 hits at a time (QMK's
+                    LED_HITS_TO_REMEMBER); type a 9th inside the fade window and
+                    the oldest key drops back to rest early instead of finishing
+                    its fade. The colours are never affected.
+                  </p>
+                </div>
+              )}
+
               {/* ---- Cost ---- */}
               {cost && (
                 <div className="mt-3 rounded border border-zinc-800 bg-zinc-950 p-2 text-[11px] leading-snug text-zinc-400">
@@ -148,12 +247,23 @@ export default function LightingPanel() {
                       <span className="text-amber-400">
                         RGB_MATRIX_KEYPRESSES is on
                       </span>{" "}
-                      because {cost.reactiveEffects.map(effectLabel).join(", ")}{" "}
-                      {cost.reactiveEffects.length === 1 ? "is" : "are"}{" "}
-                      reactive: the matrix scan now records which key was hit
-                      and when. That costs firmware size and scan time on every
-                      scan, whether or not the reactive effect is the one
-                      running.
+                      because{" "}
+                      {cost.reactiveLedmap ? (
+                        <>
+                          the ledmap reacts to taps
+                          {cost.reactiveEffects.length > 0 &&
+                            ` (and ${cost.reactiveEffects.map(effectLabel).join(", ")} would need it anyway)`}
+                        </>
+                      ) : (
+                        <>
+                          {cost.reactiveEffects.map(effectLabel).join(", ")}{" "}
+                          {cost.reactiveEffects.length === 1 ? "is" : "are"}{" "}
+                          reactive
+                        </>
+                      )}
+                      : the matrix scan now records which key was hit and when.
+                      That costs firmware size and scan time on every scan,
+                      whether or not anything reactive is running.
                     </>
                   ) : (
                     "No reactive effect is compiled in, so the matrix scan is unchanged."
@@ -222,6 +332,49 @@ export default function LightingPanel() {
                   has its own ceiling — the firmware clamps to it, so past that
                   point the slider stops making a difference.
                 </p>
+
+                <label className="flex items-start gap-2 pt-1 text-xs text-zinc-300">
+                  <input
+                    type="checkbox"
+                    checked={lighting.applyOnBoot}
+                    onChange={(e) =>
+                      patchLighting({ applyOnBoot: e.target.checked })
+                    }
+                    className="mt-0.5 shrink-0"
+                  />
+                  <span>
+                    Apply these on every boot
+                    <span className="mt-0.5 block text-[11px] leading-snug text-zinc-500">
+                      {lighting.applyOnBoot ? (
+                        <>
+                          The firmware restates them at startup. Without this
+                          they are{" "}
+                          <span className="text-zinc-300">
+                            inert on any board that has been used before
+                          </span>
+                          : QMK writes the firmware's defaults to EEPROM only
+                          when EEPROM holds no mode at all, so the board keeps
+                          the hue and brightness it was last left on and a
+                          stored mode index points at a different effect after
+                          each flash.{" "}
+                          <span className="text-amber-400">
+                            The cost: a mode you cycle to with an RGB_MOD key
+                            will not survive a replug.
+                          </span>
+                        </>
+                      ) : (
+                        <>
+                          A mode you cycle to on the board survives a replug —
+                          and everything above{" "}
+                          <span className="text-amber-400">
+                            only reaches a board whose EEPROM has been cleared
+                          </span>
+                          . Bind QK_CLEAR_EEPROM to a key if you leave this off.
+                        </>
+                      )}
+                    </span>
+                  </span>
+                </label>
               </div>
 
               {/* ---- The effect set ---- */}

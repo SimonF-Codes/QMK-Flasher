@@ -595,7 +595,6 @@ fn blank_layout(name: &str, kb: &crate::keyboards::KeyboardInfo) -> LayoutFile {
             rgb_matrix_custom: true,
             layer_state_8bit: true,
             serial_number: format!("qmk-flasher/{}", kb.id),
-            rgb_startup_speed: 60,
             os_detection: false,
             os_default: Default::default(),
             // A blank layout configures no RGB Matrix effect, exactly as a
@@ -831,18 +830,34 @@ mod tests {
              of this feature a user cannot discover from the LED panel"
         );
 
-        // Boots in ledmap mode, so the demo still looks like the layout it is
-        // teaching, and TOGGLE_LAYER_COLOR is what reveals the effect
-        // underneath. Without that key the reactive effect is compiled in and
-        // permanently invisible, which teaches the opposite of the lesson.
-        assert_eq!(
+        // The ledmap keeps the board, so the demo still looks like the layout
+        // it is teaching, and TOGGLE_LAYER_COLOR is what reveals the effect
+        // underneath. Without that key the compiled-in effect is permanently
+        // invisible, which teaches the opposite of the lesson.
+        assert_ne!(
             lighting.mode,
-            crate::layout::schema::LightingMode::Ledmap,
-            "the demo must not hand the board to the effect at boot"
+            crate::layout::schema::LightingMode::Effect,
+            "the demo must not hand the board to the effect at boot — its per-layer \
+             colours are the thing it exists to show"
         );
         assert!(
             has(&|k: &K| matches!(k, K::Special { code, .. } if code == "TOGGLE_LAYER_COLOR")),
             "the demo layout needs a TOGGLE_LAYER_COLOR key to reveal the effect"
+        );
+
+        // The escape hatch for the EEPROM this layout now deliberately
+        // overrules. `applyOnBoot` states the firmware's settings over
+        // whatever EEPROM holds, but a board can still be left in a state the
+        // firmware does not reach — RGB toggled off, a swapped keymap flag —
+        // and EE_CLR is the one key that gets out of it without a reflash.
+        assert!(
+            lighting.apply_on_boot,
+            "the demo layout's lighting settings must actually reach the board"
+        );
+        assert!(
+            has(&|k: &K| matches!(k, K::Special { code, .. } if code == "QK_CLEAR_EEPROM")),
+            "the demo layout needs a QK_CLEAR_EEPROM key — the escape hatch for a \
+             board whose stored settings have gone wrong"
         );
     }
 

@@ -11,7 +11,7 @@
 import { z } from "zod";
 
 /** Current version of the layout-file schema. */
-export const SCHEMA_VERSION = 4;
+export const SCHEMA_VERSION = 5;
 /** Keys per layer in LAYOUT_moonlander argument order. */
 export const MOONLANDER_KEY_COUNT = 72;
 
@@ -135,11 +135,26 @@ export const ComboSchema = z.object({
  * `rgb_matrix_indicators_user()` repaints every LED from the ledmap *after*
  * the active effect has drawn its frame, so with the ledmap emitted no
  * animation is ever visible. The layout picks rather than one silently winning.
+ *
+ * `reactive` is a ledmap mode: the same table, the same repaint, with each
+ * LED's brightness scaled by how recently it was struck. It exists because
+ * QMK's own reactive effects cannot do it — every one of them renders through
+ * `effect_runner_reactive`, which paints the whole board from the single global
+ * `rgb_matrix_config.hsv`, so turning one on replaces the layout's colours with
+ * one colour.
  */
-export const LightingModeSchema = z.enum(["ledmap", "effect"]);
+export const LightingModeSchema = z.enum(["ledmap", "effect", "reactive"]);
 export type LightingMode = z.infer<typeof LightingModeSchema>;
 
 const byte = z.number().int().min(0).max(255);
+
+/**
+ * Bounds on `Lighting.reactiveFadeMs`, mirroring `REACTIVE_FADE_MS_RANGE` in
+ * the Rust schema: 0 would divide by zero in the generated C, and QMK's hit
+ * ticks are `uint16_t` milliseconds.
+ */
+export const REACTIVE_FADE_MS_MIN = 50;
+export const REACTIVE_FADE_MS_MAX = 5000;
 
 /**
  * RGB Matrix configuration: the effects compiled in, which one boots, and the
@@ -162,6 +177,28 @@ export const LightingSchema = z.object({
   sat: byte,
   val: byte,
   speed: byte,
+  /**
+   * Reactive mode only: how much brighter a struck key goes than its resting
+   * level, on the ledmap's own 0–255 `v` scale. A tap cannot go *above* the
+   * layout's colour — the peak is already `hsv.v` scaled by the board's master
+   * brightness — so the resting state is the ledmap colour dimmed BY this much
+   * and a hit restores it to full.
+   */
+  reactiveBoost: byte.default(160),
+  /** Reactive mode only: milliseconds from the strike back to rest, linear. */
+  reactiveFadeMs: z
+    .number()
+    .int()
+    .min(REACTIVE_FADE_MS_MIN)
+    .max(REACTIVE_FADE_MS_MAX)
+    .default(400),
+  /**
+   * Re-apply mode/hue/sat/val/speed from `keyboard_post_init_user()` on every
+   * boot with QMK's `_noeeprom` setters. Without it they are inert on any board
+   * that has been used before: `rgb_matrix_init()` applies the
+   * `RGB_MATRIX_DEFAULT_*` defines only when EEPROM holds no mode at all.
+   */
+  applyOnBoot: z.boolean().default(true),
 });
 
 export type Lighting = z.infer<typeof LightingSchema>;
@@ -177,7 +214,6 @@ export const SettingsSchema = z.object({
   rgbMatrixCustom: z.boolean(),
   layerState8bit: z.boolean(),
   serialNumber: z.string(),
-  rgbStartupSpeed: z.number().int().nonnegative(),
   /** OS_DETECTION_ENABLE — board asks the host what it is at enumeration. */
   osDetection: z.boolean().default(false),
   /** OS assumed before detection answers, and what plain Ctrl/Gui mods mean. */
