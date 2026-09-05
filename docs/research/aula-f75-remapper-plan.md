@@ -1,3 +1,7 @@
+---
+status: draft
+---
+
 # AULA F75 remapper — transport decision and implementation plan
 
 **Date:** 2026-08-27

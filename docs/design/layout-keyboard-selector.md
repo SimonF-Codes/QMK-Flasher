@@ -1,3 +1,7 @@
+---
+status: stable
+---
+
 # Design proposal: multi-layout & multi-keyboard selector
 
 Status: **approved with amendments** (Alpha, 2026-07-19). The shipped
