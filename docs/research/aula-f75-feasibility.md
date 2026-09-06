@@ -1,3 +1,7 @@
+---
+status: stable
+---
+
 # AULA F75 — QMK feasibility research
 
 **Date:** 2026-08-27

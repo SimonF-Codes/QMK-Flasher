@@ -1,3 +1,7 @@
+---
+status: stable
+---
+
 # QMK-Flasher Worker Contract
 
 Shared contract between the parallel workers building QMK-Flasher — a Tauri

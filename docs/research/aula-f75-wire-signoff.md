@@ -1,3 +1,7 @@
+---
+status: draft
+---
+
 # AULA F75 — exact bytes, pending Simon's sign-off
 
 **Date:** 2026-08-27
