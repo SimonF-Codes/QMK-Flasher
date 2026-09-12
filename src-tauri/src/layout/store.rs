@@ -18,6 +18,7 @@ use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
 use crate::error::AppError;
+use crate::layout::schema::SCHEMA_VERSION;
 use crate::layout::LayoutFile;
 
 /// The frozen Oryx golden fixture. This is TEST MATERIAL, not the shipped
@@ -123,7 +124,30 @@ fn io_err(path: &Path) -> impl Fn(std::io::Error) -> AppError + '_ {
     move |e| AppError::InvalidLayout(format!("{}: {e}", path.display()))
 }
 
+/// Just the version, read before the rest of the document.
+#[derive(Deserialize)]
+struct SchemaVersionPeek {
+    #[serde(rename = "schemaVersion")]
+    schema_version: u32,
+}
+
 fn parse_and_validate(json: &str, what: &str) -> Result<LayoutFile, AppError> {
+    // Read the version BEFORE the whole struct. A layout written by a newer
+    // build fails deserialization on whichever field changed shape, and serde
+    // reports that field instead of the real problem: "missing field
+    // rgbStartupSpeed" is what a user actually saw, from a binary 45 minutes
+    // older than the commit that removed the field. That message sends someone
+    // to inspect a layout that is perfectly fine. `migrate` only moves forward,
+    // so a newer file can never be read by an older build, and saying so is the
+    // only useful thing we can do with it.
+    if let Ok(peek) = serde_json::from_str::<SchemaVersionPeek>(json) {
+        if peek.schema_version > SCHEMA_VERSION {
+            return Err(AppError::InvalidLayout(format!(
+                "{what}: schemaVersion {} was written by a newer build of this app, which understands up to {}. The layout is fine - this build is out of date. Rebuild it with `npm run tauri build`.",
+                peek.schema_version, SCHEMA_VERSION
+            )));
+        }
+    }
     let mut layout: LayoutFile = serde_json::from_str(json)
         .map_err(|e| AppError::InvalidLayout(format!("{what}: {e}")))?;
     // Every read funnels through here, so this is the one place an older
@@ -688,6 +712,39 @@ pub fn snapshot_layout(
 
 #[cfg(test)]
 mod tests {
+
+    /// A layout from a NEWER build must say so, not surface whichever field
+    /// happened to change. A real user hit "missing field rgbStartupSpeed"
+    /// from a binary 45 minutes older than the commit that removed the field,
+    /// and went looking at a layout that was never the problem.
+    #[test]
+    fn a_layout_from_a_newer_build_names_the_real_problem() {
+        let mut doc: serde_json::Value = serde_json::from_str(FIXTURE_LAYOUT).unwrap();
+        doc["schemaVersion"] = serde_json::json!(SCHEMA_VERSION + 1);
+        // Shape-break it the way a real newer layout would: drop a required field.
+        doc["settings"].as_object_mut().unwrap().remove("keyLock");
+        let json = serde_json::to_string(&doc).unwrap();
+
+        let err = parse_and_validate(&json, "test").unwrap_err().to_string();
+        assert!(
+            err.contains("newer build") && err.contains("out of date"),
+            "expected a version-skew message, got: {err}"
+        );
+        assert!(
+            !err.contains("missing field"),
+            "the serde error must not be what the user sees: {err}"
+        );
+    }
+
+    /// The guard must not fire on an OLDER layout — those still migrate.
+    #[test]
+    fn an_older_layout_still_migrates_rather_than_being_refused() {
+        let mut doc: serde_json::Value = serde_json::from_str(FIXTURE_LAYOUT).unwrap();
+        doc["schemaVersion"] = serde_json::json!(2);
+        let json = serde_json::to_string(&doc).unwrap();
+        let layout = parse_and_validate(&json, "test").expect("v2 must still load");
+        assert_eq!(layout.schema_version, SCHEMA_VERSION);
+    }
     use super::*;
 
     struct TempStore {
