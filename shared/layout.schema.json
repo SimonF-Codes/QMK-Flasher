@@ -692,6 +692,74 @@
         "seededFrom"
       ]
     },
+    "NavigatorTrackball": {
+      "description": "The Navigator trackball module's knobs. Every field defaults to the value\nthe module itself uses when the define is absent (`navigator.h`,\n`navigator_trackball.h`), and codegen emits a `#define` only for a field\nthat differs from it — so `NavigatorTrackball::default()` adds the module\nand not one line of config.",
+      "type": "object",
+      "properties": {
+        "aimDivider": {
+          "description": "`NAVIGATOR_AIM_DIVIDER` — what the Aim keys divide motion by.",
+          "type": "integer",
+          "format": "uint8",
+          "default": 3,
+          "maximum": 255,
+          "minimum": 0
+        },
+        "cpi": {
+          "description": "`NAVIGATOR_TRACKBALL_CPI` — the boot pointer speed, in the sensor's own\nunits. [`NAVIGATOR_CPI_RANGE`], in steps of [`NAVIGATOR_CPI_TICK`]: the\nmodule's `NAVIGATOR_INC_CPI` / `_DEC_CPI` keys move by that tick and\nstop at `NAVIGATOR_TRACKBALL_CPI_MAX` (125).",
+          "type": "integer",
+          "format": "uint8",
+          "default": 40,
+          "maximum": 255,
+          "minimum": 0
+        },
+        "rotation": {
+          "description": "`NAVIGATOR_TRACKBALL_ROTATION`, raw degrees `0..=359`. The module\nrotates the sensor's motion by this much (clockwise on screen) before\nreporting it; 90/180/270 are exact swaps, any other angle goes through\na compile-time `cosf`/`sinf`. Which number matches which printed shell\nis the user's to track — there are deliberately no named presets.",
+          "type": "integer",
+          "format": "uint16",
+          "default": 0,
+          "maximum": 65535,
+          "minimum": 0
+        },
+        "scrollAcceleration": {
+          "description": "`NAVIGATOR_SCROLL_ACCELERATION` — how hard a fast flick speeds up.",
+          "type": "number",
+          "format": "float",
+          "default": 1.5
+        },
+        "scrollDivider": {
+          "description": "`NAVIGATOR_SCROLL_DIVIDER` — drag-scroll: ball motion per scroll step.\nLower scrolls faster. A divisor in the module, so at least 1.",
+          "type": "integer",
+          "format": "uint8",
+          "default": 10,
+          "maximum": 255,
+          "minimum": 0
+        },
+        "scrollInvertX": {
+          "description": "`NAVIGATOR_SCROLL_INVERT_X` — defined or not; the module checks `#ifdef`.",
+          "type": "boolean",
+          "default": false
+        },
+        "scrollInvertY": {
+          "description": "`NAVIGATOR_SCROLL_INVERT_Y`.",
+          "type": "boolean",
+          "default": false
+        },
+        "scrollMaxSpeed": {
+          "description": "`NAVIGATOR_SCROLL_MAX_SPEED` — the cap on one scroll report. The module\ncasts it to `int8_t`, so it cannot usefully exceed 127.",
+          "type": "number",
+          "format": "float",
+          "default": 8.0
+        },
+        "turboMultiplier": {
+          "description": "`NAVIGATOR_TURBO_MULTIPLIER` — what the Turbo keys multiply motion by.",
+          "type": "integer",
+          "format": "uint8",
+          "default": 3,
+          "maximum": 255,
+          "minimum": 0
+        }
+      }
+    },
     "OsModeAction": {
       "description": "What an [`KeyAction::OsMode`] key does to the board’s OS mode.",
       "oneOf": [
@@ -785,6 +853,17 @@
           "anyOf": [
             {
               "$ref": "#/$defs/Lighting"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "navigatorTrackball": {
+          "description": "A ZSA Navigator **trackball** attached to the board, or `None` for \"no\npointing device\" — which is what every layout before v6 meant, and what\nkeeps the generated sources byte-identical to Oryx's for a layout that\nsays nothing about it. Same precedent as [`Settings::lighting`].\n\n`Some` declares the `zsa/navigator_trackball` community module in\n`keymap.json`, and that declaration is the whole opt-in: the module's\nown `qmk_module.json` (`features.pointing_device`) is what QMK turns\ninto `POINTING_DEVICE_ENABLE`, and its `rules.mk` sets the driver and\nthe I2C requirement. See `codegen::keymap_json`.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/NavigatorTrackball"
             },
             {
               "type": "null"

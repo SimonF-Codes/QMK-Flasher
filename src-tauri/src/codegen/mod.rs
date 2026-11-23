@@ -1,7 +1,7 @@
 //! QMK source generation — owned by Worker A. See `docs/CONTRACT.md`.
 //!
-//! Renders keymap.c / rules.mk / config.h from a [`LayoutFile`]
-//! (keymap_c.rs, rules_mk.rs, config_h.rs, ledmap.rs);
+//! Renders keymap.c / rules.mk / config.h / keymap.json from a [`LayoutFile`]
+//! (keymap_c.rs, rules_mk.rs, config_h.rs, keymap_json.rs, ledmap.rs);
 //! `shared/fixtures/reference_keymap.c` is the golden spec. Every emitted
 //! leaf keycode is validated against `shared/keycodes.json`
 //! ([`AppError::CodegenUnsupportedKey`] on miss). `write_sources` emits into
@@ -9,6 +9,7 @@
 
 pub mod config_h;
 pub mod keymap_c;
+pub mod keymap_json;
 pub mod ledmap;
 pub mod rules_mk;
 
@@ -35,6 +36,8 @@ pub struct GeneratedSources {
     pub keymap_c: String,
     pub rules_mk: String,
     pub config_h: String,
+    /// The community modules the build declares — see [`keymap_json`].
+    pub keymap_json: String,
 }
 
 /// All codes known to `shared/keycodes.json` (qmk names + aliases).
@@ -116,16 +119,9 @@ pub fn generate(layout: &LayoutFile) -> Result<GeneratedSources, AppError> {
         keymap_c: keymap_c::render(layout)?,
         rules_mk: rules_mk::render(layout),
         config_h: config_h::render(layout),
+        keymap_json: keymap_json::render(layout),
     })
 }
-
-/// The fourth file next to the generated three: pulls in the QMK community
-/// modules the Oryx-generated code depends on (`rgb_matrix_kb.inc`,
-/// `rawhid_state`, ORYX protocol — all live in `modules/zsa/`). Same content
-/// as the arrows_together reference. Without it the build fails at
-/// `#include "rgb_matrix_kb.inc"`.
-const KEYMAP_JSON: &str =
-    "{\n    \"modules\": [\n        \"zsa/oryx\",\n        \"zsa/defaults\"\n    ]\n}\n";
 
 /// Where the generated keymap dir lives for a keyboard. Keymaps sit one
 /// level above a versioned leaf (`zsa/moonlander/revb` builds read
@@ -146,7 +142,8 @@ fn keymap_dir(cfg: &AppConfig, kb: &crate::keyboards::KeyboardInfo) -> PathBuf {
 /// there. make keys off mtime, so an identical rewrite still invalidates
 /// every object built from the file: rewriting config.h or rules.mk forces a
 /// full rebuild of the tree (~240s) where a keymap.c-only change costs ~30s.
-/// Most edits touch keymap.c alone, and keymap.json never changes at all.
+/// Most edits touch keymap.c alone, and keymap.json changes only when a
+/// module is added or removed.
 fn write_if_changed(path: PathBuf, contents: &str) -> std::io::Result<()> {
     if let Ok(existing) = std::fs::read_to_string(&path) {
         if existing == contents {
@@ -172,7 +169,7 @@ pub fn write_sources(layout: &LayoutFile, cfg: &AppConfig) -> Result<PathBuf, Ap
     write_if_changed(dir.join("keymap.c"), &sources.keymap_c).map_err(io)?;
     write_if_changed(dir.join("rules.mk"), &sources.rules_mk).map_err(io)?;
     write_if_changed(dir.join("config.h"), &sources.config_h).map_err(io)?;
-    write_if_changed(dir.join("keymap.json"), KEYMAP_JSON).map_err(io)?;
+    write_if_changed(dir.join("keymap.json"), &sources.keymap_json).map_err(io)?;
     Ok(dir)
 }
 
@@ -235,6 +232,63 @@ mod tests {
                 }
                 panic!("{name} differs from reference:\n{rendered}");
             }
+        }
+    }
+
+    /// A layout that says nothing about the Navigator generates exactly what it
+    /// did before the setting existed — all four files. The golden test above
+    /// covers three against the Oryx reference; this pins the fourth to the
+    /// bytes the old `KEYMAP_JSON` constant held.
+    #[test]
+    fn absent_navigator_generates_the_pre_navigator_keymap_json() {
+        let sources = generate(&fixture()).unwrap();
+        assert_eq!(
+            sources.keymap_json,
+            "{\n    \"modules\": [\n        \"zsa/oryx\",\n        \"zsa/defaults\"\n    ]\n}\n"
+        );
+    }
+
+    /// Enabling the trackball changes keymap.json (the module) and nothing in
+    /// rules.mk: the module's manifest turns on `POINTING_DEVICE_ENABLE` and
+    /// its own rules.mk sets the driver and I2C. keymap.c is untouched too —
+    /// the Navigator keys are ordinary keycodes from `zsa/defaults`.
+    #[test]
+    fn a_trackball_is_a_module_declaration_not_a_rules_flag() {
+        let before = generate(&fixture()).unwrap();
+        let mut layout = fixture();
+        layout.settings.navigator_trackball =
+            Some(crate::layout::schema::NavigatorTrackball::default());
+        let after = generate(&layout).unwrap();
+
+        assert_eq!(after.rules_mk, before.rules_mk);
+        assert_eq!(after.keymap_c, before.keymap_c);
+        assert!(after.keymap_json.contains("\"zsa/navigator_trackball\""));
+        for flag in ["POINTING_DEVICE", "I2C_DRIVER", "MOUSEKEY"] {
+            assert!(!after.rules_mk.contains(flag), "{flag} belongs to the module or the board");
+        }
+    }
+
+    /// The Navigator's keys must pass catalog validation — they are real
+    /// keycodes (declared by `zsa/defaults`), and a picker that offers them has
+    /// to produce a layout codegen accepts.
+    #[test]
+    fn navigator_keycodes_are_in_the_catalog() {
+        for code in [
+            "NAVIGATOR_INC_CPI",
+            "NAVIGATOR_DEC_CPI",
+            "NAVIGATOR_TURBO",
+            "TOGGLE_TURBO",
+            "NAVIGATOR_AIM",
+            "TOGGLE_AIM",
+            "DRAG_SCROLL",
+            "TOGGLE_SCROLL",
+            "TOGGLE_SCROLL_VERTICAL",
+            "NAVIGATOR_CLEAR_SPEED",
+        ] {
+            let mut layout = fixture();
+            layout.layers[0].keys[0] = KeyAction::Special { code: code.into(), glow: None };
+            let sources = generate(&layout).unwrap_or_else(|e| panic!("{code}: {e:?}"));
+            assert!(sources.keymap_c.contains(code));
         }
     }
 

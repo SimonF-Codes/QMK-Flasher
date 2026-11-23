@@ -30,6 +30,7 @@ export const CATEGORY_ORDER: { id: string; title: string }[] = [
   { id: "special", title: "System (QMK)" },
   { id: "osmode", title: "OS mode" },
   { id: "rgb", title: "RGB" },
+  { id: "navigator", title: "Navigator trackball" },
 ];
 
 export function entryFor(code: string): KeycodeEntry | undefined {

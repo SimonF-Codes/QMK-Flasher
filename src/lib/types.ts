@@ -11,7 +11,7 @@
 import { z } from "zod";
 
 /** Current version of the layout-file schema. */
-export const SCHEMA_VERSION = 5;
+export const SCHEMA_VERSION = 6;
 /** Keys per layer in LAYOUT_moonlander argument order. */
 export const MOONLANDER_KEY_COUNT = 72;
 
@@ -203,6 +203,64 @@ export const LightingSchema = z.object({
 
 export type Lighting = z.infer<typeof LightingSchema>;
 
+/**
+ * Bounds on the Navigator trackball's knobs, mirroring the `NAVIGATOR_*`
+ * constants in the Rust schema. CPI tops out at the module's own
+ * `NAVIGATOR_TRACKBALL_CPI_MAX` (a plain define that also caps the runtime
+ * CPI keys); the divisors cannot be 0 because they are divisors in firmware.
+ */
+export const NAVIGATOR_CPI_MIN = 5;
+export const NAVIGATOR_CPI_MAX = 125;
+export const NAVIGATOR_CPI_TICK = 5;
+export const NAVIGATOR_ROTATION_MAX = 359;
+export const NAVIGATOR_FACTOR_MAX = 10;
+export const NAVIGATOR_SCROLL_DIVIDER_MAX = 50;
+export const NAVIGATOR_SCROLL_ACCELERATION_MAX = 10;
+export const NAVIGATOR_SCROLL_MAX_SPEED_MIN = 1;
+export const NAVIGATOR_SCROLL_MAX_SPEED_MAX = 127;
+
+/**
+ * The Navigator trackball module's knobs. Each defaults to the module's own
+ * value (`navigator.h` / `navigator_trackball.h`), so `{}` is a whole, valid
+ * trackball that changes nothing but which modules are compiled in.
+ */
+export const NavigatorTrackballSchema = z.object({
+  /**
+   * `NAVIGATOR_TRACKBALL_ROTATION`: raw degrees, 0–359, applied clockwise to
+   * the sensor's motion. No named presets — which number matches which
+   * printed shell is the user's to keep track of.
+   */
+  rotation: z.number().int().min(0).max(NAVIGATOR_ROTATION_MAX).default(0),
+  /** `NAVIGATOR_TRACKBALL_CPI`: boot pointer speed, steps of 5, max 125. */
+  cpi: z
+    .number()
+    .int()
+    .min(NAVIGATOR_CPI_MIN)
+    .max(NAVIGATOR_CPI_MAX)
+    .multipleOf(NAVIGATOR_CPI_TICK)
+    .default(40),
+  /** `NAVIGATOR_SCROLL_DIVIDER`: ball motion per scroll step; lower = faster. */
+  scrollDivider: z.number().int().min(1).max(NAVIGATOR_SCROLL_DIVIDER_MAX).default(10),
+  /** `NAVIGATOR_SCROLL_ACCELERATION`: how much a fast flick speeds scrolling. */
+  scrollAcceleration: z.number().min(0).max(NAVIGATOR_SCROLL_ACCELERATION_MAX).default(1.5),
+  /** `NAVIGATOR_SCROLL_MAX_SPEED`: cap on one scroll report. */
+  scrollMaxSpeed: z
+    .number()
+    .min(NAVIGATOR_SCROLL_MAX_SPEED_MIN)
+    .max(NAVIGATOR_SCROLL_MAX_SPEED_MAX)
+    .default(8),
+  /** `NAVIGATOR_SCROLL_INVERT_X`: reverse horizontal drag-scroll. */
+  scrollInvertX: z.boolean().default(false),
+  /** `NAVIGATOR_SCROLL_INVERT_Y`: reverse vertical drag-scroll. */
+  scrollInvertY: z.boolean().default(false),
+  /** `NAVIGATOR_TURBO_MULTIPLIER`: what the Turbo keys multiply motion by. */
+  turboMultiplier: z.number().int().min(1).max(NAVIGATOR_FACTOR_MAX).default(3),
+  /** `NAVIGATOR_AIM_DIVIDER`: what the Aim keys divide motion by. */
+  aimDivider: z.number().int().min(1).max(NAVIGATOR_FACTOR_MAX).default(3),
+});
+
+export type NavigatorTrackball = z.infer<typeof NavigatorTrackballSchema>;
+
 export const SettingsSchema = z.object({
   autoShift: z.boolean(),
   capsWord: z.boolean(),
@@ -224,6 +282,14 @@ export const SettingsSchema = z.object({
    * means, and what keeps codegen emitting the exact config.h Oryx would.
    */
   lighting: LightingSchema.optional(),
+  /**
+   * A ZSA Navigator trackball attached to the board, or absent for "no
+   * pointing device" — what every layout before v6 meant. Present, codegen
+   * declares `zsa/navigator_trackball` in keymap.json (that is the whole
+   * opt-in) and `#define`s only the knobs that differ from the module's own
+   * defaults. Absent, the generated sources are byte-identical to before.
+   */
+  navigatorTrackball: NavigatorTrackballSchema.optional(),
 });
 
 export const SeededFromSchema = z.object({
@@ -372,6 +438,8 @@ export const GeneratedSourcesSchema = z.object({
   keymapC: z.string(),
   rulesMk: z.string(),
   configH: z.string(),
+  /** The community modules declared — adds the Navigator's when enabled. */
+  keymapJson: z.string(),
 });
 
 export type GeneratedSources = z.infer<typeof GeneratedSourcesSchema>;
