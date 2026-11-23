@@ -42,6 +42,11 @@ import {
   mirrorLayerInto,
   type MirrorOptions,
 } from "../lib/mirror";
+import {
+  DEFAULT_NAVIGATOR_TRACKBALL,
+  patchNavigatorTrackball as patchNavigatorInLayout,
+  setNavigatorTrackball,
+} from "../lib/navigator";
 import type {
   AppError,
   Combo,
@@ -51,6 +56,7 @@ import type {
   LayoutSummary,
   LayoutVersionSummary,
   Lighting,
+  NavigatorTrackball,
   OsTarget,
 } from "../lib/types";
 
@@ -238,6 +244,16 @@ interface LayoutState {
   setBootEffect(qmk: string): void;
   /** Add or remove an effect from the set RGB_MOD can reach. */
   toggleExtraEffect(qmk: string): void;
+
+  // ---- Navigator trackball ----
+  /**
+   * Attach (at the module's defaults, or the knobs it had) or detach the
+   * trackball. Detached means the setting is absent — the firmware is exactly
+   * what it was before the Navigator existed. Never touches the keymap.
+   */
+  setNavigatorEnabled(enabled: boolean): void;
+  /** Change some of `settings.navigatorTrackball`; no-op when detached. */
+  patchNavigator(patch: Partial<NavigatorTrackball>): void;
 
   isDirty(): boolean;
 }
@@ -818,6 +834,29 @@ export const useLayoutStore = create<LayoutState>()((set, get) => ({
     const { layout } = get();
     if (!layout) return;
     const next = toggleExtraEffectInLayout(layout, qmk);
+    if (next === layout) return;
+    set({ layout: next });
+  },
+
+  // ---- Navigator trackball ----
+
+  setNavigatorEnabled(enabled) {
+    const { layout } = get();
+    if (!layout) return;
+    const next = setNavigatorTrackball(
+      layout,
+      enabled
+        ? (layout.settings.navigatorTrackball ?? DEFAULT_NAVIGATOR_TRACKBALL)
+        : null,
+    );
+    if (next === layout) return;
+    set({ layout: next });
+  },
+
+  patchNavigator(patch) {
+    const { layout } = get();
+    if (!layout) return;
+    const next = patchNavigatorInLayout(layout, patch);
     if (next === layout) return;
     set({ layout: next });
   },
