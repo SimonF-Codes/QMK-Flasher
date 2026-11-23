@@ -197,6 +197,21 @@ What landed, against the decisions above:
   even with no trackball attached; the panel and the Tool Guide say when that
   makes them inert.
 
+Firmware size, real MSYS builds of the seeded fixture
+(`real_msys_build_with_and_without_the_trackball`):
+
+| Build | Bytes |
+|---|---|
+| no trackball | 71,656 — byte-identical to Oryx's `arrows_together` image |
+| trackball, defaults | 75,224 (+3,568) |
+| trackball, 45° and every knob changed | 75,280 (+3,624) |
+
+The "on" builds compile `navigator.c`, `navigator_trackball.c` and
+`quantum/pointing_device/*` with no `POINTING_DEVICE_ENABLE` in our
+`rules.mk`, which confirms in practice that the module declaration is enough.
+The Moonlander is an STM32F303 with 256 KB of flash, so size is not a constraint.
+The "~62 KB" figure above was the demo layout, not the fixture.
+
 Deviations, and why:
 
 - **No "add a mouse layer" action.** The brief allowed one if cheap. It is not:

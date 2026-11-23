@@ -2,6 +2,43 @@
 
 ## Unreleased
 
+### An optional ZSA Navigator trackball
+
+The Moonlander can drive a Navigator **trackball** (schema **v6**,
+`settings.navigatorTrackball`). The **🖲 Trackball** panel in the toolbar
+attaches it and sets it up:
+
+- **Rotation**, in raw degrees (0–359). The preview shows where "up" ends up.
+  The module turns motion clockwise by that angle, and 90/180/270 are exact
+  axis swaps. There are no named presets, so keep your own note of which
+  number matches which printed shell. Changes apply on the next flash.
+- **Pointer speed** (CPI 5–125 in steps of 5, starting at 40), the **Turbo**
+  multiplier and the **Aim** divider.
+- **Drag-scroll feel**: divider, acceleration, max speed, and inverting
+  either axis.
+
+Ten new keys sit in the key picker's **Navigator trackball** section:
+CPI up/down, Turbo and Aim (hold or toggle), drag scroll (hold or toggle),
+vertical-only scroll, and back to normal speed. Each label says what the key
+does. The Tool Guide lists them under **Trackball** and warns when a layout
+has them but no trackball attached. Clicks are the ordinary Mouse keys. The
+app never adds a mouse layer to your layout.
+
+**Off, the firmware does not change at all.** A layout with no trackball builds
+a `.bin` byte-identical to Oryx's own. Turning it on only adds
+`zsa/navigator_trackball` to `keymap.json`, which used to be fixed and is
+now generated. The module turns on the pointing device, the driver and I2C by
+itself, so `rules.mk` stays the same. `config.h` only gets the settings that
+differ from the module's defaults.
+
+**Size**: the seeded layout is 71,656 bytes without the trackball, 75,224
+with it at defaults, and 75,280 with every setting changed (the 45° float
+rotation is the most expensive case). That is about +3.5 KB on an STM32F303
+with 256 KB of flash.
+
+Trackball only, because the trackpad is a different module. **Not yet
+flashed.** These are build-verified, not board-verified, claims.
+
 ### Lighting that reacts *and* keeps your colours
 
 The last release gave the board QMK's key-reactive effects. Flashed, they did
