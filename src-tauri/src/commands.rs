@@ -263,21 +263,44 @@ mod tests {
         assert!(!keyreport::is_running());
     }
 
-    #[test]
-    fn load_layout_returns_valid_fixture() {
-        let layout = load_layout().unwrap();
-        assert!(layout.validate().is_ok());
-        assert_eq!(layout.meta.name, "Arrows Together");
+    /// The fixture, parsed directly.
+    ///
+     /// These three used to call `load_layout()`, which returned the fixture
+    /// when they were written. Multi-layout changed that to "the user’s active
+    /// layout", and the tests silently became assertions about whoever is
+    /// running them: the name check failed the moment a second layout was
+    /// selected, and `save_layout_accepts_fixture` was WRITING to the real
+    /// store on every `cargo test`, snapshotting into version history as it
+    /// went. Their names always said fixture; now they mean it.
+    fn fixture() -> LayoutFile {
+        let mut layout: LayoutFile =
+            serde_json::from_str(store::FIXTURE_LAYOUT).expect("fixture parses");
+        layout.migrate();
+        layout
     }
 
     #[test]
-    fn save_layout_accepts_fixture() {
-        assert!(save_layout(load_layout().unwrap()).is_ok());
+    fn the_fixture_is_a_valid_layout() {
+        assert!(fixture().validate().is_ok());
+    }
+
+    #[test]
+    fn save_layout_accepts_a_valid_layout() {
+        // Against a throwaway root, so running the suite cannot touch the
+        // layouts someone actually uses.
+        let tmp = std::env::temp_dir().join(format!(
+            "qmk-flasher-test-{}",
+            std::process::id()
+        ));
+        let store = store::Store::at(tmp.clone());
+        let result = store.save(&fixture());
+        let _ = std::fs::remove_dir_all(&tmp);
+        assert!(result.is_ok(), "save failed: {result:?}");
     }
 
     #[test]
     fn generate_sources_matches_reference() {
-        let sources = generate_sources(load_layout().unwrap()).unwrap();
+        let sources = generate_sources(fixture()).unwrap();
         assert!(sources.keymap_c.contains("LAYOUT_moonlander"));
     }
 }

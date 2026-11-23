@@ -13,6 +13,12 @@ export default defineConfig(async () => ({
   test: {
     // Tests always run against the mock IPC layer.
     env: { VITE_MOCK: "1" },
+    // Worker worktrees live under .claude-worktrees/ INSIDE the repo, each a
+    // full checkout of some branch. Without this, `vitest run` collects every
+     // one of them: 330 files and 5814 tests instead of this checkout’s 33,
+    // so the number says nothing about the branch you are on and a stale
+    // worktree can fail a suite that is actually green.
+    exclude: ["**/node_modules/**", "**/dist/**", "**/.claude-worktrees/**"],
   },
 
   // Vite options tailored for Tauri development and only applied in `tauri dev` or `tauri build`
