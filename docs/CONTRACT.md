@@ -29,12 +29,12 @@ Worker modules expose plain functions taking `FnMut` callbacks for
 progress/logs — they never touch `AppHandle`; the command layer forwards
 callbacks to the webview as events. Keep that pattern.
 
-## Layout schema (v5)
+## Layout schema (v6)
 
 Source of truth: **`src-tauri/src/layout/schema.rs`** (serde). Mirrors:
 **`src/lib/types.ts`** (zod), **`shared/layout.schema.json`** (generated —
 regenerate with `REGEN_SCHEMA=1 cargo test json_schema`; a test fails if
-stale). `SCHEMA_VERSION` = **5**. All JSON is camelCase.
+stale). `SCHEMA_VERSION` = **6**. All JSON is camelCase.
 
 ```
 LayoutFile { schemaVersion, meta { name, geometry,
@@ -44,18 +44,18 @@ Layer      { title, color: "#rrggbb", keys: KeyAction[72] }   // LAYOUT-arg orde
 Combo      { name, keys: number[] /* LAYOUT-arg indices */, layer, action: KeyAction }
 settings   { autoShift, capsWord, tapDance, combos, keyLock: true (always),
              oryx, rgbMatrixCustom, layerState8bit, serialNumber,
-             osDetection, osDefault, lighting? }
+             osDetection, osDefault, lighting?, navigatorTrackball? }
 ```
 
 Every version so far has been **additive or a pure removal**: every field added
 since v1 is `serde(default)` / zod-`optional`, so serde has already filled it in
 by the time `migrate()` runs, and v5's one removal (`rgbStartupSpeed`) is a field
 serde now simply ignores — so each arm only moves the version stamp. The arms
-are written as a **ladder** rather than a match — v2 walks 2→3→4→5 — so the
+are written as a **ladder** rather than a match — v2 walks 2→3→4→5→6 — so the
 first non-trivial step lands in the right order.
 `v2_layout_migrates_to_current_schema`, `v3_…` and
-`v4_layout_migrates_and_its_lighting_starts_reaching_the_board` are the pattern
-to copy.
+`v4_layout_migrates_and_its_lighting_starts_reaching_the_board` and
+`v5_layout_migrates_with_no_trackball` are the pattern to copy.
 
 `KeyAction` is a tagged union on `kind`, every variant with optional
 `glow: "#rrggbb"`:
@@ -282,6 +282,52 @@ Editing follows the `led.ts` contract — every transform in `rgbEffects.ts`
 the **input layout unchanged** on a no-op, and `layoutStore` keys off that
 identity for dirty tracking. UI: `LightingPanel` in the layer tab bar, beside
 `LedPanel`.
+
+### Navigator trackball (added 2026-11-23, schema v6, additive)
+
+An optional ZSA Navigator **trackball** via `settings.navigatorTrackball` —
+absent by default, and absent means *no pointing device*: the generated
+`keymap.c`, `rules.mk`, `config.h` **and `keymap.json`** are byte-identical
+to a layout from before the setting existed (same precedent as `lighting`).
+Trackball only; the trackpad is a different module with a different manifest
+(`digitizer`) and is not supported.
+
+```
+navigatorTrackball? { rotation: 0..359,          // NAVIGATOR_TRACKBALL_ROTATION, raw degrees
+                      cpi: 5..125 step 5,        // NAVIGATOR_TRACKBALL_CPI (default 40)
+                      scrollDivider: 1..50,      // NAVIGATOR_SCROLL_DIVIDER (10)
+                      scrollAcceleration: 0..10, // NAVIGATOR_SCROLL_ACCELERATION (1.5)
+                      scrollMaxSpeed: 1..127,    // NAVIGATOR_SCROLL_MAX_SPEED (8.0)
+                      scrollInvertX, scrollInvertY: bool,
+                      turboMultiplier: 1..10,    // NAVIGATOR_TURBO_MULTIPLIER (3)
+                      aimDivider: 1..10 }        // NAVIGATOR_AIM_DIVIDER (3)
+```
+
+Every field defaults to the module's own value, so `{}` is a whole trackball.
+`validate()` refuses what the firmware cannot express (a zero divisor, CPI
+above the module's `NAVIGATOR_TRACKBALL_CPI_MAX`, rotation ≥ 360, NaN).
+
+**The opt-in is a module declaration, and nothing else.** `keymap.json` is
+rendered by `codegen::keymap_json` (it used to be a constant) and appends
+`"zsa/navigator_trackball"` to `zsa/oryx`, `zsa/defaults`. QMK's
+`generate-community-modules-rules-mk` turns the module manifest's
+`features.pointing_device` into `POINTING_DEVICE_ENABLE=yes`, and
+`build_keyboard.mk` includes that after the keymap's `rules.mk` and before
+`common_features.mk` reads it; the module's `rules.mk` sets
+`POINTING_DEVICE_DRIVER = custom` and `I2C_DRIVER_REQUIRED`, its `config.h`
+defines `MOUSE_EXTENDED_REPORT` / `WHEEL_EXTENDED_REPORT` under `#ifndef`. So
+our `rules.mk` is **unchanged** by the setting, and `config.h` gets only the
+knobs that differ from the module's defaults. No `SPLIT_POINTING_*`: the
+Moonlander is not a QMK split board.
+
+The ten module keycodes (`NAVIGATOR_INC_CPI` … `NAVIGATOR_CLEAR_SPEED`, declared
+by `zsa/defaults`, so they compile with or without the trackball) are in
+`shared/keycodes.json` under category `navigator` and are picked as `special`
+actions. The Tool Guide files them under **Trackball** and notes on each that
+it is inert when no trackball is attached. Nothing edits the keymap on the
+user's behalf — no mouse layer is created. UI: `NavigatorPanel` in the
+toolbar; transforms in `src/lib/navigator.ts` follow the identity-on-no-op
+contract.
 
 ### Multi-layout storage + keyboard registry (added 2026-07-19, additive)
 
@@ -589,7 +635,7 @@ All results are `Result<T, AppError>` unless noted; errors cross IPC as
 | `get_keyboard_geometry` | `(keyboard_id) -> GeometryFile` | `geometry::get_for_keyboard` |
 | `get_app_config` | `() -> AppConfig` (infallible) | `appcfg::get` |
 | `set_app_config` | `(cfg) -> ()` | `appcfg::set` |
-| `generate_sources` | `(layout) -> {keymapC, rulesMk, configH}` | `codegen::generate` |
+| `generate_sources` | `(layout) -> {keymapC, rulesMk, configH, keymapJson}` | `codegen::generate` |
 | `build_firmware` | `() -> String` (.bin path) | `build::build_firmware` |
 | `start_flash_pipeline` | `(layout) -> ()` | save → generate → build → flash |
 | `cancel_pipeline` | `() -> ()` | `flash::cancel` |
