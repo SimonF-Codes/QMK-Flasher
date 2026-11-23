@@ -10,7 +10,7 @@ use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
 /// Current version of the layout-file schema.
-pub const SCHEMA_VERSION: u32 = 5;
+pub const SCHEMA_VERSION: u32 = 6;
 
 /// Keys per layer in `LAYOUT_moonlander` argument order.
 pub const MOONLANDER_KEY_COUNT: usize = 72;
@@ -283,6 +283,176 @@ pub struct Settings {
     /// rather than a file we edited to match ourselves. See [`Lighting`].
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub lighting: Option<Lighting>,
+    /// A ZSA Navigator **trackball** attached to the board, or `None` for "no
+    /// pointing device" — which is what every layout before v6 meant, and what
+    /// keeps the generated sources byte-identical to Oryx's for a layout that
+    /// says nothing about it. Same precedent as [`Settings::lighting`].
+    ///
+    /// `Some` declares the `zsa/navigator_trackball` community module in
+    /// `keymap.json`, and that declaration is the whole opt-in: the module's
+    /// own `qmk_module.json` (`features.pointing_device`) is what QMK turns
+    /// into `POINTING_DEVICE_ENABLE`, and its `rules.mk` sets the driver and
+    /// the I2C requirement. See `codegen::keymap_json`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub navigator_trackball: Option<NavigatorTrackball>,
+}
+
+/// The Navigator trackball module's knobs. Every field defaults to the value
+/// the module itself uses when the define is absent (`navigator.h`,
+/// `navigator_trackball.h`), and codegen emits a `#define` only for a field
+/// that differs from it — so `NavigatorTrackball::default()` adds the module
+/// and not one line of config.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct NavigatorTrackball {
+    /// `NAVIGATOR_TRACKBALL_ROTATION`, raw degrees `0..=359`. The module
+    /// rotates the sensor's motion by this much (clockwise on screen) before
+    /// reporting it; 90/180/270 are exact swaps, any other angle goes through
+    /// a compile-time `cosf`/`sinf`. Which number matches which printed shell
+    /// is the user's to track — there are deliberately no named presets.
+    #[serde(default)]
+    pub rotation: u16,
+    /// `NAVIGATOR_TRACKBALL_CPI` — the boot pointer speed, in the sensor's own
+    /// units. [`NAVIGATOR_CPI_RANGE`], in steps of [`NAVIGATOR_CPI_TICK`]: the
+    /// module's `NAVIGATOR_INC_CPI` / `_DEC_CPI` keys move by that tick and
+    /// stop at `NAVIGATOR_TRACKBALL_CPI_MAX` (125).
+    #[serde(default = "default_navigator_cpi")]
+    pub cpi: u8,
+    /// `NAVIGATOR_SCROLL_DIVIDER` — drag-scroll: ball motion per scroll step.
+    /// Lower scrolls faster. A divisor in the module, so at least 1.
+    #[serde(default = "default_navigator_scroll_divider")]
+    pub scroll_divider: u8,
+    /// `NAVIGATOR_SCROLL_ACCELERATION` — how hard a fast flick speeds up.
+    #[serde(default = "default_navigator_scroll_acceleration")]
+    pub scroll_acceleration: f32,
+    /// `NAVIGATOR_SCROLL_MAX_SPEED` — the cap on one scroll report. The module
+    /// casts it to `int8_t`, so it cannot usefully exceed 127.
+    #[serde(default = "default_navigator_scroll_max_speed")]
+    pub scroll_max_speed: f32,
+    /// `NAVIGATOR_SCROLL_INVERT_X` — defined or not; the module checks `#ifdef`.
+    #[serde(default)]
+    pub scroll_invert_x: bool,
+    /// `NAVIGATOR_SCROLL_INVERT_Y`.
+    #[serde(default)]
+    pub scroll_invert_y: bool,
+    /// `NAVIGATOR_TURBO_MULTIPLIER` — what the Turbo keys multiply motion by.
+    #[serde(default = "default_navigator_turbo_multiplier")]
+    pub turbo_multiplier: u8,
+    /// `NAVIGATOR_AIM_DIVIDER` — what the Aim keys divide motion by.
+    #[serde(default = "default_navigator_aim_divider")]
+    pub aim_divider: u8,
+}
+
+/// The module's own defaults, mirrored so codegen can omit what matches them.
+pub const NAVIGATOR_DEFAULT_CPI: u8 = 40;
+pub const NAVIGATOR_DEFAULT_SCROLL_DIVIDER: u8 = 10;
+pub const NAVIGATOR_DEFAULT_SCROLL_ACCELERATION: f32 = 1.5;
+pub const NAVIGATOR_DEFAULT_SCROLL_MAX_SPEED: f32 = 8.0;
+pub const NAVIGATOR_DEFAULT_TURBO_MULTIPLIER: u8 = 3;
+pub const NAVIGATOR_DEFAULT_AIM_DIVIDER: u8 = 3;
+
+/// Bounds on [`NavigatorTrackball::cpi`]. The top is the module's
+/// `NAVIGATOR_TRACKBALL_CPI_MAX`, a plain `#define` (not `#ifndef`) that caps
+/// the runtime keys; booting above it would put the sensor somewhere the keys
+/// could never bring it back to.
+pub const NAVIGATOR_CPI_RANGE: std::ops::RangeInclusive<u8> = 5..=125;
+/// `NAVIGATOR_TRACKBALL_CPI_TICK` — the step the runtime CPI keys move by.
+pub const NAVIGATOR_CPI_TICK: u8 = 5;
+/// Top of [`NavigatorTrackball::rotation`]. The module takes `% 360`, so 360
+/// would compile, but it is 0 spelled differently.
+pub const NAVIGATOR_ROTATION_MAX: u16 = 359;
+/// Bounds on the turbo multiplier and aim divisor: a divisor of 0 is a
+/// division by zero in the firmware, and past 10 the pointer is unusable.
+pub const NAVIGATOR_FACTOR_RANGE: std::ops::RangeInclusive<u8> = 1..=10;
+/// Bounds on [`NavigatorTrackball::scroll_divider`] (a divisor, so not 0).
+pub const NAVIGATOR_SCROLL_DIVIDER_RANGE: std::ops::RangeInclusive<u8> = 1..=50;
+/// Bounds on [`NavigatorTrackball::scroll_acceleration`].
+pub const NAVIGATOR_SCROLL_ACCELERATION_RANGE: std::ops::RangeInclusive<f32> = 0.0..=10.0;
+/// Bounds on [`NavigatorTrackball::scroll_max_speed`]: one step is the floor
+/// (the module starts every scroll at 1.0), `int8_t` the ceiling.
+pub const NAVIGATOR_SCROLL_MAX_SPEED_RANGE: std::ops::RangeInclusive<f32> = 1.0..=127.0;
+
+fn default_navigator_cpi() -> u8 {
+    NAVIGATOR_DEFAULT_CPI
+}
+fn default_navigator_scroll_divider() -> u8 {
+    NAVIGATOR_DEFAULT_SCROLL_DIVIDER
+}
+fn default_navigator_scroll_acceleration() -> f32 {
+    NAVIGATOR_DEFAULT_SCROLL_ACCELERATION
+}
+fn default_navigator_scroll_max_speed() -> f32 {
+    NAVIGATOR_DEFAULT_SCROLL_MAX_SPEED
+}
+fn default_navigator_turbo_multiplier() -> u8 {
+    NAVIGATOR_DEFAULT_TURBO_MULTIPLIER
+}
+fn default_navigator_aim_divider() -> u8 {
+    NAVIGATOR_DEFAULT_AIM_DIVIDER
+}
+
+impl Default for NavigatorTrackball {
+    fn default() -> Self {
+        Self {
+            rotation: 0,
+            cpi: NAVIGATOR_DEFAULT_CPI,
+            scroll_divider: NAVIGATOR_DEFAULT_SCROLL_DIVIDER,
+            scroll_acceleration: NAVIGATOR_DEFAULT_SCROLL_ACCELERATION,
+            scroll_max_speed: NAVIGATOR_DEFAULT_SCROLL_MAX_SPEED,
+            scroll_invert_x: false,
+            scroll_invert_y: false,
+            turbo_multiplier: NAVIGATOR_DEFAULT_TURBO_MULTIPLIER,
+            aim_divider: NAVIGATOR_DEFAULT_AIM_DIVIDER,
+        }
+    }
+}
+
+impl NavigatorTrackball {
+    /// Every value the firmware cannot express, named. Codegen turns these
+    /// straight into `#define`s, so a bad one is a broken board (a zero
+    /// divisor) or a sensor the runtime keys cannot recover, not a typo.
+    pub fn validate(&self) -> Result<(), String> {
+        let at = "settings.navigatorTrackball";
+        if self.rotation > NAVIGATOR_ROTATION_MAX {
+            return Err(format!(
+                "{at}.rotation is {}, outside 0..={NAVIGATOR_ROTATION_MAX}",
+                self.rotation
+            ));
+        }
+        if !NAVIGATOR_CPI_RANGE.contains(&self.cpi) || self.cpi % NAVIGATOR_CPI_TICK != 0 {
+            return Err(format!(
+                "{at}.cpi is {}, expected a multiple of {NAVIGATOR_CPI_TICK} in {}..={}",
+                self.cpi,
+                NAVIGATOR_CPI_RANGE.start(),
+                NAVIGATOR_CPI_RANGE.end()
+            ));
+        }
+        let int = |name: &str, v: u8, r: &std::ops::RangeInclusive<u8>| {
+            if r.contains(&v) {
+                Ok(())
+            } else {
+                Err(format!("{at}.{name} is {v}, outside {}..={}", r.start(), r.end()))
+            }
+        };
+        int("scrollDivider", self.scroll_divider, &NAVIGATOR_SCROLL_DIVIDER_RANGE)?;
+        int("turboMultiplier", self.turbo_multiplier, &NAVIGATOR_FACTOR_RANGE)?;
+        int("aimDivider", self.aim_divider, &NAVIGATOR_FACTOR_RANGE)?;
+        let float = |name: &str, v: f32, r: &std::ops::RangeInclusive<f32>| {
+            // `contains` is false for NaN, which is the point.
+            if r.contains(&v) {
+                Ok(())
+            } else {
+                Err(format!("{at}.{name} is {v}, outside {}..={}", r.start(), r.end()))
+            }
+        };
+        float(
+            "scrollAcceleration",
+            self.scroll_acceleration,
+            &NAVIGATOR_SCROLL_ACCELERATION_RANGE,
+        )?;
+        float("scrollMaxSpeed", self.scroll_max_speed, &NAVIGATOR_SCROLL_MAX_SPEED_RANGE)?;
+        Ok(())
+    }
 }
 
 /// Which painter owns the LEDs.
@@ -472,10 +642,11 @@ impl LayoutFile {
     /// Every arm so far has been an additive one: v2→v3 added
     /// `settings.osDetection` / `settings.osDefault`, v3→v4 added
     /// `settings.lighting`, v4→v5 added the reactive-ledmap knobs and dropped
-    /// `settings.rgbStartupSpeed`, and every added field is `serde(default)`,
+    /// `settings.rgbStartupSpeed`, v5→v6 added `settings.navigatorTrackball`,
+    /// and every added field is `serde(default)`,
     /// so serde has already filled them in by the time this runs and the
     /// version stamp is all that is left to move. The arms are written as a
-    /// **ladder**, not a match: a v2 file has to walk 2→3→4→5, and the day one
+    /// **ladder**, not a match: a v2 file has to walk 2→3→4→5→6, and the day one
     /// of these steps stops being a no-op that ordering is what makes it
     /// correct.
     pub fn migrate(&mut self) {
@@ -498,6 +669,13 @@ impl LayoutFile {
             // the whole point of the version: its stored hue and mode start
             // reaching the board instead of being overruled by EEPROM.
             self.schema_version = 5;
+        }
+        if self.schema_version == 5 {
+            // `navigatorTrackball` absent means "no pointing device", which is
+            // what every v5 layout meant. Nothing to synthesize: filling in a
+            // default here would declare the module and change the firmware of
+            // a board that has no trackball attached.
+            self.schema_version = 6;
         }
     }
 
@@ -538,6 +716,9 @@ impl LayoutFile {
                     REACTIVE_FADE_MS_RANGE.end()
                 ));
             }
+        }
+        if let Some(nav) = &self.settings.navigator_trackball {
+            nav.validate()?;
         }
         // Per-keyboard key count from the registry (`meta.geometry` is the
         // keyboard id; only the 72-key Moonlander exists today).
@@ -687,6 +868,72 @@ mod tests {
         assert_eq!(layout.schema_version, SCHEMA_VERSION);
         layout.validate().expect("migrated layout must validate");
         assert!(layout.settings.lighting.is_none());
+    }
+
+    /// v5→v6: a layout from before the Navigator setting opens, and means what
+    /// it meant — no pointing device. Defaulting one in here would declare the
+    /// module in the firmware of a board with nothing attached.
+    #[test]
+    fn v5_layout_migrates_with_no_trackball() {
+        let mut doc: serde_json::Value = serde_json::from_str(FIXTURE).unwrap();
+        doc["schemaVersion"] = serde_json::json!(5);
+        doc["settings"].as_object_mut().unwrap().remove("navigatorTrackball");
+
+        let mut layout: LayoutFile = serde_json::from_value(doc).expect("v5 must deserialize");
+        assert_eq!(layout.schema_version, 5);
+        layout.migrate();
+
+        assert_eq!(layout.schema_version, SCHEMA_VERSION);
+        layout.validate().expect("migrated layout must validate");
+        assert!(layout.settings.navigator_trackball.is_none());
+        // ...and it serializes back without the key, so a re-saved v5 layout
+        // does not grow a field it never had.
+        let out = serde_json::to_value(&layout).unwrap();
+        assert!(out["settings"].get("navigatorTrackball").is_none());
+    }
+
+    /// `{}` is a whole trackball: every knob falls back to the module's own
+    /// default, so the UI can switch the Navigator on without inventing values.
+    #[test]
+    fn an_empty_trackball_object_takes_the_modules_defaults() {
+        let nav: NavigatorTrackball = serde_json::from_str("{}").unwrap();
+        assert_eq!(nav, NavigatorTrackball::default());
+        assert_eq!(nav.cpi, 40);
+        assert_eq!(nav.rotation, 0);
+        nav.validate().unwrap();
+    }
+
+    #[test]
+    fn trackball_values_the_firmware_cannot_express_are_rejected() {
+        let ok = NavigatorTrackball::default();
+        let bad: Vec<(&str, NavigatorTrackball)> = vec![
+            ("rotation 360", NavigatorTrackball { rotation: 360, ..ok.clone() }),
+            // Above NAVIGATOR_TRACKBALL_CPI_MAX the runtime keys cannot recover.
+            ("cpi 130", NavigatorTrackball { cpi: 130, ..ok.clone() }),
+            ("cpi 0", NavigatorTrackball { cpi: 0, ..ok.clone() }),
+            ("cpi off-tick", NavigatorTrackball { cpi: 42, ..ok.clone() }),
+            // Divisors in the module: zero is a division by zero on the board.
+            ("scroll divider 0", NavigatorTrackball { scroll_divider: 0, ..ok.clone() }),
+            ("aim divider 0", NavigatorTrackball { aim_divider: 0, ..ok.clone() }),
+            ("turbo 0", NavigatorTrackball { turbo_multiplier: 0, ..ok.clone() }),
+            ("accel NaN", NavigatorTrackball { scroll_acceleration: f32::NAN, ..ok.clone() }),
+            ("max speed 0.5", NavigatorTrackball { scroll_max_speed: 0.5, ..ok.clone() }),
+            ("max speed 200", NavigatorTrackball { scroll_max_speed: 200.0, ..ok.clone() }),
+        ];
+        for (name, nav) in bad {
+            let mut layout = fixture();
+            layout.settings.navigator_trackball = Some(nav);
+            assert!(layout.validate().is_err(), "{name} must be rejected");
+        }
+        for good in [
+            NavigatorTrackball { rotation: 359, ..ok.clone() },
+            NavigatorTrackball { cpi: 125, ..ok.clone() },
+            NavigatorTrackball { cpi: 5, ..ok.clone() },
+        ] {
+            let mut layout = fixture();
+            layout.settings.navigator_trackball = Some(good.clone());
+            layout.validate().unwrap_or_else(|e| panic!("{good:?}: {e}"));
+        }
     }
 
     /// A v2 file has to cross two arms to get here, so the ladder is walked

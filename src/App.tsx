@@ -9,6 +9,7 @@ import LayerTabs from "./components/LayerTabs";
 import LayoutMenu from "./components/LayoutMenu";
 import LivePanel from "./components/LivePanel";
 import LiveToggle from "./components/LiveToggle";
+import NavigatorPanel from "./components/NavigatorPanel";
 import OsSettingsPanel from "./components/OsSettingsPanel";
 import OsSwapToggle from "./components/OsSwapToggle";
 import ToolGuidePanel from "./components/ToolGuidePanel";
@@ -180,6 +181,7 @@ export default function App() {
               from two sides: the toggle previews an OS, this decides how the
               board picks one. */}
           <OsSettingsPanel />
+          <NavigatorPanel />
           {dirty && (
             <span className="text-xs text-amber-400" title="Unsaved changes">
               ● unsaved

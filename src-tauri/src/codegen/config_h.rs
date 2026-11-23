@@ -1,6 +1,12 @@
-//! `config.h` from `settings` (+ combo count + RGB Matrix lighting).
+//! `config.h` from `settings` (+ combo count + RGB Matrix lighting + the
+//! Navigator trackball's knobs).
 
-use crate::layout::schema::{LayoutFile, Lighting, LightingMode};
+use crate::layout::schema::{
+    LayoutFile, Lighting, LightingMode, NavigatorTrackball, NAVIGATOR_DEFAULT_AIM_DIVIDER,
+    NAVIGATOR_DEFAULT_CPI, NAVIGATOR_DEFAULT_SCROLL_ACCELERATION,
+    NAVIGATOR_DEFAULT_SCROLL_DIVIDER, NAVIGATOR_DEFAULT_SCROLL_MAX_SPEED,
+    NAVIGATOR_DEFAULT_TURBO_MULTIPLIER,
+};
 use crate::rgb_effects;
 
 pub fn render(layout: &LayoutFile) -> String {
@@ -40,7 +46,67 @@ pub fn render(layout: &LayoutFile) -> String {
     if let Some(lighting) = &s.lighting {
         out.push_str(&render_lighting(lighting));
     }
+    if let Some(nav) = &s.navigator_trackball {
+        out.push_str(&render_navigator_trackball(nav));
+    }
     out
+}
+
+/// The Navigator trackball's knobs — only the ones that differ from the
+/// module's own defaults (`navigator.h` / `navigator_trackball.h`, every one
+/// under `#ifndef`), so a default trackball adds the module and a comment and
+/// nothing else. Restating a default would pin it against a future change in
+/// the module that we never chose.
+///
+/// Deliberately absent, because the module owns them: `POINTING_DEVICE_*`,
+/// `MOUSE_EXTENDED_REPORT` and `WHEEL_EXTENDED_REPORT` (its `config.h`), the
+/// driver and I2C (its `rules.mk`). `SPLIT_POINTING_ENABLE` /
+/// `POINTING_DEVICE_LEFT|RIGHT` do not apply either: the Moonlander is one
+/// controller, not a QMK split board, and `pointing_device.c` errors on them
+/// without `SPLIT_KEYBOARD`.
+fn render_navigator_trackball(nav: &NavigatorTrackball) -> String {
+    let mut out = String::from(
+        "/* Navigator trackball — generated from settings.navigatorTrackball.\n   The zsa/navigator_trackball module in keymap.json is the opt-in; only\n   values that differ from the module's defaults are defined here. */\n",
+    );
+    let mut define = |name: &str, value: String| {
+        out.push_str(&format!("#define {name} {value}\n"));
+    };
+    if nav.rotation != 0 {
+        define("NAVIGATOR_TRACKBALL_ROTATION", nav.rotation.to_string());
+    }
+    if nav.cpi != NAVIGATOR_DEFAULT_CPI {
+        define("NAVIGATOR_TRACKBALL_CPI", nav.cpi.to_string());
+    }
+    if nav.scroll_divider != NAVIGATOR_DEFAULT_SCROLL_DIVIDER {
+        define("NAVIGATOR_SCROLL_DIVIDER", nav.scroll_divider.to_string());
+    }
+    if nav.scroll_acceleration != NAVIGATOR_DEFAULT_SCROLL_ACCELERATION {
+        define("NAVIGATOR_SCROLL_ACCELERATION", c_float(nav.scroll_acceleration));
+    }
+    if nav.scroll_max_speed != NAVIGATOR_DEFAULT_SCROLL_MAX_SPEED {
+        define("NAVIGATOR_SCROLL_MAX_SPEED", c_float(nav.scroll_max_speed));
+    }
+    if nav.turbo_multiplier != NAVIGATOR_DEFAULT_TURBO_MULTIPLIER {
+        define("NAVIGATOR_TURBO_MULTIPLIER", nav.turbo_multiplier.to_string());
+    }
+    if nav.aim_divider != NAVIGATOR_DEFAULT_AIM_DIVIDER {
+        define("NAVIGATOR_AIM_DIVIDER", nav.aim_divider.to_string());
+    }
+    // `#ifdef` switches in the module: defined means on, so there is no value.
+    if nav.scroll_invert_x {
+        out.push_str("#define NAVIGATOR_SCROLL_INVERT_X\n");
+    }
+    if nav.scroll_invert_y {
+        out.push_str("#define NAVIGATOR_SCROLL_INVERT_Y\n");
+    }
+    out
+}
+
+/// A C `float` literal. `{:?}` on an `f32` always carries a decimal point or
+/// an exponent (`2.0`, `1.25`), which is what makes the `f` suffix legal —
+/// `2f` is not a C literal.
+fn c_float(v: f32) -> String {
+    format!("{v:?}f")
 }
 
 /// The RGB Matrix block: the effect set, the switches that set costs, and the
@@ -310,5 +376,91 @@ mod tests {
         l.mode = LightingMode::Ledmap;
         assert!(with(l).contains("mode: ledmap"));
         assert!(with(lighting("SPLASH", &[])).contains("mode: effect"));
+    }
+
+    // ---- Navigator trackball ----
+
+    fn with_nav(nav: NavigatorTrackball) -> String {
+        let mut layout = fixture();
+        layout.settings.navigator_trackball = Some(nav);
+        render(&layout)
+    }
+
+    #[test]
+    fn no_navigator_emits_no_navigator_defines() {
+        let out = render(&fixture());
+        assert!(!out.contains("NAVIGATOR"), "{out}");
+        assert!(!out.contains("POINTING_DEVICE"), "{out}");
+    }
+
+    /// A default trackball is the module and nothing else: every knob matches
+    /// the module's own `#ifndef` default, so restating one would only pin it
+    /// against a future change in the module that we never chose.
+    #[test]
+    fn a_default_trackball_restates_none_of_the_modules_defaults() {
+        let out = with_nav(NavigatorTrackball::default());
+        let defines: Vec<&str> = out
+            .lines()
+            .filter(|l| l.contains("#define NAVIGATOR") || l.contains("#define POINTING"))
+            .collect();
+        assert!(defines.is_empty(), "{defines:?}");
+    }
+
+    /// The module's `config.h` already defines these under `#ifndef`, and its
+    /// manifest is what turns pointing on. A second copy here is the kind of
+    /// thing that builds today and breaks on a QMK bump.
+    #[test]
+    fn what_the_module_owns_is_never_emitted() {
+        let mut nav = NavigatorTrackball::default();
+        nav.rotation = 45;
+        nav.cpi = 60;
+        nav.scroll_invert_x = true;
+        let out = with_nav(nav);
+        for owned in [
+            "MOUSE_EXTENDED_REPORT",
+            "WHEEL_EXTENDED_REPORT",
+            "POINTING_DEVICE",
+            "SPLIT_POINTING",
+            "NAVIGATOR_TRACKBALL_CPI_MAX",
+        ] {
+            assert!(!out.contains(owned), "{owned} must come from the module:\n{out}");
+        }
+    }
+
+    #[test]
+    fn rotation_is_raw_degrees() {
+        let mut nav = NavigatorTrackball::default();
+        nav.rotation = 135;
+        assert!(with_nav(nav).contains("#define NAVIGATOR_TRACKBALL_ROTATION 135\n"));
+    }
+
+    #[test]
+    fn every_changed_knob_is_emitted_with_the_modules_own_name() {
+        let nav = NavigatorTrackball {
+            rotation: 270,
+            cpi: 85,
+            scroll_divider: 6,
+            scroll_acceleration: 2.0,
+            scroll_max_speed: 12.5,
+            scroll_invert_x: true,
+            scroll_invert_y: true,
+            turbo_multiplier: 4,
+            aim_divider: 5,
+        };
+        let out = with_nav(nav);
+        for line in [
+            "#define NAVIGATOR_TRACKBALL_ROTATION 270\n",
+            "#define NAVIGATOR_TRACKBALL_CPI 85\n",
+            "#define NAVIGATOR_SCROLL_DIVIDER 6\n",
+            // C float literals: a bare `2f` would not compile.
+            "#define NAVIGATOR_SCROLL_ACCELERATION 2.0f\n",
+            "#define NAVIGATOR_SCROLL_MAX_SPEED 12.5f\n",
+            "#define NAVIGATOR_TURBO_MULTIPLIER 4\n",
+            "#define NAVIGATOR_AIM_DIVIDER 5\n",
+            "#define NAVIGATOR_SCROLL_INVERT_X\n",
+            "#define NAVIGATOR_SCROLL_INVERT_Y\n",
+        ] {
+            assert!(out.contains(line), "missing {line:?} in:\n{out}");
+        }
     }
 }

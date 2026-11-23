@@ -684,6 +684,7 @@ const mockIpc: Ipc = {
     keymapC: "// mock keymap.c\n",
     rulesMk: "# mock rules.mk\n",
     configH: "// mock config.h\n",
+    keymapJson: '{ "modules": [ "zsa/oryx", "zsa/defaults" ] }\n',
   }),
   buildFirmware: async () => {
     MOCK_BUILD_LOG.forEach(emitLog);

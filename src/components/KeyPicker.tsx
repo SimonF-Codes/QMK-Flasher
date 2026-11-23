@@ -54,7 +54,13 @@ function actionForEntry(e: KeycodeEntry, prev: KeyAction): KeyAction {
   const osMode = OS_MODE_BY_CODE[e.qmk];
   if (osMode) return withGlow({ kind: "osMode", action: osMode }, prev);
   if (e.category === "rgb") return withGlow({ kind: "rgb", code: e.qmk }, prev);
-  if (e.category === "special" || e.category === "osmode")
+  // Navigator keys are the trackball module's own custom keycodes (declared
+  // by zsa/defaults), not HID usages: no mods, no tap half, emitted verbatim.
+  if (
+    e.category === "special" ||
+    e.category === "osmode" ||
+    e.category === "navigator"
+  )
     return withGlow({ kind: "special", code: e.qmk }, prev);
   return withGlow({ kind: "basic", code: e.qmk }, prev);
 }

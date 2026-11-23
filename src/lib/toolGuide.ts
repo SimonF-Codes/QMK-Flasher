@@ -32,6 +32,7 @@
  */
 import { GEOMETRY } from "./geometry";
 import { entryFor, longLabelFor } from "./keycodes";
+import { isNavigatorCode } from "./navigator";
 import { ALL_MODS, OS_MODE_KEYCODE, tapLabel } from "./labels";
 import {
   HOME_OS,
@@ -185,6 +186,7 @@ export type GuideGroupId =
   | "lock"
   | "chord"
   | "lighting"
+  | "pointer"
   | "system";
 
 export interface GuideGroupInfo {
@@ -241,6 +243,12 @@ export const GUIDE_GROUPS: readonly GuideGroupInfo[] = [
     id: "lighting",
     title: "Lighting",
     blurb: "Keys that change the board's own LEDs.",
+  },
+  {
+    id: "pointer",
+    title: "Trackball",
+    blurb:
+      "Keys for the ZSA Navigator trackball: pointer speed, precision, and scrolling by rolling the ball.",
   },
   {
     id: "system",
@@ -750,7 +758,8 @@ export function groupFor(a: KeyAction): GuideGroupId | null {
     case "osMode":
       return "os";
     case "special":
-      return isOsSwitchCode(a.code) ? "os" : "system";
+      if (isOsSwitchCode(a.code)) return "os";
+      return isNavigatorCode(a.code) ? "pointer" : "system";
     case "macro":
       return "macro";
     case "modTap":
@@ -818,6 +827,10 @@ function comboDetail(
     ...combo.keys.map((i) => `${i} — ${describePosition(i)}`),
   ];
 }
+
+/** Appended to a trackball key's entry when the layout attaches no trackball. */
+export const NO_TRACKBALL_NOTE =
+  "No trackball is attached in this layout's settings, so this key does nothing until one is.";
 
 /**
  * Walk the layout and produce the whole reference.
@@ -925,6 +938,15 @@ export function buildToolGuide(
   });
 
   const all = order.map((k) => byKey.get(k)!);
+
+  // The module's keys are ordinary keycodes (zsa/defaults declares them) and
+  // compile with or without the trackball, so nothing stops a layout from
+  // carrying them while no trackball is attached. Say so where they are read.
+  if (!layout.settings?.navigatorTrackball) {
+    for (const e of all) {
+      if (e.group === "pointer") e.detail.push(NO_TRACKBALL_NOTE);
+    }
+  }
   const groups: ToolGuideGroup[] = GUIDE_GROUPS.map((g) => ({
     ...g,
     entries: all.filter((e) => e.group === g.id),

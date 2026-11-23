@@ -624,6 +624,8 @@ fn blank_layout(name: &str, kb: &crate::keyboards::KeyboardInfo) -> LayoutFile {
             // A blank layout configures no RGB Matrix effect, exactly as a
             // seeded one does: the ledmap is the only thing lighting it.
             lighting: None,
+            // No pointing device until the user says one is attached.
+            navigator_trackball: None,
         },
     }
 }

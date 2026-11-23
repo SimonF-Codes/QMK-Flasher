@@ -2297,5 +2297,115 @@
     "category": "osmode",
     "tappable": false,
     "modsApplicable": false
+  },
+  {
+    "qmk": "NAVIGATOR_INC_CPI",
+    "aliases": [
+      "NV_CPIU"
+    ],
+    "label": "CPI+",
+    "longLabel": "Trackball: faster pointer (raise CPI one step, up to 125)",
+    "category": "navigator",
+    "tappable": false,
+    "modsApplicable": false
+  },
+  {
+    "qmk": "NAVIGATOR_DEC_CPI",
+    "aliases": [
+      "NV_CPID"
+    ],
+    "label": "CPI-",
+    "longLabel": "Trackball: slower pointer (lower CPI one step)",
+    "category": "navigator",
+    "tappable": false,
+    "modsApplicable": false
+  },
+  {
+    "qmk": "NAVIGATOR_TURBO",
+    "aliases": [
+      "NV_TRBO"
+    ],
+    "label": "Turbo",
+    "longLabel": "Trackball: hold to move the pointer faster (Turbo)",
+    "category": "navigator",
+    "tappable": false,
+    "modsApplicable": false
+  },
+  {
+    "qmk": "TOGGLE_TURBO",
+    "aliases": [
+      "NV_TTRB"
+    ],
+    "label": "Turbo⇄",
+    "longLabel": "Trackball: toggle fast pointer (Turbo) on/off — turns Aim off",
+    "category": "navigator",
+    "tappable": false,
+    "modsApplicable": false
+  },
+  {
+    "qmk": "NAVIGATOR_AIM",
+    "aliases": [
+      "NV_AIM"
+    ],
+    "label": "Aim",
+    "longLabel": "Trackball: hold to move the pointer slower, for precision (Aim)",
+    "category": "navigator",
+    "tappable": false,
+    "modsApplicable": false
+  },
+  {
+    "qmk": "TOGGLE_AIM",
+    "aliases": [
+      "NV_TAIM"
+    ],
+    "label": "Aim⇄",
+    "longLabel": "Trackball: toggle slow precision pointer (Aim) on/off — turns Turbo off",
+    "category": "navigator",
+    "tappable": false,
+    "modsApplicable": false
+  },
+  {
+    "qmk": "DRAG_SCROLL",
+    "aliases": [
+      "NV_DSCR"
+    ],
+    "label": "DrgScr",
+    "longLabel": "Trackball: hold to scroll by rolling the ball (drag scroll)",
+    "category": "navigator",
+    "tappable": false,
+    "modsApplicable": false
+  },
+  {
+    "qmk": "TOGGLE_SCROLL",
+    "aliases": [
+      "NV_TSCR"
+    ],
+    "label": "Scrl⇄",
+    "longLabel": "Trackball: toggle scrolling by rolling the ball on/off",
+    "category": "navigator",
+    "tappable": false,
+    "modsApplicable": false
+  },
+  {
+    "qmk": "TOGGLE_SCROLL_VERTICAL",
+    "aliases": [
+      "NV_VSCR"
+    ],
+    "label": "VScrl⇄",
+    "longLabel": "Trackball: toggle vertical-only scrolling (ignore sideways roll)",
+    "category": "navigator",
+    "tappable": false,
+    "modsApplicable": false
+  },
+  {
+    "qmk": "NAVIGATOR_CLEAR_SPEED",
+    "aliases": [
+      "NV_CSPD"
+    ],
+    "label": "Spd 0",
+    "longLabel": "Trackball: back to normal pointer speed (clear Turbo and Aim)",
+    "category": "navigator",
+    "tappable": false,
+    "modsApplicable": false
   }
 ]

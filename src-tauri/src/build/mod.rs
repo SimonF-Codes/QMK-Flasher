@@ -219,6 +219,65 @@ mod tests {
         println!("\n  shipped demo layout: {bytes} bytes at {path}\n");
     }
 
+    /// Real MSYS builds of the seeded fixture three ways — no trackball, a
+    /// default trackball, and a trackball at 45° with every knob changed (the
+    /// float-rotation path, the most code the module can compile in) — each
+    /// into its own throwaway keymap dir, printing the three image sizes.
+    ///
+    /// This is the proof that declaring `zsa/navigator_trackball` in
+    /// keymap.json is sufficient on its own: rules.mk carries no
+    /// `POINTING_DEVICE_ENABLE`, so if the module's manifest did not turn it
+    /// on, `pointing_device_task_navigator_trackball` would not be linked and
+    /// the "on" images would come out the same size as the "off" one.
+    #[test]
+    #[ignore = "invokes the real MSYS toolchain (minutes, three full builds); run manually"]
+    fn real_msys_build_with_and_without_the_trackball() {
+        use crate::layout::schema::NavigatorTrackball;
+        use crate::layout::LayoutFile;
+        let base: LayoutFile =
+            serde_json::from_str(crate::layout::store::FIXTURE_LAYOUT).unwrap();
+        let tuned = NavigatorTrackball {
+            rotation: 45,
+            cpi: 60,
+            scroll_divider: 8,
+            scroll_acceleration: 2.0,
+            scroll_max_speed: 12.0,
+            scroll_invert_x: true,
+            scroll_invert_y: true,
+            turbo_multiplier: 4,
+            aim_divider: 4,
+        };
+        let cases = [
+            ("qmk_flasher_nav_off", None),
+            ("qmk_flasher_nav_default", Some(NavigatorTrackball::default())),
+            ("qmk_flasher_nav_tuned", Some(tuned)),
+        ];
+        let mut sizes = Vec::new();
+        for (keymap, nav) in cases {
+            let mut layout = base.clone();
+            layout.settings.navigator_trackball = nav;
+            let mut cfg = appcfg::get();
+            cfg.keymap_name = keymap.into();
+            let keyboard = crate::keyboards::supported(&layout.meta.geometry).unwrap();
+            let dir = codegen::write_sources(&layout, &cfg).expect("write sources");
+            let rules = std::fs::read_to_string(dir.join("rules.mk")).unwrap();
+            assert!(!rules.contains("POINTING_DEVICE"), "the module owns the enable");
+            let result = msys::build(&cfg, keyboard, &mut |l| println!("{l}"));
+            let _ = std::fs::remove_dir_all(&dir);
+            let path = result.unwrap_or_else(|e| panic!("{keymap} must build: {e:?}"));
+            let bytes = std::fs::metadata(&path).expect("built bin exists").len();
+            sizes.push((keymap, bytes));
+        }
+        for (keymap, bytes) in &sizes {
+            println!("\n  {keymap}: {bytes} bytes");
+        }
+        let off = sizes[0].1;
+        assert!(
+            sizes[1].1 > off && sizes[2].1 > off,
+            "declaring the module must compile the driver in: {sizes:?}"
+        );
+    }
+
     /// A3 acceptance: the real MSYS build. Ignored by default — run manually
     /// once with `cargo test real_msys_build -- --ignored --nocapture`.
     /// Produces a .bin whose size is within ~1% of the known-good

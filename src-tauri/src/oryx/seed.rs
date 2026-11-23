@@ -490,6 +490,9 @@ pub fn layout_from_snapshot(
         // ledmap and nothing else — so a seeded layout configures none, and
         // codegen emits no RGB block at all.
         lighting: None,
+        // A Navigator is opted into in the app, not inferred from Oryx: the
+        // seeded keymap.json must stay the two modules Oryx's own build uses.
+        navigator_trackball: None,
     };
 
     let layout = LayoutFile {

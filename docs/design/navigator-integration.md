@@ -1,10 +1,10 @@
 ---
-status: draft
+status: stable
 ---
 
 # Design proposal: optional ZSA Navigator on the Moonlander
 
-Status: **draft** (Alpha, 2026-11-23). Not implemented. Simon has a Navigator
+Status: **implemented** (trackball only) on 2026-11-23 — see **As shipped** at the end. Originally drafted by Alpha, 2026-11-23. Simon has a Navigator
 and will 3D-print the mount; the shells themselves are separate work.
 
 ## Where the project stands first
@@ -160,5 +160,73 @@ Any implementation must report the size both ways.
 
 The 3D models for the mount. Simon named that as separate work, and it is a
 different kind of artifact from anything in this repo.
+
+## As shipped (2026-11-23)
+
+Simon answered questions 1 and 3: **trackball only**, and **raw degrees only**
+for rotation, no named shell presets. Question 2 (which half) needs no answer
+from the software — see "Which half" above. Question 4: no mouse layer is
+created, automatically or by a button; see the deviations.
+
+What landed, against the decisions above:
+
+- **Schema v6**, `settings.navigatorTrackball?` — absent by default, absent
+  generates byte-identical sources (all four files, `keymap.json` included).
+  Fields: `rotation` (0–359), `cpi` (5–125, step 5), `scrollDivider`,
+  `scrollAcceleration`, `scrollMaxSpeed`, `scrollInvertX/Y`,
+  `turboMultiplier`, `aimDivider`; each defaults to the module's own value and
+  codegen `#define`s only the ones that differ. `ADDRESS` and `TIMEOUT` from the
+  knob table are not exposed — nothing about a printed shell changes them.
+- **`keymap.json` is derived** (`codegen::keymap_json`), the one structural
+  change this doc predicted.
+- **Declaring the module is sufficient on its own.** Read in
+  `lib/python/qmk/cli/generate/community_modules.py`: `_generate_features_rules`
+  writes `POINTING_DEVICE_ENABLE=yes` from the manifest's
+  `features.pointing_device`, into `community_rules.mk`, which
+  `builddefs/build_keyboard.mk:255-256` includes after the keymap's `rules.mk`
+  (`:227`) and before `common_features.mk` (`:543`) reads it. So our `rules.mk`
+  is unchanged and `config.h` restates nothing the module owns
+  (`MOUSE_EXTENDED_REPORT`, `WHEEL_EXTENDED_REPORT`, the driver, I2C). The
+  Moonlander's own `rules.mk` already has `I2C_DRIVER_REQUIRED = yes` for its
+  port expander.
+- **Rotation is a first-class control** with a preview of where "up" lands.
+  The module turns motion **clockwise on screen** by the angle
+  (`x' = x·cos − y·sin`, `y' = x·sin + y·cos`, with 90/180/270 as exact swaps).
+- **The ten keycodes** are in `shared/keycodes.json` under `navigator`. They
+  are declared by `zsa/defaults`, which is always in the build, so they compile
+  even with no trackball attached; the panel and the Tool Guide say when that
+  makes them inert.
+
+Firmware size, real MSYS builds of the seeded fixture
+(`real_msys_build_with_and_without_the_trackball`):
+
+| Build | Bytes |
+|---|---|
+| no trackball | 71,656 — byte-identical to Oryx's `arrows_together` image |
+| trackball, defaults | 75,224 (+3,568) |
+| trackball, 45° and every knob changed | 75,280 (+3,624) |
+
+The "on" builds compile `navigator.c`, `navigator_trackball.c` and
+`quantum/pointing_device/*` with no `POINTING_DEVICE_ENABLE` in our
+`rules.mk`, which confirms in practice that the module declaration is enough.
+The Moonlander is an STM32F303 with 256 KB of flash, so size is not a constraint.
+The "~62 KB" figure above was the demo layout, not the fixture.
+
+Deviations, and why:
+
+- **No "add a mouse layer" action.** The brief allowed one if cheap. It is not:
+  which keys go where on a mouse layer is a layout decision the app has no
+  basis to make for Simon, and a layer full of guessed positions is the
+  auto-mutation in another form. Clicks are the stock Mouse keys, already in
+  the picker; the module's keys are in their own picker section.
+- **No live example in the demo layout.** The demo is built and flashed by
+  people without a Navigator; a trackball key there would be inert and the
+  Tool Guide would (correctly) flag it, which teaches the wrong lesson.
+  `the_demo_layout_has_a_live_example_of_every_advanced_kind` is unchanged:
+  the keys are `special` actions, a kind the demo already shows.
+- **`generate_sources` returns `keymapJson` as well** — additive, so a preview
+  shows every file the build reads.
+- **Rotation is capped at 359**, not taken `% 360`: 360 is 0 spelled
+  differently, and refusing it keeps one spelling per orientation.
 
 Links: [[Personal/Code/Code Index|Code Index]]

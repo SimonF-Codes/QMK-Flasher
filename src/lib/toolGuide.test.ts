@@ -7,8 +7,10 @@ import {
   chordName,
   describePosition,
   groupFor,
+  NO_TRACKBALL_NOTE,
   toolGuideMarkdown,
 } from "./toolGuide";
+import { DEFAULT_NAVIGATOR_TRACKBALL } from "./navigator";
 import { LayoutFileSchema, MOONLANDER_KEY_COUNT, SCHEMA_VERSION } from "./types";
 import type { KeyAction, LayoutFile, Combo, Settings } from "./types";
 
@@ -719,5 +721,39 @@ describe("the seeded Arrows Together layout", () => {
     expect(guide.os.counts.osAware).toBe(0);
     expect(guide.os.reachable).toBe(false);
     expect(guide.groups.some((g) => g.id === "os")).toBe(false);
+  });
+});
+
+// ---- Navigator trackball keys ----
+
+describe("trackball keys", () => {
+  const drag: KeyAction = { kind: "special", code: "DRAG_SCROLL" };
+  const aim: KeyAction = { kind: "special", code: "TOGGLE_AIM" };
+
+  it("get their own group, apart from the system keys", () => {
+    expect(groupFor(drag)).toBe("pointer");
+    expect(groupFor({ kind: "special", code: "NAVIGATOR_INC_CPI" })).toBe("pointer");
+    expect(groupFor({ kind: "special", code: "QK_BOOT" })).toBe("system");
+  });
+
+  it("say what they do in words a reader cold can follow", () => {
+    const guide = buildToolGuide(layoutWith([{ index: 0, action: aim }]));
+    const entry = guide.groups.find((g) => g.id === "pointer")!.entries[0];
+    expect(entry.summary).toMatch(/precision/i);
+    expect(entry.token).toBe("TOGGLE_AIM");
+  });
+
+  it("warn that they are inert while no trackball is attached", () => {
+    const off = buildToolGuide(layoutWith([{ index: 0, action: drag }]));
+    const offEntry = off.groups.find((g) => g.id === "pointer")!.entries[0];
+    expect(offEntry.detail).toContain(NO_TRACKBALL_NOTE);
+
+    const on = buildToolGuide(
+      layoutWith([{ index: 0, action: drag }], {
+        settings: { navigatorTrackball: DEFAULT_NAVIGATOR_TRACKBALL },
+      }),
+    );
+    const onEntry = on.groups.find((g) => g.id === "pointer")!.entries[0];
+    expect(onEntry.detail).not.toContain(NO_TRACKBALL_NOTE);
   });
 });
